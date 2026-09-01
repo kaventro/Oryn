@@ -11,10 +11,10 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  # 1. Create a single draft release up front so both platforms upload into the
+  # 1. Create a single draft release up front so all platforms upload into the
   #    same release. Nothing is public yet.
   create-release:
     runs-on: ubuntu-22.04
@@ -22,33 +22,43 @@ jobs:
       contents: write
     outputs:
       release_id: ${{ steps.create-release.outputs.result }}
+      tag_name: ${{ steps.get-tag.outputs.tag }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - name: Get version
-        run: echo "PACKAGE_VERSION=$(node -p "require('./package.json').version")" >> "$GITHUB_ENV"
+      - name: Get tag & version
+        id: get-tag
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+          else
+            TAG="v${VERSION}"
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "PACKAGE_VERSION=${VERSION}" >> "$GITHUB_ENV"
 
       - name: Create draft release
         id: create-release
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           script: |
-            const { owner, repo } = context.repo
-            const tag = `v${process.env.PACKAGE_VERSION}`
+            const { owner, repo } = context.repo;
+            const tag = '${{ steps.get-tag.outputs.tag }}';
             // find-or-create so re-running a failed release reuses the draft
-            let release
+            let release;
             try {
-              release = (await github.rest.repos.getReleaseByTag({ owner, repo, tag })).data
+              release = (await github.rest.repos.getReleaseByTag({ owner, repo, tag })).data;
             } catch (e) {
-              if (e.status !== 404) throw e
+              if (e.status !== 404) throw e;
               release = (await github.rest.repos.createRelease({
                 owner, repo, tag_name: tag, name: `Oryn ${tag}`,
                 draft: true, prerelease: false,
-              })).data
+              })).data;
             }
-            return release.id
+            return release.id;
 
-  # 2. Build every platform and upload into the draft (releaseId => no publish).
+  # 2. Build every platform (macOS, Windows, Linux) and upload into draft release.
   build-tauri:
     needs: create-release
     permissions:
@@ -57,13 +67,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - platform: 'macos-latest'
+            args: '--bundles app,dmg'
           - platform: 'windows-latest'
             args: '--bundles nsis'
           - platform: 'ubuntu-22.04'
             args: '--bundles appimage,deb'
 
     runs-on: ${{ matrix.platform }}
-    timeout-minutes: 30
+    timeout-minutes: 40
 
     steps:
       - name: Checkout repository
@@ -113,8 +125,7 @@ jobs:
           releaseId: ${{ needs.create-release.outputs.release_id }}
           args: ${{ matrix.args }}
 
-      # Also ship the raw portable exe (no installer). Needs WebView2 runtime,
-      # which ships with modern Windows 10/11.
+      # Also ship the raw portable exe (no installer) for Windows.
       - name: Upload portable exe (Windows)
         if: matrix.platform == 'windows-latest'
         shell: bash
@@ -128,7 +139,7 @@ jobs:
           else
             echo "portable exe not found:"; ls -la desktop/target/release/*.exe; exit 1
           fi
-          gh release upload "v${VERSION}" "$DEST" --clobber --repo "$GITHUB_REPOSITORY"
+          gh release upload "${{ needs.create-release.outputs.tag_name }}" "$DEST" --clobber --repo "$GITHUB_REPOSITORY"
 
   # 3. Only once EVERY platform succeeded, flip the draft to published.
   publish-release:
@@ -147,4 +158,4 @@ jobs:
               release_id: ${{ needs.create-release.outputs.release_id }},
               draft: false,
               prerelease: false,
-            })
+            });
