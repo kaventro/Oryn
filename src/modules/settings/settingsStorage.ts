@@ -4,6 +4,7 @@ import { AppSettings, type AppSettingsData } from './settingsModel.ts';
 const SETTINGS_KEY = 'Oryn.settings';
 const THEME_KEY = 'Oryn.trayTheme';
 const PANE_MODE_KEY = 'Oryn.paneMode';
+const DOCK_ICON_KEY = 'Oryn.dockIcon';
 
 export interface ThemeOption {
   id: string;
@@ -18,6 +19,19 @@ export const AVAILABLE_THEMES: ThemeOption[] = [
   { id: 'emerald', name: 'Emerald Green', color: '#30d158' },
   { id: 'purple', name: 'Purple Glow', color: '#bf5af2' },
   { id: 'mono', name: 'Monochrome', color: '#d1d1d6' },
+];
+
+export const AVAILABLE_DOCK_ICONS = [
+  { id: '1', name: 'Classic Dark Gradient', src: '/dock-icons/thumb_1.png' },
+  { id: '2', name: 'Midnight Glow', src: '/dock-icons/thumb_2.png' },
+  { id: '3', name: 'Light Lavender', src: '/dock-icons/thumb_3.png' },
+  { id: '4', name: 'Frost Violet', src: '/dock-icons/thumb_4.png' },
+  { id: '5', name: 'Monochrome Dark', src: '/dock-icons/thumb_5.png' },
+  { id: '6', name: 'Electric Cyan', src: '/dock-icons/thumb_6.png' },
+  { id: '7', name: 'Emerald Forest', src: '/dock-icons/thumb_7.png' },
+  { id: '8', name: 'Amber Sunset', src: '/dock-icons/thumb_8.png' },
+  { id: '9', name: 'Crimson Ruby', src: '/dock-icons/thumb_9.png' },
+  { id: '10', name: 'Deep Teal Glow', src: '/dock-icons/thumb_10.png' },
 ];
 
 /**
@@ -36,8 +50,6 @@ export class SettingsStorageService {
     try {
       const raw = localStorage.getItem(SETTINGS_KEY);
       const parsed = raw ? JSON.parse(raw) : null;
-      // Must be a plain object; otherwise the property assignments below would
-      // throw in strict mode on a primitive.
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) data = parsed;
     } catch { }
 
@@ -47,6 +59,8 @@ export class SettingsStorageService {
       if (theme) data.trayTheme = theme;
       const paneMode = localStorage.getItem(PANE_MODE_KEY);
       if (paneMode) data.paneMode = paneMode;
+      const dockIcon = localStorage.getItem(DOCK_ICON_KEY);
+      if (dockIcon) data.dockIcon = dockIcon;
     } catch { }
 
     return new AppSettings(data);
@@ -58,9 +72,11 @@ export class SettingsStorageService {
       localStorage.setItem(SETTINGS_KEY, JSON.stringify(s.toJSON()));
       localStorage.setItem(THEME_KEY, s.trayTheme);
       localStorage.setItem(PANE_MODE_KEY, s.paneMode);
+      localStorage.setItem(DOCK_ICON_KEY, s.dockIcon);
     } catch { }
 
     this.applyTheme(s.trayTheme);
+    this.applyDockIcon(s.dockIcon);
     this._notify(s);
   }
 
@@ -73,6 +89,19 @@ export class SettingsStorageService {
     } else {
       root.setAttribute('data-tray', theme);
     }
+  }
+
+  public applyDockIcon(iconId: string): void {
+    const validId = String(iconId || '1').replace(/\.png$/, '');
+    try {
+      (window as any).ow?.setDockIcon?.(validId);
+    } catch {}
+    try {
+      const link = document.querySelector("link[rel~='icon']") as HTMLLinkElement | null;
+      if (link) {
+        link.href = `/dock-icons/${validId}.png`;
+      }
+    } catch {}
   }
 
   public subscribe(callback: (settings: AppSettings) => void): () => boolean {

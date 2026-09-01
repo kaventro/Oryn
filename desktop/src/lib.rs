@@ -26,6 +26,8 @@ pub fn run() {
     tracing::info!("Oryn starting");
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .manage(services::fs_transfer::TransferControl::default())
         .manage(commands::system_cmd::SystemStatsState::default())
         .manage(Arc::new(commands::search_cmd::SearchService::default()))
@@ -159,6 +161,7 @@ pub fn run() {
             commands::window_cmd::window_close,
             commands::window_cmd::window_minimize,
             commands::window_cmd::window_toggle_maximize,
+            commands::window_cmd::set_dock_icon,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

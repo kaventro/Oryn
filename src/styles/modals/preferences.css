@@ -503,3 +503,66 @@
   color: #8e8e93;
   user-select: none;
 }
+
+/* Dock Icons Selector */
+.mac-pref-row--dock-icon {
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  gap: 12px !important;
+  padding: 12px !important;
+}
+
+.mac-dock-icons-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+  width: 100%;
+}
+
+.mac-dock-icon-option {
+  position: relative;
+  height: 52px;
+  border-radius: 12px;
+  border: 1.5px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  padding: 5px;
+  cursor: pointer;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  outline: none;
+}
+
+.mac-dock-icon-option img {
+  width: 38px;
+  height: 38px;
+  object-fit: contain;
+  border-radius: 8px;
+  pointer-events: none;
+  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.35));
+}
+
+.mac-dock-icon-option:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
+}
+
+.mac-dock-icon-option.selected {
+  border-color: #0a84ff;
+  background: rgba(10, 132, 255, 0.15);
+  box-shadow: 0 0 0 2px rgba(10, 132, 255, 0.4), 0 4px 12px rgba(10, 132, 255, 0.25);
+}
+
+.mac-dock-icon-option.selected::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #0a84ff;
+  box-shadow: 0 0 6px #0a84ff;
+}
