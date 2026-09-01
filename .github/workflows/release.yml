@@ -121,6 +121,8 @@ jobs:
         uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           releaseId: ${{ needs.create-release.outputs.release_id }}
           args: ${{ matrix.args }}
@@ -148,6 +150,65 @@ jobs:
     permissions:
       contents: write
     steps:
+      # The updater fetches releases/latest/download/latest.json. tauri-action writes
+      # one latest.json per matrix job, so build the merged manifest from the signed
+      # artifacts already sitting on the draft release.
+      - name: Build updater manifest
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const release_id = ${{ needs.create-release.outputs.release_id }};
+            const tag = '${{ needs.create-release.outputs.tag_name }}';
+            const assets = await github.paginate(github.rest.repos.listReleaseAssets, {
+              owner, repo, release_id, per_page: 100,
+            });
+
+            const targets = [
+              ['darwin-aarch64', (n) => n.endsWith('.app.tar.gz')],
+              ['windows-x86_64', (n) => n.endsWith('-setup.exe')],
+              ['linux-x86_64', (n) => n.endsWith('.AppImage')],
+            ];
+
+            const platforms = {};
+            for (const [key, match] of targets) {
+              const bundle = assets.find((a) => match(a.name) && !a.name.endsWith('.sig'));
+              const sig = bundle && assets.find((a) => a.name === `${bundle.name}.sig`);
+              if (!bundle || !sig) {
+                core.warning(`no signed updater artifact for ${key}`);
+                continue;
+              }
+              const raw = await github.request(
+                'GET /repos/{owner}/{repo}/releases/assets/{asset_id}',
+                { owner, repo, asset_id: sig.id, headers: { accept: 'application/octet-stream' } },
+              );
+              platforms[key] = {
+                signature: Buffer.from(raw.data).toString('utf8').trim(),
+                url: `https://github.com/${owner}/${repo}/releases/download/${tag}/${encodeURIComponent(bundle.name)}`,
+              };
+            }
+            if (Object.keys(platforms).length === 0) {
+              throw new Error('no signed updater artifacts found — is TAURI_SIGNING_PRIVATE_KEY set?');
+            }
+
+            const manifest = {
+              version: tag.replace(/^v/, ''),
+              pub_date: new Date().toISOString(),
+              notes: `https://github.com/${owner}/${repo}/releases/tag/${tag}`,
+              platforms,
+            };
+
+            // Re-runs must not collide with a manifest from a previous attempt.
+            const stale = assets.find((a) => a.name === 'latest.json');
+            if (stale) {
+              await github.rest.repos.deleteReleaseAsset({ owner, repo, asset_id: stale.id });
+            }
+            await github.rest.repos.uploadReleaseAsset({
+              owner, repo, release_id, name: 'latest.json',
+              data: JSON.stringify(manifest, null, 2),
+            });
+            core.info(`latest.json covers: ${Object.keys(platforms).join(', ')}`);
+
       - name: Publish release
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:

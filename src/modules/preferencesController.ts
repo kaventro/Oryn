@@ -1,5 +1,5 @@
 // src/modules/preferencesController.ts
-import { SettingsStorageService, AVAILABLE_THEMES } from './settings/settingsStorage.ts';
+import { SettingsStorageService, AVAILABLE_THEMES, AVAILABLE_DOCK_ICONS } from './settings/settingsStorage.ts';
 import { HotkeyRegistry, ACTION_DEFINITIONS } from './settings/hotkeyRegistry.ts';
 import { AppSettings } from './settings/settingsModel.ts';
 
@@ -10,6 +10,7 @@ const hotkeyRegistry = new HotkeyRegistry();
 export function applyTrayThemeFromStorage(): void {
   const settings = storageService.load();
   storageService.applyTheme(settings.trayTheme);
+  storageService.applyDockIcon(settings.dockIcon);
 }
 
 export function readTrayTheme(): string {
@@ -140,6 +141,9 @@ export class PreferencesController {
       });
     });
 
+    // Dock Icons Selector Setup
+    this._setupDockIcons(overlay);
+
     // Pane Mode Segmented Control
     overlay.querySelectorAll('.mac-segmented-item[data-pane-mode]').forEach((btn) => {
       btn.addEventListener('click', (e: Event) => {
@@ -251,14 +255,57 @@ export class PreferencesController {
         this._recordingActionId = null;
         this.renderHotkeysList(this._dom.hotkeySearch?.value || '');
       }
-    }, true);
+    });
   }
 
-  private _bindSwitch(id: string, onToggle: (checked: boolean) => void): void {
-    const el = document.getElementById(id) as HTMLInputElement | null;
-    if (!el) return;
-    el.addEventListener('change', (e: Event) => {
-      onToggle((e.target as HTMLInputElement).checked);
+  private _setupDockIcons(overlay: HTMLElement): void {
+    const grid = overlay.querySelector('#pref-dock-icons-grid') || document.getElementById('pref-dock-icons-grid');
+    if (!grid) return;
+    grid.replaceChildren();
+
+    AVAILABLE_DOCK_ICONS.forEach((icon) => {
+      const opt = document.createElement('button');
+      opt.type = 'button';
+      opt.className = 'mac-dock-icon-option';
+      opt.dataset.dockIcon = icon.id;
+      opt.title = `${icon.name} (Icon ${icon.id})`;
+
+      const img = document.createElement('img');
+      img.src = icon.src;
+      img.alt = icon.name;
+      img.loading = 'lazy';
+
+      opt.appendChild(img);
+
+      opt.addEventListener('click', (e: Event) => {
+        e.stopPropagation();
+        this.settings.dockIcon = icon.id;
+        this._saveAndNotify();
+        this.storage.applyDockIcon(icon.id);
+        this._updateDockIcons();
+        this._flashStatus(`Dock icon updated: ${icon.name}`);
+      });
+
+      grid.appendChild(opt);
+    });
+
+    this._updateDockIcons();
+  }
+
+  private _updateDockIcons(): void {
+    const currentId = String(this.settings.dockIcon || '1').replace(/\.png$/, '');
+    document.querySelectorAll('.mac-dock-icon-option').forEach((opt) => {
+      const isSelected = (opt as HTMLElement).dataset.dockIcon === currentId;
+      opt.classList.toggle('selected', isSelected);
+      opt.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
+    });
+  }
+
+  private _bindSwitch(id: string, setter: (checked: boolean) => void): void {
+    const input = document.getElementById(id) as HTMLInputElement | null;
+    input?.addEventListener('change', (e: Event) => {
+      const checked = (e.target as HTMLInputElement).checked;
+      setter(checked);
       this._saveAndNotify();
     });
   }
@@ -271,14 +318,12 @@ export class PreferencesController {
   }
 
   private _flashStatus(msg: string): void {
-    if (this._dom.statusHint) {
-      this._dom.statusHint.textContent = `✓ ${msg}`;
-      setTimeout(() => {
-        if (this._dom.statusHint.textContent === `✓ ${msg}`) {
-          this._dom.statusHint.textContent = '';
-        }
-      }, 2500);
-    }
+    if (!this._dom.statusHint) return;
+    this._dom.statusHint.textContent = msg;
+    this._dom.statusHint.style.opacity = '1';
+    setTimeout(() => {
+      if (this._dom.statusHint) this._dom.statusHint.style.opacity = '0';
+    }, 2000);
   }
 
   public switchTab(tabId: string): void {
@@ -447,6 +492,7 @@ export class PreferencesController {
 
     // Populate UI
     this._updateThemeWells();
+    this._updateDockIcons();
     this._updateSegmented('pane-mode', this.settings.paneMode);
 
     const sh = document.getElementById('pref-show-hidden') as HTMLInputElement | null;

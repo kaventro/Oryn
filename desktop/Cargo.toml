@@ -1,6 +1,6 @@
 [package]
 name = "Oryn"
-version = "0.0.1"
+version = "0.0.2"
 description = "Oryn — a modern, keyboard-driven dual-pane file manager"
 authors = ["Kaventro"]
 edition = "2021"
@@ -41,6 +41,7 @@ chrono = { version = "0.4", default-features = false, features = ["clock"] }
 libc = "0.2"
 zip = { version = "8", default-features = false, features = ["deflate"] }
 tar = "0.4.45"
+image = { version = "0.25", default-features = false, features = ["png"] }
 flate2 = "1.1.9"
 filetime = "0.2"
 sha2 = "0.10"
@@ -50,6 +51,8 @@ base64 = "0.22"
 ssh2 = "0.9"
 notify = "6"
 cap-std = "4.0.3"
+tauri-plugin-updater = "2.11.0"
+tauri-plugin-process = "2.3.1"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"

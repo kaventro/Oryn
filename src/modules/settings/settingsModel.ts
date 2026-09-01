@@ -3,6 +3,7 @@
 export interface AppSettingsData {
   paneMode?: 'single' | 'dual' | string;
   trayTheme?: string;
+  dockIcon?: string;
   showHiddenFiles?: boolean;
   showExtensions?: boolean;
   showStatusBarTerminal?: boolean;
@@ -26,6 +27,7 @@ export interface AppSettingsData {
 export class AppSettings {
   public paneMode: 'single' | 'dual';
   public trayTheme: string;
+  public dockIcon: string;
   public showHiddenFiles: boolean;
   public showExtensions: boolean;
   public showStatusBarTerminal: boolean;
@@ -44,6 +46,7 @@ export class AppSettings {
   constructor(initial: AppSettingsData = {}) {
     this.paneMode = initial.paneMode === 'single' ? 'single' : 'dual';
     this.trayTheme = initial.trayTheme || 'balanced';
+    this.dockIcon = initial.dockIcon || '1';
     this.showHiddenFiles = Boolean(initial.showHiddenFiles);
     this.showExtensions = initial.showExtensions !== false;
     this.showStatusBarTerminal = initial.showStatusBarTerminal !== false;
@@ -80,6 +83,7 @@ export class AppSettings {
     return {
       paneMode: this.paneMode,
       trayTheme: this.trayTheme,
+      dockIcon: this.dockIcon,
       showHiddenFiles: this.showHiddenFiles,
       showExtensions: this.showExtensions,
       showStatusBarTerminal: this.showStatusBarTerminal,

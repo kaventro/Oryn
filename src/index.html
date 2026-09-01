@@ -496,6 +496,21 @@
         </div>
       </div>
 
+      <!-- FLOATING UPDATE TOAST -->
+      <div id="nx-update" class="nx-xfer nx-xfer--hidden" role="status">
+        <div class="nx-xfer-header">
+          <span class="nx-xfer-title" id="nx-update-title">Update</span>
+          <button type="button" id="nx-update-dismiss" class="nx-xfer-cancel-btn" title="Dismiss">✕</button>
+        </div>
+        <div class="nx-xfer-bar-track" id="nx-update-track" style="display:none;">
+          <div class="nx-xfer-bar-fill" id="nx-update-fill" style="width: 0%;"></div>
+        </div>
+        <div class="nx-xfer-meta">
+          <span id="nx-update-msg" class="nx-xfer-file"></span>
+          <button type="button" id="nx-update-action" class="nx-update-action" style="display:none;"></button>
+        </div>
+      </div>
+
       <!-- MINI TERMINAL / COMMAND LINE (Hidden by default) -->
       <div class="nx-terminal" id="nx-terminal" style="display: none;" role="status" aria-live="polite">
         <span class="nx-terminal-prompt">user@Oryn<span class="nx-terminal-at"> ~</span>]$</span>
@@ -684,6 +699,19 @@
             </div>
 
             <div class="mac-pref-group">
+              <div class="mac-pref-section-title">Dock Icon</div>
+              <div class="mac-pref-card">
+                <div class="mac-pref-row mac-pref-row--dock-icon">
+                  <div class="mac-pref-row-info">
+                    <span class="mac-pref-row-title">Dock icon</span>
+                    <span class="mac-pref-row-desc">Choose the icon the app will use in the dock</span>
+                  </div>
+                  <div class="mac-dock-icons-grid" id="pref-dock-icons-grid"></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="mac-pref-group">
               <div class="mac-pref-section-title">Dual Pane Startup Volumes</div>
               <div class="mac-pref-card">
                 <div class="mac-pref-row">
@@ -860,6 +888,7 @@
       <!-- Footer -->
       <div class="mac-pref-footer">
         <div id="pref-status-hint"></div>
+        <button type="button" id="pref-check-updates" class="mac-pref-link-btn">Check for Updates…</button>
         <div id="pref-app-version">Oryn • macOS &amp; Windows</div>
       </div>
     </div>

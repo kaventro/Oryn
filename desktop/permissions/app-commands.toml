@@ -67,6 +67,7 @@ commands.allow = [
   "window_close",
   "window_minimize",
   "window_toggle_maximize",
+  "set_dock_icon",
   "fs_compress",
   "fs_extract",
   "fs_probe_text",

@@ -84,6 +84,7 @@ export interface TauriBridge {
   closeWindow: () => Promise<any>;
   minimizeWindow: () => Promise<any>;
   toggleMaximizeWindow: () => Promise<any>;
+  setDockIcon: (iconId: string) => Promise<any>;
   getSystemStats: () => Promise<any>;
   getPathSpace: (path: string) => Promise<any>;
   getSystemLocations: () => Promise<any>;
@@ -202,6 +203,7 @@ export const bridge: TauriBridge = {
   closeWindow: () => ipcInvoke('window_close'),
   minimizeWindow: () => ipcInvoke('window_minimize'),
   toggleMaximizeWindow: () => ipcInvoke('window_toggle_maximize'),
+  setDockIcon: (iconId: string) => ipcInvoke('set_dock_icon', { iconId }),
   getSystemStats: () => ipcInvoke('system_get_stats'),
   getPathSpace: (path: string) => ipcInvoke('system_get_path_space', { input: { path } }),
   getSystemLocations: () => ipcInvoke('system_get_locations'),

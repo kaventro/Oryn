@@ -12,6 +12,8 @@
     "core:webview:default",
     "core:app:default",
     "core:resources:default",
-    "allow-Oryn-commands"
+    "allow-Oryn-commands",
+    "updater:default",
+    "process:allow-restart"
   ]
 }

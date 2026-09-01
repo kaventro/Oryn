@@ -33,6 +33,7 @@ import { ViewController } from './modules/viewController.ts';
 import { ColumnsViewController } from './modules/columns/columnsViewController.ts';
 import { RemoteController } from './modules/remoteController.ts';
 import { RemoteDialog } from './modules/remoteDialog.ts';
+import { UpdaterController } from './modules/updaterController.ts';
 import {
   PreferencesController,
   applyTrayThemeFromStorage,
@@ -1058,6 +1059,11 @@ async function init(): Promise<void> {
     sidebarControllerInst?.render();
   }).catch(() => { });
 }
+
+// Background updates run outside init() so a failed startup can still self-heal.
+const updater = new UpdaterController();
+updater.attach();
+setTimeout(() => { void updater.run(); }, 5000);
 
 init().catch((err) => {
   console.error('[init] failed:', err);

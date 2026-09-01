@@ -207,3 +207,31 @@
 }
 
 
+
+.nx-update-action {
+  background: rgba(10, 132, 255, 0.16);
+  border: 1px solid rgba(10, 132, 255, 0.35);
+  border-radius: 5px;
+  color: #79c0ff;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 9px;
+}
+
+.nx-update-action:hover {
+  background: rgba(10, 132, 255, 0.28);
+}
+
+.mac-pref-link-btn {
+  background: none;
+  border: 0;
+  color: #0a84ff;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 0;
+}
+
+.mac-pref-link-btn:hover {
+  text-decoration: underline;
+}
