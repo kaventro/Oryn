@@ -1,0 +1,20 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Oryn",
+        "width": 1120,
+        "height": 720,
+        "minWidth": 800,
+        "minHeight": 480,
+        "resizable": true,
+        "decorations": false,
+        "theme": "Dark",
+        "transparent": false,
+        "shadow": true
+      }
+    ]
+  }
+}

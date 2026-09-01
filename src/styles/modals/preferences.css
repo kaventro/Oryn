@@ -1,0 +1,505 @@
+.preferences-modal {
+  width: 720px !important;
+  max-width: 92vw !important;
+  height: 520px !important;
+  max-height: 85vh !important;
+  padding: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  background: #1e1e20 !important;
+  border-radius: 12px !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  box-shadow: 0 28px 75px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.08) !important;
+  overflow: hidden !important;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif !important;
+}
+
+/* Modal Title Header */
+.mac-pref-header {
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.mac-pref-header-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #f5f5f7;
+  letter-spacing: -0.01em;
+}
+
+.mac-pref-header-title svg {
+  color: #8e8e93;
+}
+
+.mac-pref-close-btn {
+  background: rgba(255, 255, 255, 0.09);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #f5f5f7;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 3px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+}
+
+.mac-pref-close-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+}
+
+.mac-pref-close-btn:active {
+  transform: scale(0.97);
+}
+
+/* Body: Left Sidebar + Right Content */
+.mac-pref-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Left Navigation Sidebar */
+.mac-pref-sidebar {
+  width: 190px;
+  background: #171719;
+  border-right: 1px solid rgba(255, 255, 255, 0.07);
+  padding: 10px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.mac-pref-icon-badge {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #ffffff;
+}
+
+.mac-pref-icon-badge svg {
+  width: 12px;
+  height: 12px;
+  stroke-width: 2.2;
+}
+
+.badge-blue {
+  background: linear-gradient(180deg, #0a84ff 0%, #0066cc 100%);
+}
+
+.badge-orange {
+  background: linear-gradient(180deg, #ff9f0a 0%, #e67e00 100%);
+}
+
+.badge-purple {
+  background: linear-gradient(180deg, #bf5af2 0%, #9b30d9 100%);
+}
+
+.badge-teal {
+  background: linear-gradient(180deg, #30b0c7 0%, #0891b2 100%);
+}
+
+.badge-green {
+  background: linear-gradient(180deg, #34c759 0%, #16a34a 100%);
+}
+
+.mac-pref-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: #c7c7cc;
+  font-size: 13px;
+  font-weight: 400;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s ease, color 0.1s ease;
+  width: 100%;
+  user-select: none;
+}
+
+.mac-pref-nav-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+}
+
+.mac-pref-nav-item.active {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  font-weight: 500;
+}
+
+/* Right Content Area */
+.mac-pref-main {
+  flex: 1;
+  padding: 16px 22px;
+  overflow-y: auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.mac-pref-tab-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.mac-pref-group {
+  margin-bottom: 18px;
+}
+
+.mac-pref-group:last-child {
+  margin-bottom: 0;
+}
+
+/* Section Header above Card */
+.mac-pref-section-title {
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.45);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0 0 6px 8px;
+  padding: 0;
+  user-select: none;
+}
+
+/* Inset Grouped Card (macOS Inset Grouped List style) */
+.mac-pref-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.mac-pref-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 9px 12px;
+  min-height: 42px;
+  transition: background 0.1s ease;
+}
+
+.mac-pref-row + .mac-pref-row {
+  border-top: 1px solid rgba(255, 255, 255, 0.045);
+}
+
+.mac-pref-row-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.mac-pref-row-title {
+  font-size: 13px;
+  font-weight: 400;
+  color: #f5f5f7;
+}
+
+.mac-pref-row-desc {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+  line-height: 1.3;
+}
+
+/* Native macOS Switch (Toggle) */
+.mac-switch {
+  position: relative;
+  display: inline-block;
+  width: 34px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.mac-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.mac-slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background-color: rgba(255, 255, 255, 0.16);
+  transition: 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 20px;
+}
+
+.mac-slider:before {
+  position: absolute;
+  content: "";
+  height: 16px;
+  width: 16px;
+  left: 2px;
+  bottom: 2px;
+  background-color: #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  transition: 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 50%;
+}
+
+.mac-switch input:checked + .mac-slider {
+  background-color: #34c759;
+}
+
+.mac-switch input:checked + .mac-slider:before {
+  transform: translateX(14px);
+}
+
+/* Native macOS Segmented Control */
+.mac-segmented {
+  display: inline-flex;
+  background: rgba(0, 0, 0, 0.28);
+  padding: 2px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.mac-segmented-item {
+  padding: 3px 11px;
+  font-size: 12px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.7);
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.1s ease;
+  user-select: none;
+  font-family: inherit;
+}
+
+.mac-segmented-item:hover {
+  color: #ffffff;
+}
+
+.mac-segmented-item.active {
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+  font-weight: 500;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
+/* Theme Wells */
+.mac-theme-wells {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.mac-theme-well {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  cursor: pointer;
+  position: relative;
+  transition: transform 0.1s ease;
+  border: none;
+  outline: none;
+}
+
+.mac-theme-well:hover {
+  transform: scale(1.15);
+}
+
+.mac-theme-well.selected {
+  box-shadow: 0 0 0 2px #1e1e20, 0 0 0 3.5px #ffffff;
+}
+
+/* Native macOS Select */
+.mac-select {
+  height: 26px;
+  padding: 0 24px 0 10px;
+  font-size: 12px;
+  color: #f5f5f7;
+  background: rgba(255, 255, 255, 0.08) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5' fill='none' stroke='%238e8e93' stroke-width='1.5' stroke-linecap='round'%3E%3Cpath d='m1 1 3 3 3-3'/%3E%3C/svg%3E") no-repeat right 8px center;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  outline: none;
+  appearance: none;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.1s ease;
+}
+
+.mac-select:hover {
+  background-color: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.mac-select:focus {
+  border-color: #0a84ff;
+  box-shadow: 0 0 0 2px rgba(10, 132, 255, 0.25);
+}
+
+/* Hotkeys Management */
+.mac-hotkey-toolbar {
+  display: flex !important;
+  align-items: stretch !important;
+  gap: 8px !important;
+  margin-bottom: 12px !important;
+  height: 30px !important;
+}
+
+#pref-hotkey-search,
+.mac-hotkey-toolbar .mac-search-field,
+.mac-search-field {
+  flex: 1 1 auto !important;
+  height: 30px !important;
+  min-height: 30px !important;
+  max-height: 30px !important;
+  box-sizing: border-box !important;
+  margin: 0 !important;
+  padding: 0 10px !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+  border: 1px solid rgba(255, 255, 255, 0.09) !important;
+  border-radius: 6px !important;
+  color: #f5f5f7 !important;
+  font-family: inherit !important;
+  font-size: 12px !important;
+  line-height: 28px !important;
+  outline: none !important;
+  display: block !important;
+  vertical-align: middle !important;
+  transition: border-color 0.1s ease, box-shadow 0.1s ease;
+}
+
+.mac-search-field:focus {
+  border-color: #0a84ff !important;
+  box-shadow: 0 0 0 2px rgba(10, 132, 255, 0.25) !important;
+}
+
+#pref-hotkeys-reset,
+.mac-hotkey-toolbar button {
+  flex: 0 0 auto !important;
+  height: 30px !important;
+  min-height: 30px !important;
+  max-height: 30px !important;
+  box-sizing: border-box !important;
+  margin: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 4px !important;
+  padding: 0 12px !important;
+  border-radius: 6px !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+  border: 1px solid rgba(255, 255, 255, 0.09) !important;
+  color: #8e8e93 !important;
+  font-family: inherit !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  cursor: pointer !important;
+  transition: all 0.1s ease !important;
+  white-space: nowrap !important;
+  vertical-align: middle !important;
+}
+
+#pref-hotkeys-reset:hover,
+.mac-hotkey-toolbar button:hover {
+  background: rgba(255, 255, 255, 0.12) !important;
+  color: #ffffff !important;
+}
+
+#pref-hotkeys-reset:active,
+.mac-hotkey-toolbar button:active {
+  transform: scale(0.96) !important;
+}
+
+.mac-hotkeys-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mac-hotkey-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mac-hotkey-badge {
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #79c0ff;
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.1s ease;
+  min-width: 56px;
+  text-align: center;
+}
+
+.mac-hotkey-badge:hover {
+  background: rgba(10, 132, 255, 0.2);
+  border-color: #0a84ff;
+  color: #ffffff;
+}
+
+.mac-hotkey-badge.recording {
+  background: #ff453a !important;
+  color: #ffffff !important;
+  border-color: #ff453a !important;
+  animation: macPulse 0.8s infinite alternate;
+}
+
+@keyframes macPulse {
+  from { opacity: 0.75; }
+  to { opacity: 1; }
+}
+
+.mac-hotkey-clear-btn {
+  background: transparent;
+  border: none;
+  color: #636366;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+.mac-hotkey-clear-btn:hover {
+  color: #ff453a;
+  background: rgba(255, 69, 58, 0.12);
+}
+
+/* Footer Status Bar */
+.mac-pref-footer {
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  background: #171719;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  flex-shrink: 0;
+  font-size: 11px;
+  color: #8e8e93;
+  user-select: none;
+}

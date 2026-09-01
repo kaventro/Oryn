@@ -1,0 +1,45 @@
+{
+  "name": "Oryn",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "A modern, keyboard-driven dual-pane file manager built with Tauri 2 and Vite",
+  "license": "AGPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kaventro/Oryn.git"
+  },
+  "homepage": "https://github.com/kaventro/Oryn",
+  "keywords": [
+    "file-manager",
+    "dual-pane",
+    "tauri",
+    "rust",
+    "total-commander",
+    "desktop-app"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "ui:dev": "vite",
+    "ui:build": "vite build",
+    "typecheck": "tsc --noEmit",
+    "ui:test": "node --experimental-strip-types --test \"src/**/*.test.ts\"",
+    "ui:test:coverage": "c8 --all --include=\"src/**/*.ts\" --exclude=\"src/**/*.test.ts\" --reporter=text --reporter=lcov node --experimental-strip-types --test \"src/**/*.test.ts\"",
+    "test:e2e": "node scripts/e2e-browser.mjs",
+    "tauri": "tauri",
+    "dev": "tauri dev",
+    "build": "tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.11.5",
+    "@types/node": "^26.4.0",
+    "c8": "^12.0.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.1"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.11.5"
+  }
+}

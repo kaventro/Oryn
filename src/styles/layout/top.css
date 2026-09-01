@@ -1,0 +1,856 @@
+.mac-app {
+  display: flex;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--mac-bg);
+  color: var(--on-surface);
+  font-family: var(--font-body);
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Sidebar */
+.mac-sidebar {
+  width: 220px;
+  min-width: 190px;
+  max-width: 300px;
+  height: 100vh;
+  background: var(--mac-sidebar-bg);
+  border-right: 1px solid var(--mac-divider);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  transition: width 0.22s cubic-bezier(0.16, 1, 0.3, 1), transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+  position: relative;
+  z-index: 10;
+}
+
+.mac-sidebar.collapsed {
+  width: 0 !important;
+  min-width: 0 !important;
+  border-right-color: transparent !important;
+  transform: translateX(-100%) !important;
+}
+
+/* Only macOS needs the gap when the sidebar folds away — the traffic lights
+   move over the header there. On Windows it was 84px of nothing. */
+body.platform-mac .sidebar-collapsed .mac-header,
+body.platform-mac .mac-sidebar.collapsed ~ .mac-workspace .mac-header {
+  padding-left: 84px !important;
+}
+
+.sidebar-top-bar {
+  height: 52px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-shrink: 0;
+  -webkit-app-region: drag;
+}
+
+/* Brand wordmark */
+.sidebar-brand {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  padding: 0 20px;
+  flex-shrink: 0;
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+  isolation: isolate;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.19) 0%,
+    rgba(255, 255, 255, 0.07) 38%,
+    rgba(255, 255, 255, 0.025) 62%,
+    rgba(255, 255, 255, 0.1) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.42),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 0 18px rgba(255, 255, 255, 0.06),
+    0 1px 2px rgba(0, 0, 0, 0.45),
+    0 8px 22px rgba(0, 0, 0, 0.35),
+    0 0 18px color-mix(in srgb, var(--primary) 20%, transparent);
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+/* Ambient bloom — follows the active accent theme */
+.sidebar-brand::before {
+  content: '';
+  position: absolute;
+  inset: -40%;
+  background:
+    radial-gradient(58% 90% at 14% 0%, var(--primary) 0%, transparent 60%),
+    radial-gradient(52% 90% at 92% 110%, var(--primary) 0%, transparent 62%);
+  opacity: 0.34;
+  pointer-events: none;
+}
+
+/* Specular sweep on hover */
+.sidebar-brand::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -60%;
+  width: 42%;
+  transform: skewX(-18deg);
+  z-index: 2;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.22) 50%,
+    transparent 100%
+  );
+  opacity: 0;
+  pointer-events: none;
+}
+
+.sidebar-brand:hover {
+  border-color: rgba(255, 255, 255, 0.22);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 0 22px rgba(255, 255, 255, 0.09),
+    0 1px 2px rgba(0, 0, 0, 0.45),
+    0 10px 26px rgba(0, 0, 0, 0.4),
+    0 0 26px color-mix(in srgb, var(--primary) 32%, transparent);
+}
+
+.sidebar-brand:hover::after {
+  animation: brandSheen 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes brandSheen {
+  0% { opacity: 0; left: -60%; }
+  35% { opacity: 1; }
+  100% { opacity: 0; left: 115%; }
+}
+
+.sidebar-brand-text {
+  position: relative;
+  z-index: 1;
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.3em;
+  margin-right: -0.3em;
+  white-space: nowrap;
+  background: linear-gradient(180deg, #ffffff 0%, rgba(255, 255, 255, 0.82) 52%, rgba(255, 255, 255, 0.64) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.5));
+}
+
+/* macOS keeps the traffic-light zone clear */
+body.platform-mac .sidebar-top-bar {
+  padding-left: 78px;
+}
+
+/* Less room on macOS: the traffic lights already claim 78px of a 220px strip,
+   so the chip trades tracking and padding to stay clear of the toggle. */
+body.platform-mac .sidebar-brand {
+  padding: 0 13px;
+}
+
+body.platform-mac .sidebar-brand-text {
+  letter-spacing: 0.18em;
+  margin-right: -0.18em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-brand:hover::after { animation: none; }
+}
+
+.sidebar-toggle-btn {
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  color: var(--on-surface-variant);
+  cursor: pointer;
+  padding: 5px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  -webkit-app-region: no-drag;
+}
+
+.sidebar-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  transform: scale(1.04);
+}
+
+.sidebar-toggle-btn:active {
+  transform: scale(0.96);
+}
+
+.sidebar-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 8px 20px 8px;
+}
+
+.sidebar-section {
+  margin-top: 14px;
+}
+
+.sidebar-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.12s ease;
+}
+
+.sidebar-section-header:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.sidebar-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #8e8e93;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  transition: color 0.12s ease;
+}
+
+.sidebar-section-header:hover .sidebar-section-title {
+  color: #d1d1d6;
+}
+
+.sidebar-section-chevron {
+  width: 10px;
+  height: 10px;
+  color: #8e8e93;
+  flex-shrink: 0;
+  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), color 0.12s ease;
+  transform: rotate(0deg);
+}
+
+.sidebar-section.collapsed .sidebar-section-chevron {
+  transform: rotate(-90deg);
+}
+
+.sidebar-section.collapsed .sidebar-nav {
+  display: none;
+}
+
+.sidebar-add-tag-btn,
+.sidebar-add-pin-btn {
+  background: transparent;
+  border: none;
+  color: #8e8e93;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 1px 5px;
+  border-radius: 4px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.12s ease;
+}
+
+.sidebar-add-tag-btn:hover,
+.sidebar-add-pin-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  transform: scale(1.08);
+}
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+}
+
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  border-radius: var(--radius-sm);
+  color: #d1d1d6;
+  font-size: 13px;
+  font-weight: 400;
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  width: 100%;
+  text-align: left;
+  transition: all 0.12s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sidebar-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+}
+
+.sidebar-item:active {
+  transform: scale(0.98);
+}
+
+.sidebar-item.active {
+  background: var(--mac-blue);
+  color: #ffffff;
+  font-weight: 500;
+  box-shadow: 0 2px 8px rgba(10, 132, 255, 0.3);
+}
+
+.sidebar-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  opacity: 0.9;
+}
+
+.tag-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.tag-dot--red { background: var(--tag-red); }
+.tag-dot--orange { background: var(--tag-orange); }
+.tag-dot--yellow { background: var(--tag-yellow); }
+.tag-dot--green { background: var(--tag-green); }
+.tag-dot--blue { background: var(--tag-blue); }
+.tag-dot--purple { background: var(--tag-purple); }
+.tag-dot--gray { background: var(--tag-gray); }
+
+.sidebar-pinned-divider {
+  height: 1px;
+  background: var(--mac-divider, rgba(255, 255, 255, 0.08));
+  margin: 6px 8px;
+}
+
+.sidebar-item-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-item-remove {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  font-size: 10px;
+  color: #8e8e93;
+  margin-left: 4px;
+  transition: all 0.15s ease;
+}
+
+.sidebar-item:hover .sidebar-item-remove {
+  display: inline-flex;
+}
+
+.sidebar-item-remove:hover {
+  background: rgba(255, 69, 58, 0.2);
+  color: #ff453a;
+  transform: scale(1.15);
+}
+
+.sidebar-section--dragover {
+  outline: 2px dashed var(--mac-blue, #0a84ff);
+  outline-offset: -2px;
+  border-radius: var(--radius-sm, 6px);
+  background: rgba(10, 132, 255, 0.08);
+}
+
+/* Workspace Main */
+.mac-workspace {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  height: 100vh;
+  background: var(--mac-bg);
+  overflow: hidden;
+}
+
+/* Top Header */
+.mac-header {
+  height: 52px;
+  padding: 0 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  gap: 16px;
+  background: rgba(20, 20, 22, 0.85);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--mac-divider);
+  -webkit-app-region: drag;
+  z-index: 5;
+}
+
+.mac-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  -webkit-app-region: no-drag;
+}
+
+.mac-header-sidebar-toggle {
+  display: none !important;
+}
+
+.sidebar-collapsed .mac-header-sidebar-toggle,
+.mac-sidebar.collapsed ~ .mac-workspace .mac-header-sidebar-toggle {
+  display: inline-flex !important;
+}
+
+/* The wordmark follows the toggle into the header when the sidebar folds away,
+   so the strip it lives in is not simply lost. It reuses .sidebar-brand, so the
+   glass stays defined in exactly one place. */
+.mac-header-brand {
+  display: none !important;
+  /* .mac-header-left is no-drag for the button and title; the wordmark is
+     neither, so it hands that area back as draggable window chrome. */
+  -webkit-app-region: drag;
+}
+
+.sidebar-collapsed .mac-header-brand,
+.mac-sidebar.collapsed ~ .mac-workspace .mac-header-brand {
+  display: inline-flex !important;
+}
+
+.mac-folder-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 320px;
+}
+
+.mac-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  -webkit-app-region: no-drag;
+}
+
+.mac-tabs-container {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pane-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tab-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #a0a0a5;
+  border-radius: var(--radius-sm);
+  padding: 5px 12px;
+  font-size: 12.5px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  max-width: 200px;
+}
+
+.tab-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+.tab-btn--active {
+  background: var(--primary, #0a84ff);
+  border-color: var(--primary, #0a84ff);
+  color: #ffffff;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(10, 132, 255, 0.35);
+}
+
+.tab-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tab-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tab-close {
+  margin-left: 2px;
+  font-size: 13px;
+  line-height: 1;
+  opacity: 0.6;
+  border-radius: 50%;
+  width: 15px;
+  height: 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.1s, background 0.1s;
+}
+
+.tab-close:hover {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.mac-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mac-icon-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #c4c4c8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.mac-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+  transform: scale(1.04);
+}
+
+.mac-icon-btn:active {
+  transform: scale(0.96);
+}
+
+.mac-icon-btn.active {
+  background: var(--primary, #0a84ff);
+  border-color: var(--primary, #0a84ff);
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(10, 132, 255, 0.35);
+}
+
+/* Windows / Linux Caption Controls */
+.win-caption-controls {
+  display: flex;
+  align-items: center;
+  margin-left: 10px;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  padding-left: 6px;
+  gap: 2px;
+}
+
+body.platform-mac .win-caption-controls {
+  display: none;
+}
+
+.win-caption-btn {
+  width: 30px;
+  height: 28px;
+  border-radius: 4px;
+  background: transparent;
+  border: none;
+  color: #a1a1a6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.1s ease;
+}
+
+.win-caption-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+.win-caption-btn--close:hover {
+  background: #e81123 !important;
+  color: #ffffff !important;
+}
+
+/* Action Toolbar */
+.mac-toolbar {
+  padding: 8px 18px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.mac-pill-group {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: stretch;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.mac-toolbar-btn {
+  background: transparent;
+  border: none;
+  color: #c4c4c8;
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 5px 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  transition: all 0.1s ease;
+  height: 28px;
+}
+
+.mac-toolbar-btn:last-child {
+  border-right: none;
+}
+
+.mac-toolbar-btn:hover {
+  background: rgba(255, 255, 255, 0.09);
+  color: #ffffff;
+}
+
+.mac-toolbar-btn:active {
+  background: rgba(255, 255, 255, 0.16);
+  transform: scale(0.98);
+}
+
+.mac-toolbar-btn--active {
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+}
+
+.mac-toolbar-btn--danger:hover {
+  color: var(--error);
+  background: rgba(255, 69, 58, 0.15);
+}
+
+/* Breadcrumbs & Search Row */
+.mac-nav-bar {
+  padding: 0 18px 8px 18px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.mac-breadcrumb-container {
+  flex: 1;
+  min-width: 0;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: var(--radius-pill);
+  padding: 3px 12px;
+  display: flex;
+  align-items: center;
+  height: 30px;
+  overflow: hidden;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
+  cursor: text;
+  transition: all 0.15s ease;
+}
+
+.mac-breadcrumb-container:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.mac-breadcrumb-container:focus-within {
+  border-color: var(--primary, #0a84ff);
+  background: rgba(255, 255, 255, 0.09);
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.25);
+}
+
+.pane-title {
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  white-space: nowrap;
+  width: 100%;
+}
+
+.pane-title--editing {
+  width: 100%;
+}
+
+.path-inline-input {
+  width: 100%;
+  height: 24px;
+  background: transparent;
+  border: none;
+  color: #ffffff;
+  font-family: var(--font-mono, monospace);
+  font-size: 12.5px;
+  outline: none;
+  padding: 0 4px;
+}
+
+.pane-title-path {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  width: 100%;
+  cursor: text;
+}
+
+.pane-title-path::-webkit-scrollbar {
+  display: none;
+}
+
+.path-crumb {
+  background: transparent;
+  border: none;
+  color: #a8a8ac;
+  font-size: 12.5px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+  transition: all 0.1s ease;
+}
+
+.path-crumb:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.path-crumb:last-of-type {
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.path-sep {
+  color: #636366;
+  font-size: 12px;
+  margin: 0 2px;
+  user-select: none;
+}
+
+.path-edit-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: #78787c;
+  cursor: pointer;
+  padding: 2px 6px;
+  margin-left: auto;
+  font-size: 12px;
+  border-radius: 4px;
+  transition: all 0.1s ease;
+}
+
+.path-edit-btn:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.mac-search-container {
+  width: 250px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-pill);
+  padding: 0 10px 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  position: relative;
+  transition: all 0.15s ease;
+}
+
+.mac-search-container:focus-within {
+  border-color: var(--primary, #0a84ff);
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.25);
+}
+
+.search-icon {
+  color: #8e8e93;
+  flex-shrink: 0;
+}
+
+.mac-search-input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  color: #ffffff;
+  font-size: 12.5px;
+  outline: none;
+  font-family: inherit;
+}
+
+.mac-search-input::placeholder {
+  color: #727276;
+}
+
+.mac-search-filter-btn {
+  background: transparent;
+  border: none;
+  color: #8e8e93;
+  cursor: pointer;
+  padding: 3px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.1s ease;
+}
+
+.mac-search-filter-btn:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.1);
+}

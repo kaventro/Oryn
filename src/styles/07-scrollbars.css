@@ -1,0 +1,60 @@
+/**
+ * Hidden scrollbars everywhere the app scrolls (Tauri / WebKit + Firefox).
+ */
+html {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+html::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+.pane-list,
+.pane-title,
+.filter-dropdown,
+.viewer-content,
+.search-results,
+.search-history-list,
+.search-tab-panel,
+.compare-results,
+.replace-body,
+.quick-view-body,
+.git-status-list,
+.git-log-list,
+.git-branches-list,
+.diff-content {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+.pane-list::-webkit-scrollbar,
+.pane-title::-webkit-scrollbar,
+.filter-dropdown::-webkit-scrollbar,
+.viewer-content::-webkit-scrollbar,
+.search-results::-webkit-scrollbar,
+.search-history-list::-webkit-scrollbar,
+.search-tab-panel::-webkit-scrollbar,
+.compare-results::-webkit-scrollbar,
+.replace-body::-webkit-scrollbar,
+.quick-view-body::-webkit-scrollbar,
+.git-status-list::-webkit-scrollbar,
+.git-log-list::-webkit-scrollbar,
+.git-branches-list::-webkit-scrollbar,
+.diff-content::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+  display: none !important;
+  background: transparent !important;
+}
+
+body * {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+body *::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+  display: none !important;
+}

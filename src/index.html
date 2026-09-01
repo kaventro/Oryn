@@ -1,0 +1,1474 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <!--
+      Content-Security-Policy is intentionally NOT declared here. It is owned by
+      desktop/tauri.conf.json (strict `csp` in production, permissive `devCsp`
+      for Vite HMR in development), which Tauri injects with per-script nonces.
+      A second hand-written policy here would only weaken that (browsers enforce
+      the intersection, and an `'unsafe-inline'` meta re-opened inline scripts).
+      The production bundle emits no inline scripts, so `script-src 'self'` holds.
+    -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Oryn</title>
+  <link rel="icon" type="image/png" href="/favicon.png" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+
+<body>
+  <div id="app" class="mac-app single-pane-mode">
+
+    <!-- Left sidebar -->
+    <aside class="mac-sidebar" id="sidebar">
+      <!-- Window Controls & Sidebar toggle -->
+      <div class="sidebar-top-bar" data-tauri-drag-region>
+        <div class="sidebar-brand" data-tauri-drag-region>
+          <span class="sidebar-brand-text">Oryn</span>
+        </div>
+        <button type="button" class="sidebar-toggle-btn" id="sidebar-toggle" title="Toggle Sidebar">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="3" ry="3" />
+            <line x1="9" y1="3" x2="9" y2="21" />
+          </svg>
+        </button>
+      </div>
+
+      <div class="sidebar-content">
+        <!-- FAVORITES -->
+        <div class="sidebar-section" id="sidebar-favorites-section" data-section="favorites">
+          <div class="sidebar-section-header">
+            <div class="sidebar-section-title">
+              <svg class="sidebar-section-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+              <span>Favorites</span>
+            </div>
+            <button type="button" class="sidebar-add-tag-btn" id="btn-add-pinned-folder"
+              title="Pin Current Folder to Favorites">+</button>
+          </div>
+          <nav class="sidebar-nav" id="sidebar-favorites-nav">
+            <button type="button" class="sidebar-item" id="fav-home" data-path="~">
+              <svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="#0a84ff" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+                <polyline points="9 22 9 12 15 12 15 22" />
+              </svg>
+              <span class="sidebar-item-label" id="fav-home-label">Home</span>
+            </button>
+            <button type="button" class="sidebar-item" id="fav-desktop" data-path="~/Desktop">
+              <svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="#0a84ff" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+                <line x1="8" y1="21" x2="16" y2="21" />
+                <line x1="12" y1="17" x2="12" y2="21" />
+              </svg>
+              <span class="sidebar-item-label">Desktop</span>
+            </button>
+            <button type="button" class="sidebar-item" id="fav-documents" data-path="~/Documents">
+              <svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="#0a84ff" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+              </svg>
+              <span class="sidebar-item-label">Documents</span>
+            </button>
+            <button type="button" class="sidebar-item" id="fav-downloads" data-path="~/Downloads">
+              <svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="#0a84ff" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+              <span class="sidebar-item-label">Downloads</span>
+            </button>
+          </nav>
+        </div>
+
+        <!-- LOCATIONS -->
+        <div class="sidebar-section" id="sidebar-locations-section" data-section="locations">
+          <div class="sidebar-section-header">
+            <div class="sidebar-section-title">
+              <svg class="sidebar-section-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+              <span>Locations</span>
+            </div>
+          </div>
+          <nav class="sidebar-nav" id="sidebar-locations-nav">
+            <button type="button" class="sidebar-item" id="loc-root" data-path="/">
+              <svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="#0a84ff" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="6" width="20" height="12" rx="2" />
+                <circle cx="12" cy="12" r="2" />
+                <line x1="6" y1="12" x2="6.01" y2="12" />
+                <line x1="18" y1="12" x2="18.01" y2="12" />
+              </svg>
+              <span class="sidebar-item-label">Drives</span>
+            </button>
+          </nav>
+        </div>
+
+        <!-- REMOTE SERVERS (SFTP) -->
+        <div class="sidebar-section" id="sidebar-remote-section" data-section="remote" style="display: none;">
+          <div class="sidebar-section-header">
+            <div class="sidebar-section-title">
+              <svg class="sidebar-section-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+              <span>Remote (SFTP)</span>
+            </div>
+            <button type="button" class="sidebar-add-tag-btn" id="btn-add-remote-server"
+              title="Connect to Remote Server (SFTP/SSH)">+</button>
+          </div>
+          <nav class="sidebar-nav" id="sidebar-remote-nav">
+            <div class="sidebar-empty-msg" style="padding: 6px 12px; font-size: 11px; color: #8e8e93;">No saved servers
+            </div>
+          </nav>
+        </div>
+
+        <!-- TAGS -->
+        <div class="sidebar-section" id="sidebar-tags-section" data-section="tags">
+          <div class="sidebar-section-header">
+            <div class="sidebar-section-title">
+              <svg class="sidebar-section-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+              <span>Tags</span>
+            </div>
+            <button type="button" class="sidebar-add-tag-btn" id="btn-add-custom-tag" title="Add New Tag">+</button>
+          </div>
+          <nav class="sidebar-nav" id="sidebar-tags-nav">
+            <button type="button" class="sidebar-item" data-tag="red">
+              <span class="tag-dot tag-dot--red"></span>
+              <span class="sidebar-item-label">Red</span>
+            </button>
+            <button type="button" class="sidebar-item" data-tag="orange">
+              <span class="tag-dot tag-dot--orange"></span>
+              <span class="sidebar-item-label">Orange</span>
+            </button>
+            <button type="button" class="sidebar-item" data-tag="yellow">
+              <span class="tag-dot tag-dot--yellow"></span>
+              <span class="sidebar-item-label">Yellow</span>
+            </button>
+            <button type="button" class="sidebar-item" data-tag="green">
+              <span class="tag-dot tag-dot--green"></span>
+              <span class="sidebar-item-label">Green</span>
+            </button>
+            <button type="button" class="sidebar-item" data-tag="blue">
+              <span class="tag-dot tag-dot--blue"></span>
+              <span class="sidebar-item-label">Blue</span>
+            </button>
+            <button type="button" class="sidebar-item" data-tag="purple">
+              <span class="tag-dot tag-dot--purple"></span>
+              <span class="sidebar-item-label">Purple</span>
+            </button>
+            <button type="button" class="sidebar-item" data-tag="gray">
+              <span class="tag-dot tag-dot--gray"></span>
+              <span class="sidebar-item-label">Gray</span>
+            </button>
+          </nav>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main workspace area -->
+    <main class="mac-workspace" id="workspace">
+
+      <!-- HEADER ROW: Title, Tabs, Top-Right Controls -->
+      <header class="mac-header" data-tauri-drag-region>
+        <div class="mac-header-left">
+          <div class="sidebar-brand mac-header-brand" data-tauri-drag-region>
+            <span class="sidebar-brand-text">Oryn</span>
+          </div>
+          <button type="button" class="sidebar-toggle-btn mac-header-sidebar-toggle" id="sidebar-toggle-header"
+            title="Toggle Sidebar (Cmd+B)">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="3" ry="3" />
+              <line x1="9" y1="3" x2="9" y2="21" />
+            </svg>
+          </button>
+          <h1 class="mac-folder-title" id="folder-title">Documents</h1>
+        </div>
+
+        <div class="mac-header-right">
+          <!-- TABS CONTAINER -->
+          <div class="mac-tabs-container">
+            <div id="tabs-left" class="pane-tabs"></div>
+            <div id="tabs-right" class="pane-tabs" style="display:none;"></div>
+          </div>
+
+          <!-- TAB & SPLIT ACTIONS -->
+          <div class="mac-header-actions">
+            <button type="button" class="mac-icon-btn" id="btn-add-tab" title="New Tab (Ctrl+T)" aria-label="New Tab">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+            </button>
+            <button type="button" class="mac-icon-btn" id="btn-pane-toggle" title="Toggle Dual/Single Pane (Tab)"
+              aria-label="Toggle Dual Pane">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <line x1="12" y1="3" x2="12" y2="21" />
+              </svg>
+            </button>
+            <button type="button" class="mac-icon-btn" id="btn-remote-toggle"
+              title="Remote Servers / SFTP (Ctrl+Shift+S)" aria-label="Remote Connections" style="display: none;">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+                <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+                <line x1="6" y1="6" x2="6.01" y2="6"></line>
+                <line x1="6" y1="18" x2="6.01" y2="18"></line>
+              </svg>
+            </button>
+            <button type="button" class="mac-icon-btn" id="btn-terminal-toggle" title="Toggle Terminal (Ctrl+` or F9)"
+              aria-label="Toggle Terminal">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="4 17 10 11 4 5" />
+                <line x1="12" y1="19" x2="20" y2="19" />
+              </svg>
+            </button>
+            <button type="button" class="mac-icon-btn" id="btn-settings-toggle" title="Settings & Preferences (Cmd+,)"
+              aria-label="Settings">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3" />
+                <path
+                  d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              </svg>
+            </button>
+
+            <!-- WINDOW CAPTION CONTROLS (Windows & Linux) -->
+            <div class="win-caption-controls" id="win-caption-controls">
+              <button type="button" class="win-caption-btn" id="win-btn-min" title="Minimize" aria-label="Minimize">
+                <svg width="10" height="1" viewBox="0 0 10 1">
+                  <rect width="10" height="1" fill="currentColor" />
+                </svg>
+              </button>
+              <button type="button" class="win-caption-btn" id="win-btn-max" title="Maximize" aria-label="Maximize">
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1">
+                  <rect x="0.5" y="0.5" width="9" height="9" />
+                </svg>
+              </button>
+              <button type="button" class="win-caption-btn win-caption-btn--close" id="win-btn-close" title="Close"
+                aria-label="Close">
+                <svg width="10" height="10" viewBox="0 0 10 10">
+                  <line x1="1" y1="1" x2="9" y2="9" stroke="currentColor" stroke-width="1.2" />
+                  <line x1="9" y1="1" x2="1" y2="9" stroke="currentColor" stroke-width="1.2" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <!-- ACTION TOOLBAR -->
+      <section class="mac-toolbar" role="toolbar" aria-label="Action Toolbar">
+        <!-- NAVIGATION GROUP -->
+        <div class="mac-pill-group mac-nav-group">
+          <button type="button" class="mac-toolbar-btn" id="btn-nav-back" title="Back (Alt+Left)">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5"
+              stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="15 18 9 12 15 6" />
+            </svg>
+          </button>
+          <button type="button" class="mac-toolbar-btn" id="btn-nav-forward" title="Forward (Alt+Right)">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5"
+              stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+          </button>
+          <button type="button" class="mac-toolbar-btn" id="btn-nav-up" title="Parent Directory (Alt+Up)">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5"
+              stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="18 15 12 9 6 15" />
+            </svg>
+          </button>
+        </div>
+
+        <!-- ACTION BUTTONS -->
+        <div class="mac-pill-group mac-action-group">
+          <button type="button" class="mac-toolbar-btn mac-toolbar-btn--labeled" data-cmd="newFile"
+            title="New File (Shift+F7)">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+              <polyline points="14 2 14 8 20 8" />
+              <line x1="12" y1="18" x2="12" y2="12" />
+              <line x1="9" y1="15" x2="15" y2="15" />
+            </svg>
+            <span>New File</span>
+          </button>
+          <button type="button" class="mac-toolbar-btn mac-toolbar-btn--labeled" data-cmd="mkdir"
+            title="New Folder (F7)">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path
+                d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z" />
+              <line x1="12" y1="10" x2="12" y2="16" />
+              <line x1="9" y1="13" x2="15" y2="13" />
+            </svg>
+            <span>Folder</span>
+          </button>
+          <button type="button" class="mac-toolbar-btn mac-toolbar-btn--labeled" data-cmd="rename" title="Rename (F2)">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+            </svg>
+            <span>Rename</span>
+          </button>
+          <button type="button" class="mac-toolbar-btn mac-toolbar-btn--labeled" data-cmd="copy"
+            title="Duplicate / Copy (F5)">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+            </svg>
+            <span>Duplicate</span>
+          </button>
+          <button type="button" class="mac-toolbar-btn mac-toolbar-btn--labeled mac-toolbar-btn--danger"
+            data-cmd="delete" title="Delete (F8)">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+            </svg>
+            <span>Delete</span>
+          </button>
+          <button type="button" class="mac-toolbar-btn mac-toolbar-btn--labeled" data-cmd="viewFile"
+            title="Preview (F3 / Space)">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+            <span>Preview</span>
+          </button>
+        </div>
+
+        <!-- VIEW MODE SEGMENTED CONTROL -->
+        <div class="mac-pill-group mac-view-group">
+          <button type="button" class="mac-toolbar-btn mac-toolbar-btn--active" id="btn-view-list" data-view="list"
+            title="List View">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <line x1="8" y1="6" x2="21" y2="6" />
+              <line x1="8" y1="12" x2="21" y2="12" />
+              <line x1="8" y1="18" x2="21" y2="18" />
+              <line x1="3" y1="6" x2="3.01" y2="6" />
+              <line x1="3" y1="12" x2="3.01" y2="12" />
+              <line x1="3" y1="18" x2="3.01" y2="18" />
+            </svg>
+          </button>
+          <button type="button" class="mac-toolbar-btn" id="btn-view-grid" data-view="grid" title="Grid View">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="7" height="7" />
+              <rect x="14" y="3" width="7" height="7" />
+              <rect x="14" y="14" width="7" height="7" />
+              <rect x="3" y="14" width="7" height="7" />
+            </svg>
+          </button>
+          <button type="button" class="mac-toolbar-btn" id="btn-view-columns" data-view="columns" title="Columns View">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="5" height="18" rx="1" />
+              <rect x="10" y="3" width="5" height="18" rx="1" />
+              <rect x="17" y="3" width="5" height="18" rx="1" />
+            </svg>
+          </button>
+        </div>
+
+        <!-- MORE BUTTON -->
+        <div class="mac-pill-group">
+          <button type="button" class="mac-toolbar-btn" id="btn-more-menu" title="More Options">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5"
+              stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="1" />
+              <circle cx="19" cy="12" r="1" />
+              <circle cx="5" cy="12" r="1" />
+            </svg>
+          </button>
+        </div>
+      </section>
+
+      <!-- BREADCRUMB & SEARCH BAR ROW -->
+      <section class="mac-nav-bar">
+        <!-- BREADCRUMBS PILL -->
+        <div class="mac-breadcrumb-container" id="mac-breadcrumbs">
+          <div class="pane-title" id="title-left"></div>
+          <div class="pane-title" id="title-right" style="display:none;"></div>
+        </div>
+
+        <!-- SEARCH PILL -->
+        <div class="mac-search-container">
+          <svg class="search-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <input type="text" id="filter-input" class="mac-search-input" placeholder="Search files…" autocomplete="off"
+            spellcheck="false" />
+          <button type="button" id="browse-folder-btn" class="mac-search-filter-btn"
+            title="Find in Tree (Ctrl+Shift+T)">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <line x1="4" y1="21" x2="4" y2="14" />
+              <line x1="4" y1="10" x2="4" y2="3" />
+              <line x1="12" y1="21" x2="12" y2="12" />
+              <line x1="12" y1="8" x2="12" y2="3" />
+              <line x1="20" y1="21" x2="20" y2="16" />
+              <line x1="20" y1="12" x2="20" y2="3" />
+              <line x1="1" y1="14" x2="7" y2="14" />
+              <line x1="9" y1="8" x2="15" y2="8" />
+              <line x1="17" y1="16" x2="23" y2="16" />
+            </svg>
+          </button>
+          <div id="filter-dropdown" class="filter-dropdown hidden"></div>
+        </div>
+      </section>
+
+      <!-- FILE PANES -->
+      <div class="mac-panes-wrapper" id="panes-wrapper">
+        <section class="pane mac-pane active" id="pane-left" data-side="left">
+          <div class="pane-body">
+            <div class="pane-col-head" aria-label="Column headers">
+              <span class="pch-name" data-sort="name" role="button">Name<span class="sort-icon"></span></span>
+              <span class="pch-date" data-sort="date" role="button">Date Modified<span class="sort-icon"></span></span>
+              <span class="pch-size" data-sort="size" role="button">Size<span class="sort-icon"></span></span>
+            </div>
+            <div class="pane-list" id="list-left" tabindex="0" role="listbox" aria-label="Left panel"></div>
+          </div>
+        </section>
+
+        <section class="pane mac-pane" id="pane-right" data-side="right">
+          <div class="pane-body">
+            <div class="pane-col-head" aria-label="Column headers">
+              <span class="pch-name" data-sort="name" role="button">Name<span class="sort-icon"></span></span>
+              <span class="pch-date" data-sort="date" role="button">Date Modified<span class="sort-icon"></span></span>
+              <span class="pch-size" data-sort="size" role="button">Size<span class="sort-icon"></span></span>
+            </div>
+            <div class="pane-list" id="list-right" tabindex="0" role="listbox" aria-label="Right panel"></div>
+          </div>
+        </section>
+      </div>
+
+      <!-- STATUS BAR -->
+      <footer class="mac-status-bar" id="mac-status-bar">
+        <div class="mac-status-left" id="item-count-status">0 items</div>
+        <button type="button" class="mac-status-terminal-btn" id="btn-status-terminal-toggle"
+          title="Toggle Terminal (Ctrl+` or F9)">
+          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="4 17 10 11 4 5" />
+            <line x1="12" y1="19" x2="20" y2="19" />
+          </svg>
+          <span>Terminal</span>
+        </button>
+        <div class="mac-status-right" id="full-path-status">/</div>
+        <div id="status" class="status" style="display:none;"></div>
+      </footer>
+
+      <!-- FLOATING TRANSFER PROGRESS TOAST -->
+      <div id="nx-xfer" class="nx-xfer nx-xfer--hidden" role="status">
+        <div class="nx-xfer-header">
+          <span class="nx-xfer-title" id="nx-xfer-title">Transferring files…</span>
+          <button type="button" id="nx-xfer-cancel" class="nx-xfer-cancel-btn" title="Cancel (Esc)">✕</button>
+        </div>
+        <div class="nx-xfer-bar-track">
+          <div class="nx-xfer-bar-fill" id="nx-xfer-fill" style="width: 0%;"></div>
+        </div>
+        <div class="nx-xfer-meta">
+          <span id="nx-xfer-file" class="nx-xfer-file">Preparing…</span>
+          <span id="nx-xfer-pct" class="nx-xfer-pct">0%</span>
+        </div>
+      </div>
+
+      <!-- MINI TERMINAL / COMMAND LINE (Hidden by default) -->
+      <div class="nx-terminal" id="nx-terminal" style="display: none;" role="status" aria-live="polite">
+        <span class="nx-terminal-prompt">user@Oryn<span class="nx-terminal-at"> ~</span>]$</span>
+        <input type="text" id="nx-cmd-input" class="nx-cmd-input" placeholder="Type command…" autocomplete="off"
+          spellcheck="false" />
+        <span class="nx-terminal-output" id="nx-terminal-output">ready</span>
+      </div>
+    </main>
+
+  </div>
+
+  <!-- Modal dialogs & overlays -->
+  <div id="modal-overlay" class="modal-overlay hidden" aria-hidden="true">
+    <div class="modal nx-modal mac-dialog" id="modal-rename">
+      <div class="mac-dialog-header">
+        <div class="mac-dialog-icon" id="rename-dialog-icon">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#0a84ff" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+          </svg>
+        </div>
+        <div class="mac-dialog-title-group">
+          <h2 id="rename-dialog-title" class="mac-dialog-title">Rename</h2>
+          <p class="mac-dialog-subtitle">Enter a new name for this file or folder.</p>
+        </div>
+      </div>
+      <input type="text" id="rename-input" class="mac-dialog-input" spellcheck="false" autocomplete="off" />
+      <div class="modal-actions mac-dialog-actions">
+        <button type="button" id="rename-cancel" class="mac-btn mac-btn--secondary">Cancel</button>
+        <button type="button" id="rename-ok" class="mac-btn mac-btn--primary">Rename</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Batch rename overlay -->
+  <div id="batch-rename-overlay" class="modal-overlay hidden" aria-hidden="true">
+    <div class="modal nx-modal batch-rename-modal" id="modal-batch-rename" style="width:500px">
+      <div class="search-header">
+        <h2>BATCH RENAME</h2>
+        <button type="button" id="batch-rename-close" class="search-action-btn search-action-btn--ghost">✕
+          Close</button>
+      </div>
+      <div style="padding: 10px 24px;">
+        <label class="search-field-block nx-mono">
+          <span class="search-muted">Mask: [N] name, [E] ext, [C] counter, [C:start] counter from start</span>
+          <input type="text" id="batch-rename-mask" placeholder="[N]-[C].[E]" autocomplete="off" spellcheck="false"
+            value="[N]-[C].[E]" />
+        </label>
+      </div>
+      <div id="batch-rename-preview" class="search-results nx-mono"
+        style="margin: 0 24px 16px 24px; max-height: 200px; overflow-y:auto; border: 1px solid var(--border); padding: 8px;">
+      </div>
+      <div class="modal-actions" style="margin: 0 24px 24px 24px; padding:0; justify-content: flex-end;">
+        <button type="button" id="batch-rename-ok" class="search-start-btn">Rename</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bookmarks overlay -->
+  <div id="bookmarks-overlay" class="modal-overlay hidden" aria-hidden="true">
+    <div class="modal nx-modal bookmarks-modal" id="modal-bookmarks" style="width:400px">
+      <div class="search-header">
+        <h2>★ BOOKMARKS</h2>
+        <button type="button" id="bookmarks-close" class="search-action-btn search-action-btn--ghost">✕ Close</button>
+      </div>
+      <div class="modal-actions" style="margin: 0 24px 10px 24px; padding:0; justify-content: flex-start;">
+        <button type="button" id="bookmarks-add" class="search-action-btn">+ Add Current Folder</button>
+      </div>
+      <div id="bookmarks-list" class="search-results nx-mono"
+        style="margin: 0 24px 16px 24px; max-height: 250px; overflow-y:auto; border: 1px solid var(--border); padding: 8px;"
+        role="listbox" tabindex="0"></div>
+    </div>
+  </div>
+
+  <!-- Preferences overlay -->
+  <div id="preferences-overlay" class="modal-overlay hidden" aria-hidden="true">
+    <div class="modal nx-modal preferences-modal" id="modal-preferences" role="dialog" aria-modal="true"
+      aria-labelledby="preferences-title">
+      <!-- Header -->
+      <div class="mac-pref-header">
+        <div class="mac-pref-header-title">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3" />
+            <path
+              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+          </svg>
+          <span id="preferences-title">Settings</span>
+        </div>
+        <button type="button" id="preferences-close" class="mac-pref-close-btn"
+          title="Close Settings (Esc)">Done</button>
+      </div>
+
+      <!-- Body -->
+      <div class="mac-pref-body">
+        <!-- Sidebar -->
+        <nav class="mac-pref-sidebar" aria-label="Settings Categories">
+          <button type="button" class="mac-pref-nav-item active" data-ptab="appearance">
+            <span class="mac-pref-icon-badge badge-blue">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <path d="m4.93 4.93 4.24 4.24" />
+                <path d="m14.83 9.17 4.24-4.24" />
+                <path d="m14.83 14.83 4.24 4.24" />
+                <path d="m9.17 14.83-4.24 4.24" />
+              </svg>
+            </span>
+            <span>Appearance</span>
+          </button>
+          <button type="button" class="mac-pref-nav-item" data-ptab="hotkeys">
+            <span class="mac-pref-icon-badge badge-orange">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round">
+                <rect x="2" y="4" width="20" height="16" rx="2" />
+                <path d="M6 8h.01" />
+                <path d="M10 8h.01" />
+                <path d="M14 8h.01" />
+                <path d="M18 8h.01" />
+                <path d="M8 12h.01" />
+                <path d="M12 12h.01" />
+                <path d="M16 12h.01" />
+                <path d="M7 16h10" />
+              </svg>
+            </span>
+            <span>Keyboard</span>
+          </button>
+          <button type="button" class="mac-pref-nav-item" data-ptab="files">
+            <span class="mac-pref-icon-badge badge-purple">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round">
+                <path
+                  d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z" />
+              </svg>
+            </span>
+            <span>Files & Git</span>
+          </button>
+          <button type="button" class="mac-pref-nav-item" data-ptab="editor">
+            <span class="mac-pref-icon-badge badge-teal">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round">
+                <polyline points="16 18 22 12 16 6" />
+                <polyline points="8 6 2 12 8 18" />
+              </svg>
+            </span>
+            <span>External Tools</span>
+          </button>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="mac-pref-main">
+          <!-- Appearance Panel -->
+          <div id="pref-panel-appearance" class="mac-pref-tab-panel">
+            <div class="mac-pref-group">
+              <div class="mac-pref-section-title">Theme & View</div>
+              <div class="mac-pref-card">
+                <div class="mac-pref-row">
+                  <div class="mac-pref-row-info">
+                    <span class="mac-pref-row-title">Accent Color</span>
+                    <span class="mac-pref-row-desc">Visual tint for active tabs and highlights</span>
+                  </div>
+                  <div class="mac-theme-wells">
+                    <div class="mac-theme-well selected" data-theme="balanced" style="background:#0a84ff;"
+                      title="Graphite Blue"></div>
+                    <div class="mac-theme-well" data-theme="ocean" style="background:#00b4d8;" title="Ocean Cyan"></div>
+                    <div class="mac-theme-well" data-theme="ember" style="background:#ff9f0a;" title="Ember Orange">
+                    </div>
+                    <div class="mac-theme-well" data-theme="emerald" style="background:#30d158;" title="Emerald Green">
+                    </div>
+                    <div class="mac-theme-well" data-theme="purple" style="background:#bf5af2;" title="Purple Glow">
+                    </div>
+                    <div class="mac-theme-well" data-theme="mono" style="background:#8e8e93;" title="Monochrome"></div>
+                  </div>
+                </div>
+                <div class="mac-pref-row">
+                  <div class="mac-pref-row-info">
+                    <span class="mac-pref-row-title">Pane Layout</span>
+                    <span class="mac-pref-row-desc">Choose between dual side-by-side or single panel</span>
+                  </div>
+                  <div class="mac-segmented">
+                    <button type="button" class="mac-segmented-item active" data-pane-mode="dual">Dual Pane</button>
+                    <button type="button" class="mac-segmented-item" data-pane-mode="single">Single Pane</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="mac-pref-group">
+              <div class="mac-pref-section-title">Dual Pane Startup Volumes</div>
+              <div class="mac-pref-card">
+                <div class="mac-pref-row">
+                  <div class="mac-pref-row-info">
+                    <span class="mac-pref-row-title">Open Drives by Side</span>
+                    <span class="mac-pref-row-desc">In Dual Pane, start each panel on its own drive or volume when more
+                      than one is present</span>
+                  </div>
+                  <label class="mac-switch">
+                    <input type="checkbox" id="pref-dual-drive-defaults" checked>
+                    <span class="mac-slider"></span>
+                  </label>
+                </div>
+                <div class="mac-pref-row">
+                  <div class="mac-pref-row-info">
+                    <span class="mac-pref-row-title">Left Panel Volume</span>
+                    <span class="mac-pref-row-desc">Automatic opens the home volume (C:\ on Windows, / on
+                      macOS/Linux)</span>
+                  </div>
+                  <select id="pref-left-drive" class="mac-select"></select>
+                </div>
+                <div class="mac-pref-row">
+                  <div class="mac-pref-row-info">
+                    <span class="mac-pref-row-title">Right Panel Volume</span>
+                    <span class="mac-pref-row-desc">Automatic opens the next distinct volume (e.g. D:\, /Volumes/…,
+                      /media/…)</span>
+                  </div>
+                  <select id="pref-right-drive" class="mac-select"></select>
+                </div>
+              </div>
+            </div>
+
+            <div class="mac-pref-group">
+              <div class="mac-pref-section-title">File Listing</div>
+              <div class="mac-pref-card">
+                <div class="mac-pref-row">
+                  <div class="mac-pref-row-info">
+                    <span class="mac-pref-row-title">Show Hidden Files</span>
+                    <span class="mac-pref-row-desc">Display dotfiles and hidden folders (.git, .env)</span>
+                  </div>
+                  <label class="mac-switch">
+                    <input type="checkbox" id="pref-show-hidden">
+                    <span class="mac-slider"></span>
+                  </label>
+                </div>
+                <div class="mac-pref-row">
+                  <div class="mac-pref-row-info">
+                    <span class="mac-pref-row-title">Show File Extensions</span>
+                    <span class="mac-pref-row-desc">Always display filename extensions in panels</span>
+                  </div>
+                  <label class="mac-switch">
+                    <input type="checkbox" id="pref-show-ext" checked>
+                    <span class="mac-slider"></span>
+                  </label>
+                </div>
+                <div class="mac-pref-row">
+                  <div class="mac-pref-row-info">
+                    <span class="mac-pref-row-title">Status Bar Terminal</span>
+                    <span class="mac-pref-row-desc">Show quick terminal launcher button in the bottom status bar</span>
+                  </div>
+                  <label class="mac-switch">
+                    <input type="checkbox" id="pref-show-status-terminal" checked>
+                    <span class="mac-slider"></span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Hotkeys Panel -->
+          <div id="pref-panel-hotkeys" class="mac-pref-tab-panel" style="display:none;">
+            <div class="mac-hotkey-toolbar">
+              <input type="text" id="pref-hotkey-search" class="mac-search-field"
+                placeholder="Search shortcuts (e.g. F3, Rename, Git)…" />
+              <button type="button" id="pref-hotkeys-reset" class="mac-pref-close-btn"
+                title="Restore all default shortcuts">↺ Reset</button>
+            </div>
+            <div id="pref-hotkeys-list" class="mac-hotkeys-container"></div>
+          </div>
+
+          <!-- Files & Git Panel -->
+          <div id="pref-panel-files" class="mac-pref-tab-panel" style="display:none;">
+            <div class="mac-pref-group">
+              <div class="mac-pref-section-title">File Operations</div>
+              <div class="mac-pref-card">
+                <div class="mac-pref-row">
+                  <div class="mac-pref-row-info">
+                    <span class="mac-pref-row-title">Confirm Before Delete</span>
+                    <span class="mac-pref-row-desc">Prompt confirmation dialog when deleting items</span>
+                  </div>
+                  <label class="mac-switch">
+                    <input type="checkbox" id="pref-confirm-delete" checked>
+                    <span class="mac-slider"></span>
+                  </label>
+                </div>
+                <div class="mac-pref-row">
+                  <div class="mac-pref-row-info">
+                    <span class="mac-pref-row-title">Overwrite Conflict Policy</span>
+                    <span class="mac-pref-row-desc">Default action when copying existing files</span>
+                  </div>
+                  <select id="pref-overwrite-policy" class="mac-select">
+                    <option value="prompt">Prompt for Conflict</option>
+                    <option value="overwrite">Overwrite Automatically</option>
+                    <option value="skip">Skip Existing</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div class="mac-pref-group">
+              <div class="mac-pref-section-title">Git Integration</div>
+              <div class="mac-pref-card">
+                <div class="mac-pref-row">
+                  <div class="mac-pref-row-info">
+                    <span class="mac-pref-row-title">Default Diff Reference</span>
+                    <span class="mac-pref-row-desc">Base revision used for diff and blame</span>
+                  </div>
+                  <select id="pref-git-diff-ref" class="mac-select">
+                    <option value="HEAD">HEAD (Working Tree)</option>
+                    <option value="HEAD~1">HEAD~1 (Previous Commit)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div class="mac-pref-group">
+              <div class="mac-pref-section-title">Remote Connections</div>
+              <div class="mac-pref-card">
+                <div class="mac-pref-row">
+                  <div class="mac-pref-row-info">
+                    <span class="mac-pref-row-title">Enable Remote SFTP Feature</span>
+                    <span class="mac-pref-row-desc">Show SFTP remote servers in sidebar and enable SSH/SFTP connections</span>
+                  </div>
+                  <label class="mac-switch">
+                    <input type="checkbox" id="pref-enable-sftp">
+                    <span class="mac-slider"></span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Editor Panel -->
+          <div id="pref-panel-editor" class="mac-pref-tab-panel" style="display:none;">
+            <div class="mac-pref-group">
+              <div class="mac-pref-section-title">External Applications</div>
+              <div class="mac-pref-card">
+                <div class="mac-pref-row">
+                  <div class="mac-pref-row-info">
+                    <span class="mac-pref-row-title">Preferred Code Editor</span>
+                    <span class="mac-pref-row-desc">Used for Shift+F4 and editing source files</span>
+                  </div>
+                  <select id="pref-default-editor" class="mac-select">
+                    <option value="vscode">Visual Studio Code (code)</option>
+                    <option value="cursor">Cursor (cursor)</option>
+                    <option value="sublime">Sublime Text (subl)</option>
+                    <option value="custom">Custom Command…</option>
+                  </select>
+                </div>
+                <div class="mac-pref-row" id="pref-custom-editor-wrap" style="display:none;">
+                  <div class="mac-pref-row-info">
+                    <span class="mac-pref-row-title">Launch Command</span>
+                    <span class="mac-pref-row-desc">Executable path or shell command</span>
+                  </div>
+                  <input type="text" id="pref-custom-editor-cmd" class="mac-search-field" style="width:180px;"
+                    placeholder="e.g. zed, nvim" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+
+      <!-- Footer -->
+      <div class="mac-pref-footer">
+        <div id="pref-status-hint"></div>
+        <div id="pref-app-version">Oryn • macOS &amp; Windows</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Viewer overlay -->
+  <div id="viewer-overlay" class="modal-overlay hidden" aria-hidden="true">
+    <div class="modal nx-modal viewer-modal">
+      <div class="viewer-header">
+        <h2><span aria-hidden="true">👁</span> PREVIEW <span id="viewer-title" class="viewer-title-text nx-mono"></span>
+        </h2>
+        <div class="viewer-header-actions">
+          <button type="button" id="viewer-mode-btn" class="viewer-btn viewer-mode-btn hidden"
+            title="Toggle rendered Markdown / raw source">Raw</button>
+          <button type="button" id="viewer-edit-btn" class="viewer-btn viewer-edit-btn hidden"
+            title="Edit file (Ctrl+E / Cmd+E)">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+            <span>Edit</span>
+          </button>
+          <button type="button" id="viewer-save-btn" class="viewer-btn viewer-save-btn hidden"
+            title="Save changes (Ctrl+S / Cmd+S)">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+            <span>Save</span>
+          </button>
+          <button type="button" id="viewer-cancel-edit-btn" class="viewer-btn viewer-cancel-btn hidden"
+            title="Cancel editing">Cancel</button>
+        </div>
+      </div>
+      <div class="viewer-content-wrap">
+        <div id="viewer-content" class="viewer-content nx-mono" tabindex="0"></div>
+        <textarea id="viewer-editor" class="viewer-editor nx-mono hidden" spellcheck="false" placeholder="File content…"></textarea>
+      </div>
+      <div class="viewer-footer">
+        <div id="viewer-status-hint" class="viewer-status-hint"></div>
+        <button type="button" id="viewer-close" class="viewer-close-btn">✕ Close (Esc)</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Properties overlay -->
+  <div id="properties-overlay" class="modal-overlay hidden" aria-hidden="true">
+    <div class="modal nx-modal properties-modal" id="properties-modal" role="dialog" aria-modal="true"
+      aria-labelledby="properties-title">
+      <div class="properties-head">
+        <div class="properties-icon" aria-hidden="true">
+          <span>i</span>
+        </div>
+        <div class="properties-heading">
+          <div class="search-header properties-header-row">
+            <h2 id="properties-title">PROPERTIES</h2>
+            <span id="properties-kind" class="properties-kind nx-mono">FILE</span>
+          </div>
+          <div id="properties-path" class="properties-path nx-mono" data-tooltip=""></div>
+        </div>
+      </div>
+
+      <div class="properties-grid nx-mono">
+        <div class="properties-card">
+          <span class="properties-label">Type</span>
+          <span id="properties-type" class="properties-value">—</span>
+        </div>
+        <div class="properties-card">
+          <span class="properties-label">Size</span>
+          <span id="properties-size" class="properties-value">—</span>
+        </div>
+        <div class="properties-card">
+          <span class="properties-label">Mode</span>
+          <span id="properties-mode" class="properties-value">—</span>
+        </div>
+        <div class="properties-card properties-card--wide">
+          <span class="properties-label">Modified</span>
+          <span id="properties-mtime" class="properties-value">—</span>
+        </div>
+        <div class="properties-card properties-card--wide properties-tags-card">
+          <span class="properties-label">Tags</span>
+          <div id="properties-tags-list" class="properties-tags-list"></div>
+        </div>
+      </div>
+
+      <div class="properties-footer">
+        <div id="properties-summary" class="properties-summary nx-mono"></div>
+        <div class="properties-actions">
+          <button type="button" id="properties-copy" class="search-action-btn">Copy path</button>
+          <button type="button" id="properties-close" class="search-start-btn">OK</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Search overlay -->
+  <div id="search-overlay" class="modal-overlay hidden" aria-hidden="true">
+    <div class="modal nx-modal search-modal">
+      <div class="search-header">
+        <h2>FIND FILES</h2>
+        <div class="search-tabs" role="tablist">
+          <button class="search-tab search-tab--active" data-tab="standard" role="tab">Standard</button>
+          <button class="search-tab" data-tab="advanced" role="tab">Advanced</button>
+          <button class="search-tab" data-tab="results" role="tab">Results <span id="search-tab-count"></span></button>
+        </div>
+      </div>
+
+      <!-- Standard Tab -->
+      <div id="search-tab-standard" class="search-tab-panel">
+        <fieldset class="search-section">
+          <legend class="search-section-legend">📁 Directory</legend>
+          <div class="search-root-row nx-mono">
+            <input type="text" id="search-root-input" class="search-root-input" placeholder="Search root path…"
+              autocomplete="off" spellcheck="false" />
+            <button type="button" id="search-browse-btn" class="search-browse-btn" data-tooltip="Browse folder">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+              </svg>
+            </button>
+          </div>
+          <div class="search-row-2col">
+            <label class="search-inline-label nx-mono">
+              Depth
+              <select id="search-depth" class="search-select">
+                <option value="-1">All subfolders</option>
+                <option value="0">Current folder only</option>
+                <option value="1">1 level deep</option>
+                <option value="2">2 levels deep</option>
+              </select>
+            </label>
+            <label class="search-inline-label nx-mono">
+              Entry type
+              <select id="search-entry-type" class="search-select">
+                <option value="all">Files + Folders</option>
+                <option value="files">Files only</option>
+                <option value="dirs">Folders only</option>
+              </select>
+            </label>
+          </div>
+        </fieldset>
+
+        <fieldset class="search-section">
+          <legend class="search-section-legend">🔍 File name / mask</legend>
+          <label class="search-field-block nx-mono">
+            <span class="search-muted">Mask (separate with <code>;</code>)</span>
+            <input type="text" id="search-filename" placeholder="e.g. *.txt or report" autocomplete="off"
+              spellcheck="false" />
+          </label>
+          <div class="search-row-checks nx-mono">
+            <label class="search-inline-label nx-mono">
+              Name match
+              <select id="search-mode" class="search-select">
+                <option value="substring">contains</option>
+                <option value="exact">exact name</option>
+                <option value="glob">glob (*.ext)</option>
+                <option value="regex">regex</option>
+              </select>
+            </label>
+            <label class="search-check-label"><input type="checkbox" id="search-name-case" /> Case-sensitive</label>
+          </div>
+        </fieldset>
+
+        <fieldset class="search-section">
+          <legend class="search-section-legend">📄 Content</legend>
+          <label class="search-field-block nx-mono">
+            <span class="search-muted">Contains text (ripgrep)</span>
+            <input type="text" id="search-content" placeholder="optional text inside files" autocomplete="off"
+              spellcheck="false" />
+          </label>
+        </fieldset>
+      </div>
+
+      <!-- Advanced Tab -->
+      <div id="search-tab-advanced" class="search-tab-panel hidden">
+        <fieldset class="search-section">
+          <legend class="search-section-legend">⚙️ Options</legend>
+          <div class="search-row-checks nx-mono" style="flex-direction:column;gap:10px;align-items:flex-start">
+            <label class="search-check-label"><input type="checkbox" id="search-symlinks" /> Follow symbolic
+              links</label>
+            <label class="search-check-label"><input type="checkbox" id="search-hidden" /> Include hidden
+              files/folders</label>
+          </div>
+        </fieldset>
+      </div>
+
+      <!-- Results Tab -->
+      <div id="search-tab-results" class="search-tab-panel hidden">
+        <div id="search-results" class="search-results nx-mono" role="listbox" tabindex="0" aria-label="Search hits">
+        </div>
+        <p class="search-hint nx-mono" id="search-hint"></p>
+      </div>
+
+      <div class="search-footer">
+        <button type="button" id="search-start-btn" class="search-start-btn">▶ Start</button>
+        <button type="button" id="search-new-btn" class="search-action-btn">New search</button>
+        <button type="button" id="search-close" class="search-action-btn search-action-btn--ghost">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="ctx-menu" class="ctx-menu hidden"></div>
+
+  <!-- Compare dirs overlay -->
+  <div id="compare-overlay" class="modal-overlay hidden" aria-hidden="true">
+    <div class="modal nx-modal compare-modal">
+      <div class="search-header">
+        <h2>⇔ COMPARE DIRECTORIES</h2>
+        <button type="button" id="compare-close" class="search-action-btn search-action-btn--ghost">✕ Close</button>
+      </div>
+      <div class="compare-paths nx-mono">
+        <div class="compare-path-item"><span class="compare-path-label">LEFT</span><span id="compare-left-path"
+            class="compare-path-text"></span></div>
+        <div class="compare-path-item"><span class="compare-path-label">RIGHT</span><span id="compare-right-path"
+            class="compare-path-text"></span></div>
+      </div>
+      <div class="compare-stats nx-mono" id="compare-stats"></div>
+      <div class="compare-tabs" role="tablist">
+        <button class="compare-tab compare-tab--active" data-ctab="different">⚠ Different</button>
+        <button class="compare-tab" data-ctab="onlyLeft">← Left only</button>
+        <button class="compare-tab" data-ctab="onlyRight">Right only →</button>
+        <button class="compare-tab" data-ctab="same">✓ Same</button>
+      </div>
+      <div id="compare-results" class="compare-results nx-mono"></div>
+      <div class="search-footer">
+        <button type="button" id="compare-run-btn" class="search-start-btn">▶ Compare</button>
+        <button type="button" id="compare-swap-btn" class="search-action-btn">⇄ Swap</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- File diff overlay -->
+  <div id="diff-overlay" class="modal-overlay hidden" aria-hidden="true">
+    <div class="modal nx-modal diff-modal">
+      <div class="search-header">
+        <h2>📋 FILE DIFF</h2>
+        <button type="button" id="diff-close" class="search-action-btn search-action-btn--ghost">✕ Close</button>
+      </div>
+      <div class="compare-paths nx-mono">
+        <div class="compare-path-item"><span class="compare-path-label">A</span><span id="diff-left-path"
+            class="compare-path-text"></span></div>
+        <div class="compare-path-item"><span class="compare-path-label">B</span><span id="diff-right-path"
+            class="compare-path-text"></span></div>
+      </div>
+      <div id="diff-status" class="diff-status nx-mono"></div>
+      <div id="diff-content" class="diff-content nx-mono" tabindex="0"></div>
+      <div class="search-footer">
+        <button type="button" id="diff-run-btn" class="search-start-btn">▶ Diff</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Git panel overlay -->
+  <div id="git-overlay" class="modal-overlay hidden" aria-hidden="true">
+    <div class="modal nx-modal git-modal">
+      <div class="search-header">
+        <h2>⎇ GIT</h2>
+        <div class="git-branch-badge nx-mono" id="git-branch-badge"></div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button type="button" id="git-stash-btn" class="search-action-btn" title="Stash changes">📦 Stash</button>
+          <button type="button" id="git-pop-btn" class="search-action-btn" title="Pop latest stash">📤 Pop</button>
+          <button type="button" id="git-pull-btn" class="search-action-btn">⬇ Pull</button>
+          <button type="button" id="git-push-btn" class="search-action-btn">⬆ Push</button>
+          <button type="button" id="git-close" class="search-action-btn search-action-btn--ghost">✕ Close</button>
+        </div>
+      </div>
+
+      <div class="search-tabs" style="padding:0 24px" role="tablist">
+        <button class="search-tab search-tab--active" data-gtab="status" role="tab">Status</button>
+        <button class="search-tab" data-gtab="log" role="tab">Log</button>
+        <button class="search-tab" data-gtab="diff" role="tab">Diff</button>
+        <button class="search-tab" data-gtab="blame" role="tab">Blame</button>
+        <button class="search-tab" data-gtab="branches" role="tab">Branches</button>
+      </div>
+
+      <div id="git-tab-status" class="search-tab-panel git-tab-panel">
+        <div id="git-status-list" class="git-status-list nx-mono"></div>
+        <div class="git-commit-area">
+          <input type="text" id="git-commit-msg" class="git-commit-input nx-mono" placeholder="Commit message…"
+            autocomplete="off" />
+          <button type="button" id="git-commit-btn" class="search-start-btn">✔ Commit staged</button>
+        </div>
+      </div>
+
+      <div id="git-tab-log" class="search-tab-panel git-tab-panel hidden">
+        <div id="git-log-list" class="git-log-list nx-mono"></div>
+      </div>
+
+      <div id="git-tab-diff" class="search-tab-panel git-tab-panel hidden">
+        <div class="git-diff-toolbar nx-mono">
+          <span>Since:</span>
+          <input type="text" id="git-diff-ref1" class="git-ref-input" placeholder="HEAD" value="HEAD" />
+          <span>Until:</span>
+          <input type="text" id="git-diff-ref2" class="git-ref-input" placeholder="(working tree)" value="" />
+          <button type="button" class="search-action-btn" id="git-diff-run-btn">Run diff</button>
+        </div>
+        <div id="git-diff-content" class="diff-content nx-mono" tabindex="0"></div>
+      </div>
+
+      <div id="git-tab-blame" class="search-tab-panel git-tab-panel hidden">
+        <div class="git-blame-toolbar nx-mono">
+          <label class="git-blame-label">File:
+            <input type="text" id="git-blame-file" class="git-ref-input git-blame-file-input"
+              placeholder="Relative file path…" />
+          </label>
+          <label class="git-blame-label">Ref:
+            <input type="text" id="git-blame-ref" class="git-ref-input" placeholder="HEAD (optional)" />
+          </label>
+          <button type="button" class="search-action-btn" id="git-blame-run-btn">Run blame</button>
+        </div>
+        <div id="git-blame-content" class="git-blame-content nx-mono" tabindex="0"></div>
+      </div>
+
+      <div id="git-tab-branches" class="search-tab-panel git-tab-panel hidden">
+        <div id="git-branches-list" class="git-branches-list nx-mono"></div>
+      </div>
+
+      <div class="git-status-bar nx-mono" id="git-status-bar"></div>
+    </div>
+  </div>
+
+  <!-- Multi-rename overlay -->
+  <div id="multi-rename-overlay" class="modal-overlay hidden" aria-hidden="true">
+    <div class="modal nx-modal multi-rename-modal">
+      <div class="search-header">
+        <h2>🏷 MULTI-RENAME TOOL</h2>
+        <div id="mr-count-info" class="mr-count-info nx-mono"></div>
+        <button type="button" id="mr-close" class="search-action-btn search-action-btn--ghost">✕ Close</button>
+      </div>
+      <div class="mr-controls-grid nx-mono">
+        <div class="mr-field">
+          <label for="mr-find">Find:</label>
+          <input type="text" id="mr-find" class="mr-input" placeholder="Text to find…" />
+        </div>
+        <div class="mr-field">
+          <label for="mr-replace">Replace:</label>
+          <input type="text" id="mr-replace" class="mr-input" placeholder="Replacement…" />
+        </div>
+        <div class="mr-field mr-field--check">
+          <label><input type="checkbox" id="mr-regex" /> Use Regular Expressions (RegEx)</label>
+        </div>
+        <div class="mr-field">
+          <label for="mr-prefix">Prefix:</label>
+          <input type="text" id="mr-prefix" class="mr-input" placeholder="Prepend text…" />
+        </div>
+        <div class="mr-field">
+          <label for="mr-suffix">Suffix:</label>
+          <input type="text" id="mr-suffix" class="mr-input" placeholder="Append text…" />
+        </div>
+        <div class="mr-field">
+          <label for="mr-case">Case:</label>
+          <select id="mr-case" class="mr-select">
+            <option value="none">Keep original case</option>
+            <option value="lower">lowercase</option>
+            <option value="upper">UPPERCASE</option>
+            <option value="title">Title Case</option>
+          </select>
+        </div>
+        <div class="mr-field">
+          <label for="mr-num-pos">Numbering:</label>
+          <select id="mr-num-pos" class="mr-select">
+            <option value="none">None</option>
+            <option value="prefix">Prefix (01_name)</option>
+            <option value="suffix">Suffix (name_01)</option>
+          </select>
+        </div>
+        <div class="mr-field mr-field--inline">
+          <label for="mr-num-start">Start: <input type="number" id="mr-num-start" class="mr-input mr-input--num"
+              value="1" min="0" /></label>
+          <label for="mr-num-digits">Digits: <input type="number" id="mr-num-digits" class="mr-input mr-input--num"
+              value="2" min="1" max="6" /></label>
+        </div>
+      </div>
+      <div class="mr-preview-header nx-mono">
+        <span class="mr-col mr-col-old">Original Name</span>
+        <span class="mr-col-arrow"></span>
+        <span class="mr-col mr-col-new">New Name Preview</span>
+      </div>
+      <div id="mr-preview-list" class="mr-preview-list nx-mono"></div>
+      <div class="search-footer">
+        <div id="mr-status-bar" class="nx-mono mr-status-bar"></div>
+        <button type="button" id="mr-apply-btn" class="search-start-btn">✔ Apply Rename</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Folder sync overlay -->
+  <div id="folder-sync-overlay" class="modal-overlay hidden" aria-hidden="true">
+    <div class="modal nx-modal folder-sync-modal">
+      <div class="search-header">
+        <h2>⇄ FOLDER SYNCHRONIZATION</h2>
+        <div style="display:flex;gap:8px">
+          <button type="button" id="sync-refresh-btn" class="search-action-btn">🔄 Re-scan</button>
+          <button type="button" id="sync-close-btn" class="search-action-btn search-action-btn--ghost">✕ Close</button>
+        </div>
+      </div>
+      <div class="compare-paths nx-mono">
+        <div class="compare-path-item"><span class="compare-path-label">Left</span><span id="sync-left-path"
+            class="compare-path-text"></span></div>
+        <div class="compare-path-item"><span class="compare-path-label">Right</span><span id="sync-right-path"
+            class="compare-path-text"></span></div>
+      </div>
+      <div class="sync-results-header nx-mono">
+        <span class="sync-hdr-name">File / Item</span>
+        <span class="sync-hdr-left">Left Size</span>
+        <span class="sync-hdr-action">Action</span>
+        <span class="sync-hdr-right">Right Size</span>
+      </div>
+      <div id="sync-results-list" class="sync-results-list nx-mono"></div>
+      <div class="search-footer">
+        <div id="sync-summary" class="nx-mono sync-summary"></div>
+        <div id="sync-status-bar" class="nx-mono sync-status-bar"></div>
+        <button type="button" id="sync-run-btn" class="search-start-btn">▶ Synchronize</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Checksum / hash overlay -->
+  <div id="checksum-overlay" class="modal-overlay hidden" aria-hidden="true">
+    <div class="modal nx-modal checksum-modal">
+      <div class="search-header">
+        <h2>🔒 FILE CHECKSUM & INTEGRITY</h2>
+        <button type="button" id="checksum-close" class="search-action-btn search-action-btn--ghost">✕ Close</button>
+      </div>
+      <div class="checksum-body nx-mono">
+        <div class="checksum-item">
+          <span class="checksum-label">File:</span>
+          <span id="checksum-filename" class="checksum-val checksum-val--bold"></span>
+        </div>
+        <div class="checksum-item">
+          <span class="checksum-label">Path:</span>
+          <span id="checksum-path" class="checksum-val checksum-val--dim"></span>
+        </div>
+        <div class="checksum-item">
+          <span class="checksum-label">Size:</span>
+          <span id="checksum-size" class="checksum-val"></span>
+        </div>
+        <div class="checksum-hash-row">
+          <div class="checksum-hash-label">SHA-256:</div>
+          <div id="checksum-sha256" class="checksum-hash-val selectable"></div>
+          <button type="button" id="checksum-copy-sha256" class="search-action-btn search-action-btn--sm">Copy</button>
+        </div>
+        <div class="checksum-hash-row">
+          <div class="checksum-hash-label">MD5:</div>
+          <div id="checksum-md5" class="checksum-hash-val selectable"></div>
+          <button type="button" id="checksum-copy-md5" class="search-action-btn search-action-btn--sm">Copy</button>
+        </div>
+        <div class="checksum-verify-section">
+          <div class="checksum-hash-label">Verify against hash:</div>
+          <input type="text" id="checksum-verify-input" class="checksum-verify-input"
+            placeholder="Paste expected SHA-256 or MD5 hash here…" />
+          <div id="checksum-verify-result" class="checksum-verify-result"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Embedded terminal drawer -->
+  <div id="terminal-drawer" class="terminal-drawer hidden" aria-hidden="true">
+    <div class="terminal-resize-handle" id="terminal-resize-handle" title="Drag to resize terminal"></div>
+    <div class="terminal-header">
+      <div class="terminal-title">
+        <span>📟 Terminal</span>
+        <span id="terminal-cwd" class="terminal-cwd nx-mono"></span>
+      </div>
+      <div class="terminal-actions">
+        <span id="terminal-status" class="terminal-status nx-mono"></span>
+        <button type="button" id="terminal-copy-btn" class="search-action-btn search-action-btn--sm"
+          title="Copy output">Copy</button>
+        <button type="button" id="terminal-external-btn" class="search-action-btn search-action-btn--sm"
+          title="Open OS Terminal">↗ External</button>
+        <button type="button" id="terminal-clear-btn" class="search-action-btn search-action-btn--sm"
+          title="Clear terminal">Clear</button>
+        <button type="button" id="terminal-close-btn"
+          class="search-action-btn search-action-btn--sm search-action-btn--ghost" title="Close (Esc)">✕</button>
+      </div>
+    </div>
+    <div id="terminal-output" class="terminal-output nx-mono" tabindex="0"></div>
+    <div class="terminal-input-bar">
+      <span class="terminal-prompt">$</span>
+      <input type="text" id="terminal-input" class="terminal-input nx-mono"
+        placeholder="Enter shell command… (type 'help' or 'cd <dir>')" autocomplete="off" spellcheck="false" />
+    </div>
+  </div>
+
+  <!-- Disk space analyzer overlay -->
+  <div id="disk-space-overlay" class="modal-overlay hidden" aria-hidden="true">
+    <div class="modal nx-modal disk-space-modal" id="disk-space-modal" role="dialog" aria-modal="true">
+      <div class="disk-space-header">
+        <div class="disk-space-title-row">
+          <h2>📊 DISK SPACE ANALYZER</h2>
+          <div class="disk-space-actions">
+            <button type="button" id="disk-space-up" class="search-action-btn search-action-btn--sm"
+              title="Go to parent directory">▲ Up</button>
+            <button type="button" id="disk-space-refresh" class="search-action-btn search-action-btn--sm">🔄
+              Re-scan</button>
+            <button type="button" id="disk-space-close" class="search-action-btn search-action-btn--ghost">✕
+              Close</button>
+          </div>
+        </div>
+        <div class="disk-space-nav-bar">
+          <div id="disk-space-crumbs" class="disk-space-crumbs nx-mono"></div>
+          <div id="disk-space-summary" class="disk-space-summary nx-mono"></div>
+        </div>
+      </div>
+
+      <div id="disk-space-loading" class="disk-space-loading hidden">
+        <div class="disk-spinner"></div>
+        <span>Analyzing folder contents and calculating tree sizes…</span>
+      </div>
+
+      <div class="disk-space-body">
+        <div class="disk-treemap-section">
+          <div class="disk-section-title">Visual Treemap</div>
+          <div id="disk-space-treemap" class="disk-space-treemap"></div>
+        </div>
+        <div class="disk-list-section">
+          <div class="disk-section-title">Ranked Breakdown</div>
+          <div id="disk-space-list" class="disk-space-list nx-mono"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Duplicate finder overlay -->
+  <div id="duplicates-overlay" class="modal-overlay hidden" aria-hidden="true">
+    <div class="modal nx-modal duplicates-modal" id="duplicates-modal" role="dialog" aria-modal="true">
+      <div class="duplicates-header">
+        <div class="duplicates-title-row">
+          <h2>⚡ DUPLICATE FILE FINDER</h2>
+          <button type="button" id="duplicates-close-btn" class="search-action-btn search-action-btn--ghost">✕
+            Close</button>
+        </div>
+        <div class="duplicates-config-row nx-mono">
+          <div class="duplicates-input-wrap">
+            <input type="text" id="duplicates-path-input" class="duplicates-path-input"
+              placeholder="Path to search for duplicates…" autocomplete="off" spellcheck="false" />
+            <button type="button" id="duplicates-browse-btn" class="search-browse-btn" title="Browse folder">📁</button>
+          </div>
+          <label class="duplicates-size-filter">
+            Min size:
+            <select id="duplicates-min-size" class="search-select">
+              <option value="0">All sizes</option>
+              <option value="1024" selected>&gt; 1 KB</option>
+              <option value="102400">&gt; 100 KB</option>
+              <option value="1048576">&gt; 1 MB</option>
+              <option value="10485760">&gt; 10 MB</option>
+            </select>
+          </label>
+          <button type="button" id="duplicates-scan-btn" class="search-start-btn">Scan Duplicates</button>
+        </div>
+        <div class="duplicates-toolbar">
+          <div id="duplicates-summary" class="duplicates-summary nx-mono">Ready to scan.</div>
+          <div class="duplicates-smart-select">
+            <span class="duplicates-select-label">Auto-Select:</span>
+            <button type="button" id="duplicates-select-oldest" class="search-action-btn search-action-btn--sm"
+              title="Keep oldest, select newer copies for deletion">Keep Oldest</button>
+            <button type="button" id="duplicates-select-newest" class="search-action-btn search-action-btn--sm"
+              title="Keep newest, select older copies for deletion">Keep Newest</button>
+            <button type="button" id="duplicates-select-shortest" class="search-action-btn search-action-btn--sm"
+              title="Keep shortest path copy">Shortest Path</button>
+            <button type="button" id="duplicates-select-none" class="search-action-btn search-action-btn--sm">Deselect
+              All</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="duplicates-loading" class="disk-space-loading hidden">
+        <div class="disk-spinner"></div>
+        <span>Comparing files by size &amp; calculating cryptographic hashes…</span>
+      </div>
+
+      <div id="duplicates-groups" class="duplicates-groups nx-mono"></div>
+
+      <div id="duplicates-footer" class="duplicates-footer hidden">
+        <span id="duplicates-selected-count" class="duplicates-selected-count nx-mono">0 files selected</span>
+        <button type="button" id="duplicates-delete-btn" class="search-action-btn search-action-btn--danger">🗑 Move
+          Selected to Trash</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Command Palette Overlay -->
+  <div id="command-palette-overlay" class="modal-overlay hidden" aria-hidden="true">
+    <div class="command-palette-modal">
+      <div class="cp-search-box">
+        <span class="cp-search-icon">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+        </span>
+        <input type="text" id="cp-input" class="cp-input"
+          placeholder="Type a command or search locations, files, actions… (prefix > for commands, # for locations, @ for files)"
+          autocomplete="off" spellcheck="false" />
+        <span class="cp-badge-counter" id="cp-counter">0 items</span>
+      </div>
+      <div class="cp-categories" id="cp-categories">
+        <button type="button" class="cp-cat-btn active" data-cat="all">All</button>
+        <button type="button" class="cp-cat-btn" data-cat="commands">⚡ Commands</button>
+        <button type="button" class="cp-cat-btn" data-cat="locations">📍 Locations</button>
+        <button type="button" class="cp-cat-btn" data-cat="files">📄 Files</button>
+      </div>
+      <div id="cp-results-list" class="cp-results-list" role="listbox"></div>
+      <div class="cp-footer">
+        <span class="cp-tip"><kbd>↑</kbd><kbd>↓</kbd> navigate</span>
+        <span class="cp-tip"><kbd>↵</kbd> select</span>
+        <span class="cp-tip"><kbd>Tab</kbd> category</span>
+        <span class="cp-tip"><kbd>esc</kbd> close</span>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/bridge.ts"></script>
+</body>
+
+</html>

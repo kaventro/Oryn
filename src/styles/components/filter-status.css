@@ -1,0 +1,209 @@
+.footer-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  width: 100%;
+}
+
+.footer-filter {
+  flex: 0 1 320px;
+  min-width: 160px;
+}
+
+/* —— Filter Dropdown —— */
+.filter-dropdown {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 500;
+  max-height: 280px;
+  overflow-y: auto;
+  border-radius: var(--radius-sm);
+  background: var(--surface-container-high);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--outline);
+  padding: 4px 0;
+  animation: fdrop-in 0.12s ease;
+}
+
+@keyframes fdrop-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.filter-dropdown.hidden {
+  display: none;
+}
+
+.fdrop-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  font-size: 0.8125rem;
+  font-family: var(--font-body);
+  color: var(--on-surface);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background 0.08s ease;
+  border-left: 3px solid transparent;
+}
+
+.fdrop-item:hover {
+  background: color-mix(in srgb, var(--surface-bright) 55%, var(--surface-container));
+}
+
+.fdrop-item--sel {
+  background: var(--surface-bright) !important;
+  border-left-color: var(--nx-neon);
+  color: var(--on-surface);
+}
+
+.fdrop-item--dir {
+  color: var(--on-surface);
+  font-weight: 600;
+}
+
+.fdrop-item mark {
+  background: var(--nx-neon-soft);
+  color: var(--on-surface);
+  font-weight: 700;
+}
+
+.fdrop-badge {
+  flex-shrink: 0;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--outline);
+  margin-left: 8px;
+  opacity: 0.6;
+}
+
+.fdrop-more {
+  padding: 6px 14px;
+  font-size: 0.6875rem;
+  color: var(--on-surface-variant);
+  opacity: 0.55;
+  font-style: italic;
+  border-top: 1px solid var(--ghost-line);
+  margin-top: 2px;
+}
+
+.status {
+  width: 100%;
+  font-size: 11px;
+  color: var(--on-surface-variant);
+  min-height: 1.2em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.status:empty {
+  color: var(--on-surface-variant);
+  opacity: 0.45;
+}
+
+/* —— Floating Transfer Progress Toast —— */
+.nx-xfer {
+  position: fixed;
+  bottom: 38px;
+  right: 20px;
+  width: 320px;
+  background: #1e1e20;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  padding: 12px 14px;
+  z-index: 9000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: xferSlideUp 0.15s ease-out;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+}
+
+.nx-xfer--hidden {
+  display: none !important;
+}
+
+@keyframes xferSlideUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.nx-xfer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.nx-xfer-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #f5f5f7;
+}
+
+.nx-xfer-cancel-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #8e8e93;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  transition: all 0.1s ease;
+}
+
+.nx-xfer-cancel-btn:hover {
+  background: rgba(255, 69, 58, 0.2);
+  color: #ff453a;
+  border-color: rgba(255, 69, 58, 0.3);
+}
+
+.nx-xfer-bar-track {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.nx-xfer-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #0a84ff, #00b4d8);
+  border-radius: 3px;
+  transition: width 0.1s linear;
+}
+
+.nx-xfer-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.nx-xfer-file {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 230px;
+}
+
+.nx-xfer-pct {
+  font-weight: 600;
+  color: #79c0ff;
+  font-family: var(--font-mono, monospace);
+}
+
+

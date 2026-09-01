@@ -1,0 +1,40 @@
+.quick-view-container {
+  display: flex;
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  padding: 10px;
+  box-sizing: border-box;
+  background: var(--surface-container-low);
+  overflow: hidden;
+}
+
+.quick-view-content {
+  flex: 1;
+  margin: 0;
+  padding: 8px;
+  background: var(--surface-container-lowest);
+  border: 1px inset var(--ghost-line);
+  color: var(--on-surface);
+  font-size: 0.75rem;
+  overflow: auto;
+  white-space: pre-wrap;
+  user-select: text;
+  word-wrap: break-word;
+}
+
+.quick-view-empty,
+.quick-view-loading,
+.quick-view-error {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--on-surface-variant);
+  font-size: 0.8rem;
+  opacity: 0.8;
+}
+
+.quick-view-error {
+  color: var(--error);
+}

@@ -1,0 +1,14 @@
+.replace-status {
+  margin-top: 8px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-container-lowest);
+  font-size: 11px;
+  color: var(--on-surface);
+  white-space: pre-wrap;
+  min-height: 32px;
+  max-height: 140px;
+  overflow-y: auto;
+  border: 1px solid var(--ghost-line);
+}
+

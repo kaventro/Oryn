@@ -1,0 +1,9 @@
+@import "modals/search.css";
+@import "modals/base.css";
+@import "modals/properties.css";
+@import "modals/compare.css";
+@import "modals/replace.css";
+@import "modals/quick-view.css";
+@import "modals/viewer.css";
+@import "modals/preferences.css";
+@import "modals/remote.css";

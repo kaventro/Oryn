@@ -1,0 +1,7 @@
+---
+exclude_paths:
+  - "coverage/**"
+  - "desktop/gen/**"
+  - "desktop/target/**"
+  - "dist/**"
+  - "node_modules/**"

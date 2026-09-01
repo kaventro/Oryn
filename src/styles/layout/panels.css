@@ -1,0 +1,121 @@
+.mac-panes-wrapper {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  gap: 12px;
+  padding: 0 16px 12px 16px;
+  background: var(--mac-bg);
+}
+
+.mac-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border-radius: var(--radius-md);
+  background: var(--mac-card-bg);
+  overflow: hidden;
+  border: 1px solid var(--mac-card-border);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.single-pane-mode #pane-right {
+  display: none !important;
+}
+
+.single-pane-mode #pane-left {
+  flex: 1;
+  width: 100%;
+}
+
+.dual-pane-mode #pane-left,
+.dual-pane-mode #pane-right {
+  display: flex !important;
+  flex: 1;
+}
+
+.dual-pane-mode .mac-pane.active {
+  border-color: rgba(10, 132, 255, 0.65);
+  box-shadow: 0 0 0 1px rgba(10, 132, 255, 0.3), 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.dual-pane-mode .mac-pane:not(.active) {
+  opacity: 0.92;
+}
+
+.pane-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.pane-col-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px 85px;
+  gap: 12px;
+  padding: 8px 16px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: #8e8e93;
+  border-bottom: 1px solid var(--mac-divider);
+  background: rgba(255, 255, 255, 0.02);
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.pane-col-head span {
+  cursor: pointer;
+  transition: color 0.12s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pane-col-head span:hover {
+  color: #ffffff;
+}
+
+.pch-date,
+.pch-size {
+  justify-content: flex-end;
+  text-align: right;
+}
+
+.pane-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  outline: none;
+  position: relative;
+  padding: 0;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: auto;
+  overscroll-behavior-y: contain;
+}
+
+.virtual-inner {
+  position: relative;
+  width: 100%;
+}
+
+.virtual-window {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  will-change: transform;
+  contain: layout style paint;
+}
+
+.pane-list.drag-over {
+  background: rgba(10, 132, 255, 0.08);
+}

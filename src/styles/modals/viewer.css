@@ -1,0 +1,514 @@
+/* Viewer Modal (F3 Lister) */
+.viewer-modal {
+  width: 80vw;
+  max-width: 1400px;
+  height: 85vh;
+  padding: 0;
+  display: flex !important;
+  flex-direction: column;
+}
+
+.viewer-header {
+  padding: 18px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--outline);
+  flex-shrink: 0;
+}
+
+.viewer-header h2 {
+  font-size: 0.85rem;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.viewer-title-text {
+  color: var(--on-surface);
+  text-transform: none;
+  letter-spacing: normal;
+  text-shadow: none;
+  font-family: var(--font-body);
+  font-weight: 600;
+  opacity: 0.8;
+}
+
+.viewer-content-wrap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--background);
+}
+
+.viewer-content {
+  flex: 1;
+  overflow: auto;
+  padding: 24px;
+  border: none;
+  box-shadow: none;
+  color: var(--on-surface);
+  font-size: 0.85rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  outline: none;
+}
+
+.viewer-content:focus {
+  /* Elegant edge focus indicator instead of full border */
+  box-shadow: inset 4px 0 0 0 color-mix(in srgb, var(--nx-neon) 60%, transparent);
+}
+
+.viewer-footer {
+  padding: 14px 24px;
+  display: flex;
+  justify-content: flex-end;
+  border-top: 1px solid var(--outline);
+  flex-shrink: 0;
+}
+
+.viewer-close-btn {
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-container-high);
+  color: var(--on-surface-variant);
+  border: 1px solid var(--outline);
+  cursor: pointer;
+  font-size: 0.75rem;
+  transition: all 0.1s ease;
+}
+
+.viewer-close-btn:hover {
+  background: color-mix(in srgb, var(--error) 15%, transparent);
+  color: var(--error);
+  border-color: color-mix(in srgb, var(--error) 40%, transparent);
+}
+
+.viewer-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.viewer-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-variant);
+  color: var(--on-surface-variant);
+  border: 1px solid var(--outline);
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  transition: all 0.12s ease;
+}
+
+.viewer-btn:hover {
+  background: var(--surface-container-high);
+  color: var(--on-surface);
+  border-color: var(--outline-variant);
+}
+
+.viewer-btn.hidden {
+  display: none !important;
+}
+
+.viewer-edit-btn {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.viewer-edit-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+.viewer-save-btn {
+  background: #0a84ff;
+  color: #ffffff;
+  border-color: #0a84ff;
+  font-weight: 600;
+}
+
+.viewer-save-btn:hover {
+  background: #0071e3;
+  border-color: #0071e3;
+  color: #ffffff;
+}
+
+.viewer-cancel-btn {
+  background: transparent;
+  color: #a8a8ac;
+}
+
+.viewer-cancel-btn:hover {
+  color: #ff453a;
+  background: rgba(255, 69, 58, 0.1);
+  border-color: rgba(255, 69, 58, 0.3);
+}
+
+.viewer-editor {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  resize: none;
+  background: var(--background);
+  color: var(--on-surface);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  line-height: 1.6;
+  padding: 24px;
+  border: none;
+  outline: none;
+  tab-size: 2;
+  box-sizing: border-box;
+}
+
+.viewer-editor:focus {
+  box-shadow: inset 4px 0 0 0 #0a84ff;
+}
+
+.viewer-editor.hidden {
+  display: none !important;
+}
+
+.viewer-status-hint {
+  font-size: 0.75rem;
+  color: #8e8e93;
+  margin-right: auto;
+  align-self: center;
+}
+
+/* Rendered Markdown */
+/* The raw view is monospace with pre-wrap; rendered prose needs neither. */
+.viewer-content--md {
+  white-space: normal;
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  line-height: 1.7;
+  max-width: 90ch;
+  margin: 0 auto;
+  padding: 28px 32px 48px;
+}
+
+.viewer-content--md .md-h {
+  font-weight: 650;
+  line-height: 1.3;
+  margin: 1.6em 0 0.6em;
+  color: var(--on-surface);
+}
+
+.viewer-content--md > .md-h:first-child {
+  margin-top: 0;
+}
+
+.viewer-content--md .md-h1 {
+  font-size: 1.7rem;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--outline);
+}
+
+.viewer-content--md .md-h2 {
+  font-size: 1.35rem;
+  padding-bottom: 0.28em;
+  border-bottom: 1px solid var(--outline-variant);
+}
+
+.viewer-content--md .md-h3 { font-size: 1.12rem; }
+.viewer-content--md .md-h4 { font-size: 1rem; }
+.viewer-content--md .md-h5 { font-size: 0.92rem; }
+
+.viewer-content--md .md-h6 {
+  font-size: 0.85rem;
+  color: var(--on-surface-variant);
+}
+
+.viewer-content--md .md-p {
+  margin: 0 0 1em;
+}
+
+.viewer-content--md .md-list {
+  margin: 0 0 1em;
+  padding-left: 1.6em;
+}
+
+.viewer-content--md .md-list .md-list {
+  margin: 0.35em 0 0.2em;
+}
+
+.viewer-content--md .md-li {
+  margin: 0.3em 0;
+}
+
+.viewer-content--md .md-task {
+  list-style: none;
+  margin-left: -1.35em;
+}
+
+.viewer-content--md .md-task input {
+  margin-right: 0.5em;
+  accent-color: var(--primary);
+}
+
+.viewer-content--md .md-quote {
+  margin: 0 0 1em;
+  padding: 0.1em 0 0.1em 1.1em;
+  border-left: 3px solid var(--outline);
+  color: var(--on-surface-variant);
+}
+
+.viewer-content--md .md-quote .md-p:last-child {
+  margin-bottom: 0;
+}
+
+.viewer-content--md .md-hr {
+  height: 1px;
+  border: none;
+  background: var(--outline);
+  margin: 1.8em 0;
+}
+
+.viewer-content--md .md-link {
+  color: var(--primary);
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--primary) 35%, transparent);
+  cursor: pointer;
+}
+
+.viewer-content--md .md-link:hover {
+  border-bottom-color: var(--primary);
+}
+
+/* Relative and non-web targets are not clickable — they read as plain text
+   with the target on hover, rather than pretending to be links. */
+.viewer-content--md .md-link-plain,
+.viewer-content--md .md-image {
+  color: var(--on-surface);
+  border-bottom: 1px dotted var(--outline);
+  cursor: help;
+}
+
+.viewer-content--md .md-image::before {
+  content: '🖼 ';
+  opacity: 0.65;
+}
+
+.viewer-content--md .md-code-inline {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  padding: 0.15em 0.4em;
+  border-radius: var(--radius-xs);
+  background: var(--surface-container-high);
+  color: var(--on-surface);
+}
+
+.viewer-content--md .md-code {
+  position: relative;
+  margin: 0 0 1.2em;
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--radius-md);
+  background: var(--surface-container-lowest);
+  overflow: hidden;
+}
+
+.viewer-content--md .md-code-lang {
+  padding: 5px 12px;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--on-surface-variant);
+  background: var(--surface-variant);
+  border-bottom: 1px solid var(--outline-variant);
+}
+
+.viewer-content--md .md-code pre {
+  margin: 0;
+  padding: 14px 16px;
+  overflow-x: auto;
+}
+
+.viewer-content--md .md-code code {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  line-height: 1.55;
+  white-space: pre;
+  color: var(--on-surface);
+}
+
+.viewer-content--md .md-table-wrap {
+  margin: 0 0 1.2em;
+  overflow-x: auto;
+}
+
+.viewer-content--md .md-table {
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.viewer-content--md .md-table th,
+.viewer-content--md .md-table td {
+  padding: 7px 14px;
+  border: 1px solid var(--outline-variant);
+  text-align: left;
+}
+
+.viewer-content--md .md-table th {
+  background: var(--surface-variant);
+  font-weight: 620;
+}
+
+.viewer-content--md .md-table tbody tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.viewer-content--md del {
+  color: var(--on-surface-variant);
+}
+
+/* Image preview */
+.viewer-content--media {
+  white-space: normal;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 24px;
+  /* Checkerboard, so a transparent PNG reads as transparent instead of
+     silently blending into the dark background. */
+  background-image:
+    linear-gradient(45deg, rgba(255, 255, 255, 0.03) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(255, 255, 255, 0.03) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, rgba(255, 255, 255, 0.03) 75%),
+    linear-gradient(-45deg, transparent 75%, rgba(255, 255, 255, 0.03) 75%);
+  background-size: 20px 20px;
+  background-position: 0 0, 0 10px, 10px -10px, -10px 0;
+}
+
+.viewer-img {
+  max-width: 100%;
+  max-height: calc(85vh - 200px);
+  object-fit: contain;
+  border-radius: var(--radius-sm);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
+}
+
+.viewer-media-meta {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  color: var(--on-surface-variant);
+}
+
+/* Office documents */
+.viewer-content--office {
+  white-space: normal;
+  font-family: var(--font-body);
+  font-size: 0.88rem;
+  line-height: 1.65;
+  padding: 26px 30px 44px;
+}
+
+.viewer-content--office .office-doc--docx,
+.viewer-content--office .office-doc--pptx {
+  max-width: 88ch;
+  margin: 0 auto;
+}
+
+.viewer-content--office .office-p {
+  margin: 0 0 0.75em;
+}
+
+.viewer-content--office .office-p--blank {
+  margin: 0 0 0.75em;
+  min-height: 0.4em;
+}
+
+.viewer-content--office .office-slide {
+  margin: 1.8em 0 0.8em;
+  padding-bottom: 0.3em;
+  font-size: 0.8rem;
+  font-weight: 650;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--on-surface-variant);
+  border-bottom: 1px solid var(--outline);
+}
+
+.viewer-content--office .office-sheet {
+  margin: 0 0 2em;
+}
+
+.viewer-content--office .office-sheet-name {
+  margin: 0 0 0.6em;
+  font-size: 0.82rem;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--primary);
+}
+
+.viewer-content--office .office-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--radius-md);
+}
+
+.viewer-content--office .office-table {
+  border-collapse: collapse;
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.viewer-content--office .office-table th,
+.viewer-content--office .office-table td {
+  padding: 5px 12px;
+  border-right: 1px solid var(--outline-variant);
+  border-bottom: 1px solid var(--outline-variant);
+  white-space: nowrap;
+  text-align: left;
+}
+
+/* Spreadsheet gutters: the column letters and row numbers, not data. */
+.viewer-content--office .office-col,
+.viewer-content--office .office-row-num,
+.viewer-content--office .office-corner {
+  position: sticky;
+  background: var(--surface-variant);
+  color: var(--on-surface-variant);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 500;
+  text-align: center;
+}
+
+.viewer-content--office .office-col,
+.viewer-content--office .office-corner {
+  top: 0;
+  z-index: 1;
+}
+
+.viewer-content--office .office-row-num,
+.viewer-content--office .office-corner {
+  left: 0;
+}
+
+.viewer-content--office .office-corner {
+  z-index: 2;
+}
+
+.viewer-content--office .office-empty,
+.viewer-content--office .office-note {
+  color: var(--on-surface-variant);
+  font-size: 0.8rem;
+  font-style: italic;
+  margin: 0.6em 0 0;
+}

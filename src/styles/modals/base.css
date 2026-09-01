@@ -1,0 +1,212 @@
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: macFadeIn 0.16s ease-out;
+}
+
+@keyframes macFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes macScaleIn {
+  from { transform: scale(0.96); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.modal-overlay.hidden {
+  display: none !important;
+}
+
+.nx-modal,
+.mac-dialog {
+  background: rgba(36, 36, 40, 0.94);
+  border-radius: var(--radius-lg, 14px);
+  padding: 20px 24px;
+  min-width: 400px;
+  max-width: 520px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 28px 70px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+  animation: macScaleIn 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+  font-family: var(--font-body);
+}
+
+.mac-dialog-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.mac-dialog-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-md, 10px);
+  background: rgba(10, 132, 255, 0.16);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--primary, #0a84ff);
+}
+
+.mac-dialog-icon svg {
+  width: 20px !important;
+  height: 20px !important;
+  max-width: 20px !important;
+  max-height: 20px !important;
+  display: block;
+}
+
+.mac-dialog-title-group {
+  flex: 1;
+  min-width: 0;
+}
+
+.mac-dialog-title,
+.nx-modal h2 {
+  margin: 0 0 4px 0;
+  font-family: var(--font-body);
+  font-size: 15px;
+  font-weight: 600;
+  color: #ffffff;
+  letter-spacing: -0.01em;
+}
+
+.mac-dialog-subtitle {
+  margin: 0;
+  font-size: 12.5px;
+  color: #8e8e93;
+  line-height: 1.4;
+}
+
+.mac-dialog-input,
+.mac-dialog input[type='text'] {
+  width: 100%;
+  height: 34px;
+  padding: 6px 12px;
+  margin-bottom: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: var(--radius-sm, 8px);
+  background: rgba(255, 255, 255, 0.07);
+  color: #ffffff;
+  font-family: var(--font-body);
+  font-size: 13px;
+  outline: none;
+  transition: all 0.12s ease;
+}
+
+.mac-dialog-input:focus,
+.mac-dialog input[type='text']:focus {
+  border-color: var(--primary, #0a84ff);
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.28);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.modal-actions,
+.mac-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+}
+
+.mac-btn,
+.modal-actions button,
+.search-start-btn {
+  height: 30px;
+  padding: 0 16px;
+  border-radius: var(--radius-sm, 6px);
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.12s ease;
+  border: none;
+}
+
+.mac-btn:active,
+.modal-actions button:active,
+.search-start-btn:active {
+  transform: scale(0.97);
+}
+
+.mac-btn--primary,
+.modal-actions button#rename-ok,
+.search-start-btn {
+  background: var(--primary, #0a84ff);
+  color: #ffffff;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(10, 132, 255, 0.35);
+}
+
+.mac-btn--primary:hover,
+.modal-actions button#rename-ok:hover,
+.search-start-btn:hover {
+  background: var(--mac-blue-hover, #0071e3);
+}
+
+.mac-btn--danger {
+  background: var(--error, #ff453a) !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+  box-shadow: 0 2px 8px rgba(255, 69, 58, 0.35) !important;
+}
+
+.mac-btn--danger:hover {
+  background: #e0382e !important;
+}
+
+.mac-btn--secondary,
+.modal-actions button#rename-cancel,
+.search-action-btn {
+  background: rgba(255, 255, 255, 0.08);
+  color: #d1d1d6;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  font-weight: 400;
+}
+
+.mac-btn--secondary:hover,
+.modal-actions button#rename-cancel:hover,
+.search-action-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+}
+
+.search-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 0 14px 0;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--mac-divider, rgba(255, 255, 255, 0.07));
+}
+
+.search-header h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.search-action-btn--ghost {
+  background: transparent;
+  border: none;
+  color: #8e8e93;
+}
+
+.search-action-btn--ghost:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
+}

@@ -1,0 +1,154 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  margin: 0 !important;
+  padding: 0 !important;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background-color: #141416 !important;
+  color: #f5f5f7;
+  border: none !important;
+  outline: none !important;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "SF Pro", "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#app {
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background-color: #141416;
+}
+
+:root {
+  /* Apple iOS / macOS Pro Surfaces */
+  /* The workspace deliberately shares the sidebar's tone rather than sitting a
+     step lighter — the panes are already a raised card against it, so the extra
+     step only made the two halves of the window look mismatched. The hairline
+     on the sidebar's right edge is what separates them now. */
+  --mac-bg: #141416;
+  --mac-sidebar-bg: #141416;
+  --mac-card-bg: #242428;
+  --mac-glass-bg: rgba(36, 36, 42, 0.75);
+  --mac-glass-border: rgba(255, 255, 255, 0.09);
+  --mac-card-border: rgba(255, 255, 255, 0.07);
+  --mac-divider: rgba(255, 255, 255, 0.06);
+
+  --nx-bg: #141416;
+  --nx-bg-elevated: #242428;
+  --nx-panel: #141416;
+  --nx-panel-mid: #25252a;
+  --nx-line: rgba(255, 255, 255, 0.07);
+
+  /* Apple System Colors */
+  --mac-blue: #0a84ff;
+  --mac-blue-hover: #0071e3;
+  --mac-blue-active: #0062cc;
+  --mac-blue-gradient: linear-gradient(180deg, #0a84ff 0%, #0071e3 100%);
+  --mac-cyan: #30b0c7;
+  --mac-green: #34c759;
+  --mac-orange: #ff9f0a;
+  --mac-red: #ff453a;
+  --mac-purple: #bf5af2;
+  --mac-pink: #ff375f;
+  --mac-yellow: #ffd60a;
+  --mac-gray: #8e8e93;
+
+  --primary: #0a84ff;
+  --primary-container: #0a84ff;
+  --on-primary-container: #ffffff;
+  --primary-fixed-dim: #0a84ff;
+  --surface-tint: var(--primary);
+
+  --background: var(--mac-bg);
+  --surface: var(--mac-bg);
+  --surface-dim: var(--mac-sidebar-bg);
+  --surface-bright: rgba(255, 255, 255, 0.06);
+  --surface-container: var(--mac-bg);
+  --surface-container-low: var(--mac-sidebar-bg);
+  --surface-container-lowest: #121214;
+  --surface-container-high: rgba(255, 255, 255, 0.08);
+  --surface-container-highest: rgba(255, 255, 255, 0.12);
+  --surface-variant: rgba(255, 255, 255, 0.04);
+  --on-surface: #f5f5f7;
+  --on-surface-variant: #8e8e93;
+
+  --secondary: #8e8e93;
+  --secondary-container: rgba(255, 255, 255, 0.08);
+  --outline: rgba(255, 255, 255, 0.08);
+  --outline-variant: rgba(255, 255, 255, 0.05);
+  --error: #ff453a;
+
+  /* Typography */
+  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "SF Pro", "Helvetica Neue", sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "SF Pro", "Helvetica Neue", sans-serif;
+  --font-mono: "SF Mono", Monaco, Menlo, Consolas, monospace;
+
+  /* Radii */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --radius-pill: 9999px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.25);
+  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 12px 36px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  --shadow-accent: 0 4px 16px rgba(10, 132, 255, 0.35);
+
+  /* Tag colors */
+  --tag-red: #ff453a;
+  --tag-orange: #ff9f0a;
+  --tag-yellow: #ffd60a;
+  --tag-green: #34c759;
+  --tag-blue: #0a84ff;
+  --tag-purple: #bf5af2;
+  --tag-gray: #8e8e93;
+}
+
+/* Custom theme overrides */
+html[data-tray='ocean'] {
+  --primary: #00b4d8;
+  --mac-blue: #00b4d8;
+  --mac-blue-gradient: linear-gradient(180deg, #00b4d8 0%, #0096c7 100%);
+  --shadow-accent: 0 4px 16px rgba(0, 180, 216, 0.35);
+}
+
+html[data-tray='ember'] {
+  --primary: #ff9f0a;
+  --mac-blue: #ff9f0a;
+  --mac-blue-gradient: linear-gradient(180deg, #ff9f0a 0%, #f0883e 100%);
+  --shadow-accent: 0 4px 16px rgba(255, 159, 10, 0.35);
+}
+
+html[data-tray='emerald'] {
+  --primary: #34c759;
+  --mac-blue: #34c759;
+  --mac-blue-gradient: linear-gradient(180deg, #34c759 0%, #28a745 100%);
+  --shadow-accent: 0 4px 16px rgba(52, 199, 89, 0.35);
+}
+
+html[data-tray='purple'] {
+  --primary: #bf5af2;
+  --mac-blue: #bf5af2;
+  --mac-blue-gradient: linear-gradient(180deg, #bf5af2 0%, #a838e0 100%);
+  --shadow-accent: 0 4px 16px rgba(191, 90, 242, 0.35);
+}
+
+html[data-tray='mono'] {
+  --primary: #d1d1d6;
+  --mac-blue: #d1d1d6;
+  --mac-blue-gradient: linear-gradient(180deg, #e5e5ea 0%, #d1d1d6 100%);
+  --shadow-accent: 0 4px 16px rgba(209, 209, 214, 0.25);
+}

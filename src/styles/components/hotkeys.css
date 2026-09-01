@@ -1,0 +1,27 @@
+/* Accel labels */
+.nx-hotkeys {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 10px calc(var(--space-unit) * 2);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--on-surface-variant);
+  background: var(--surface-container-lowest);
+  flex-shrink: 0;
+}
+
+.nx-hotkeys span:not(.nx-sep) {
+  color: var(--on-surface);
+  opacity: 0.92;
+}
+
+.nx-sep {
+  color: var(--outline-variant) !important;
+  opacity: 0.35 !important;
+  user-select: none;
+}
+

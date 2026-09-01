@@ -1,0 +1,131 @@
+/* History list */
+.search-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.search-history-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.1s ease;
+  border-left: 2px solid transparent;
+}
+
+.search-history-item:hover {
+  background: color-mix(in srgb, var(--surface-bright) 55%, var(--surface-container));
+  border-left-color: var(--primary);
+}
+
+.search-history-root {
+  font-size: 10px;
+  color: var(--on-surface-variant);
+  opacity: 0.65;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-history-label {
+  font-size: 12px;
+  color: var(--primary-fixed-dim);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-tc-hint {
+  margin: 0 0 10px;
+  font-size: 11px;
+  color: var(--on-surface-variant);
+  line-height: 1.45;
+}
+
+.search-muted {
+  font-weight: 400;
+  opacity: 0.75;
+}
+
+.search-muted code {
+  font-size: 0.85em;
+}
+
+.search-field-block {
+  display: block;
+  margin-bottom: 12px;
+  font-size: 12px;
+  color: var(--on-surface-variant);
+}
+
+.search-field-block input {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--ghost-line);
+  background: var(--surface-container-lowest);
+  color: var(--on-surface);
+  font: inherit;
+}
+
+.search-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 10px 0 6px;
+  font-size: 0.75rem;
+}
+
+.search-opt {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  color: var(--on-surface-variant);
+}
+
+.search-opt input {
+  accent-color: var(--primary-container);
+}
+
+.search-advanced {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px 20px;
+  margin-bottom: 10px;
+  font-size: 0.75rem;
+  color: var(--on-surface-variant);
+}
+
+.search-advanced.hidden {
+  display: none !important;
+}
+
+.search-field select {
+  margin-left: 6px;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--ghost-line);
+  background: var(--surface-container-lowest);
+  color: var(--on-surface);
+  font: inherit;
+}
+
+.search-native-label code {
+  font-size: 0.65rem;
+  opacity: 0.85;
+}
+
+.search-kbd-hint {
+  margin: 0 0 8px;
+  font-size: 10px;
+  opacity: 0.55;
+}
+

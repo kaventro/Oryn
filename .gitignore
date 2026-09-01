@@ -1,0 +1,134 @@
+# 
+# Dependencies & Package Managers
+# 
+node_modules/
+.npm/
+.pnpm-store/
+.yarn/
+.vite/
+.turbo/
+.parcel-cache/
+
+# 
+# Build Outputs & Artifacts
+# 
+dist/
+coverage/
+.nyc_output/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Rust / Tauri
+**/target/
+desktop/target/
+**/*.rs.bk
+*.pdb
+Cargo.lock.orig
+
+# Binaries & Shared Libraries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Legacy Go artifacts
+/openwindow
+*.test
+*.out
+coverage.out
+*.coverprofile
+profile.cov
+go.work
+go.work.sum
+/vendor/
+
+# 
+# Environment, Secrets & Local Overrides
+# 
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+*.crt
+*.pfx
+*.p12
+*.local
+
+# 
+# IDEs & Editors
+# 
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+*~
+.history/
+
+# 
+# AI Assistants, Agents & LLM Tooling
+# 
+# Claude / Anthropic
+CLAUDE.md
+.claude/
+claude.json
+.claudeignore
+
+# Gemini / AGY / Agents
+AGENTS.md
+.github/AGENTS.md
+GEMINI.md
+.agents/
+.agents
+.gemini/
+
+# Cursor
+.cursor/
+.cursorrules
+.cursorignore
+.cursorindexingignore
+
+# GitHub Copilot
+.copilot/
+.github/copilot/
+.copilot-instructions.md
+.github/copilot-instructions.md
+
+
+# 
+# OS Generated Files
+# 
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+.AppleDouble
+.LSOverride
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+.directory
+.Trash-*
+
+# 
+# Internal / Scratch / Documentation
+# 
+.cache/
+.screenshots/
+.screenshots
+tmp/
+temp/
+scratch/
+docs/STITCH_MCP.md
+docs/STYLE_CODE_RUST.md
