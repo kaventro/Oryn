@@ -173,3 +173,53 @@ test('CommandsController openViewer hides Edit button for image files', async ()
   assert.equal(mockOverlay.classList.contains('hidden'), false, 'Overlay should be visible');
   assert.equal(mockEdit.classList.contains('hidden'), true, 'Edit button MUST be hidden for image files');
 });
+
+test('CommandsController duplicate clones in place instead of copying to the other pane', () => {
+  const state = new AppState();
+  let cloned = 0;
+  let copiedToOther = 0;
+  (globalThis as any).document = {
+    querySelectorAll: () => [],
+    getElementById: () => null,
+    addEventListener: () => {},
+  };
+  const controller = new CommandsController({
+    api: () => ({}),
+    state,
+    setStatus: () => {},
+    focusActiveList: () => {},
+    copyToOther: () => { copiedToOther++; },
+    fileOps: { cloneSelection: () => { cloned++; } },
+  });
+
+  controller.runCommand('duplicate');
+  controller.runCommand('copy');
+
+  assert.equal(cloned, 1);
+  assert.equal(copiedToOther, 1);
+});
+
+test('CommandsController rename and delete dispatch to file ops', () => {
+  const state = new AppState();
+  let renamed = 0;
+  let deleted = 0;
+  (globalThis as any).document = {
+    querySelectorAll: () => [],
+    getElementById: () => null,
+    addEventListener: () => {},
+  };
+  const controller = new CommandsController({
+    api: () => ({}),
+    state,
+    setStatus: () => {},
+    focusActiveList: () => {},
+    beginRename: () => { renamed++; },
+    beginDelete: () => { deleted++; },
+  });
+
+  controller.runCommand('rename');
+  controller.runCommand('delete');
+
+  assert.equal(renamed, 1);
+  assert.equal(deleted, 1);
+});

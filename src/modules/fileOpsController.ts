@@ -11,11 +11,13 @@ export interface FileOpsDeps {
   getFilteredSelection: (side: 'left' | 'right') => any;
   fullPath: (pane: any, item: any) => Promise<string | null>;
   loadDir: (side: 'left' | 'right') => Promise<void>;
-  refreshAll: () => Promise<void>;
+  refreshAll: (opts?: { force?: boolean }) => Promise<void>;
   focusActiveList: () => void;
 }
 
 export class FileOpsController {
+  public columnsViewController?: any;
+  public clipboard: { paths: string[]; isCut: boolean; sourceDir: string } | null = null;
   public state: any;
   public api: () => any;
   public setStatus: (msg: string) => void;
@@ -23,7 +25,7 @@ export class FileOpsController {
   public getFilteredSelection: (side: 'left' | 'right') => any;
   public fullPath: (pane: any, item: any) => Promise<string | null>;
   public loadDir: (side: 'left' | 'right') => Promise<void>;
-  public refreshAll: () => Promise<void>;
+  public refreshAll: (opts?: { force?: boolean }) => Promise<void>;
   public focusActiveList: () => void;
 
   constructor(deps: FileOpsDeps) {
@@ -38,13 +40,190 @@ export class FileOpsController {
     this.focusActiveList = deps.focusActiveList;
   }
 
+  
+  public async copySelectionToClipboard(side: 'left' | 'right' = this.state.active): Promise<void> {
+    const apiObj = typeof this.api === 'function' ? this.api() : this.api;
+    const pane = this.state[side];
+    let dirPath = pane.path;
+    let bases: string[] = [];
+
+    const isColumns = typeof document !== 'undefined' && document.getElementById('app')?.classList.contains('columns-mode') && this.columnsViewController;
+
+    if (isColumns) {
+      const cols = this.columnsViewController.getColumns(side);
+      const activeIdx = this.columnsViewController.getActiveColumnIndex(side);
+      const col = cols[activeIdx];
+      if (col) {
+        dirPath = col.path;
+        if (col.selectedItem && col.selectedItem.base && col.selectedItem.base !== '..') {
+          bases = [col.selectedItem.base];
+        } else if (col.selectedIndex >= 0 && col.items && col.items[col.selectedIndex]) {
+          const it = col.items[col.selectedIndex];
+          if (it.base && it.base !== '..') bases = [it.base];
+        }
+      }
+    } else {
+      bases = this.getSelectedBases(side);
+    }
+
+    if (!bases.length) {
+      const { item, vis } = this.getFilteredSelection ? this.getFilteredSelection(side) : { item: null, vis: [] };
+      if (item && item.base && item.base !== '..') {
+        bases = [item.base];
+      } else {
+        const firstValid = vis?.find((it: any) => it.base && it.base !== '..');
+        if (firstValid) {
+          bases = [firstValid.base];
+        }
+      }
+    }
+
+    if (!bases.length) {
+      this.setStatus('Nothing selected to copy.');
+      return;
+    }
+
+    const fullPaths: string[] = [];
+    for (const base of bases) {
+      fullPaths.push(await apiObj.pathJoin(dirPath, base));
+    }
+
+    this.clipboard = {
+      paths: fullPaths,
+      isCut: false,
+      sourceDir: dirPath,
+    };
+
+    try {
+      await apiObj.clipboardWrite(fullPaths.join('\n'));
+    } catch {}
+
+    this.setStatus(`Copied ${fullPaths.length} item(s) to clipboard.`);
+  }
+
+  public async cutSelectionToClipboard(side: 'left' | 'right' = this.state.active): Promise<void> {
+    const apiObj = typeof this.api === 'function' ? this.api() : this.api;
+    const pane = this.state[side];
+    let dirPath = pane.path;
+    let bases: string[] = [];
+
+    const isColumns = typeof document !== 'undefined' && document.getElementById('app')?.classList.contains('columns-mode') && this.columnsViewController;
+
+    if (isColumns) {
+      const cols = this.columnsViewController.getColumns(side);
+      const activeIdx = this.columnsViewController.getActiveColumnIndex(side);
+      const col = cols[activeIdx];
+      if (col) {
+        dirPath = col.path;
+        if (col.selectedItem && col.selectedItem.base && col.selectedItem.base !== '..') {
+          bases = [col.selectedItem.base];
+        } else if (col.selectedIndex >= 0 && col.items && col.items[col.selectedIndex]) {
+          const it = col.items[col.selectedIndex];
+          if (it.base && it.base !== '..') bases = [it.base];
+        }
+      }
+    } else {
+      bases = this.getSelectedBases(side);
+    }
+
+    if (!bases.length) {
+      const { item, vis } = this.getFilteredSelection ? this.getFilteredSelection(side) : { item: null, vis: [] };
+      if (item && item.base && item.base !== '..') {
+        bases = [item.base];
+      } else {
+        const firstValid = vis?.find((it: any) => it.base && it.base !== '..');
+        if (firstValid) {
+          bases = [firstValid.base];
+        }
+      }
+    }
+
+    if (!bases.length) {
+      this.setStatus('Nothing selected to cut.');
+      return;
+    }
+
+    const fullPaths: string[] = [];
+    for (const base of bases) {
+      fullPaths.push(await apiObj.pathJoin(dirPath, base));
+    }
+
+    this.clipboard = {
+      paths: fullPaths,
+      isCut: true,
+      sourceDir: dirPath,
+    };
+
+    try {
+      await apiObj.clipboardWrite(fullPaths.join('\n'));
+    } catch {}
+
+    this.setStatus(`Cut ${fullPaths.length} item(s) to clipboard.`);
+  }
+
+  public async pasteFromClipboard(side: 'left' | 'right' = this.state.active): Promise<void> {
+    if (!this.clipboard || !this.clipboard.paths.length) {
+      this.setStatus('Clipboard is empty.');
+      return;
+    }
+
+    const apiObj = typeof this.api === 'function' ? this.api() : this.api;
+    const pane = this.state[side];
+    let targetDir = pane.path;
+
+    if (typeof document !== 'undefined' && document.getElementById('app')?.classList.contains('columns-mode') && this.columnsViewController) {
+      const cols = this.columnsViewController.getColumns(side);
+      const activeIdx = this.columnsViewController.getActiveColumnIndex(side);
+      const col = cols[activeIdx];
+      if (col) {
+        targetDir = col.path;
+      }
+    }
+
+    const { paths, isCut, sourceDir } = this.clipboard;
+    let pasted = 0;
+    let failed = 0;
+
+    for (const src of paths) {
+      const baseName = src.split(/[/\\]/).filter(Boolean).pop() || 'item';
+      let dstName = baseName;
+
+      if (sourceDir === targetDir && !isCut) {
+        dstName = await this.generateDuplicateName(targetDir, baseName);
+      }
+
+      const dst = await apiObj.pathJoin(targetDir, dstName);
+      try {
+        if (isCut) {
+          const res = await apiObj.move(src, dst, 'overwrite');
+          if (res && res.ok === false) failed++;
+          else pasted++;
+        } else {
+          const res = await apiObj.copy(src, dst, 'overwrite');
+          if (res && res.ok === false) failed++;
+          else pasted++;
+        }
+      } catch (err) {
+        failed++;
+      }
+    }
+
+    if (isCut && pasted > 0) {
+      this.clipboard = null;
+    }
+
+    await this.refreshAll();
+    this.setStatus(`Pasted ${pasted} item(s)${failed > 0 ? `, ${failed} failed` : ''}.`);
+  }
+
   public async copyPathOnly(): Promise<void> {
+    const apiObj = typeof this.api === 'function' ? this.api() : this.api;
     const side = this.state.active as 'left' | 'right';
     const { item } = this.getFilteredSelection(side);
     if (!item || item.base === '' || item.base === '..') return;
     const fp = await this.fullPath(this.state[side], item);
     if (fp) {
-      await this.api().clipboardWrite(fp);
+      await apiObj.clipboardWrite(fp);
       this.setStatus('Path copied to clipboard.');
     }
   }
@@ -80,10 +259,10 @@ export class FileOpsController {
         input.readOnly = true;
         input.style.textAlign = 'center';
       }
-      overlay?.classList.remove('hidden');
 
       const close = (result: boolean) => {
         overlay?.classList.add('hidden');
+        overlay?.setAttribute('aria-hidden', 'true');
         if (title) title.textContent = 'Rename';
         if (subtitle) subtitle.textContent = 'Enter a new name for this file or folder.';
         if (btnOk) {
@@ -109,18 +288,58 @@ export class FileOpsController {
           if (ev.key === 'Escape') { ev.preventDefault(); close(false); }
           if (ev.key === 'Enter') { ev.preventDefault(); close(true); }
         };
-        input.focus();
       }
+      this.revealModal(overlay, input, false);
     });
   }
 
   public getSelectedBases(side: 'left' | 'right'): string[] {
+    return this.collectTargets(side).bases;
+  }
+
+  private collectTargets(side: 'left' | 'right'): { dirPath: string; bases: string[] } {
     const pane = this.state[side];
-    const sel = pane.activeTab.selectedBases;
-    if (sel.size > 0) return [...sel];
-    const { item } = this.getFilteredSelection(side);
-    if (!item || item.base === '' || item.base === '..') return [];
-    return [item.base];
+    let dirPath = pane?.path || '';
+    let bases: string[] = [];
+    const isColumns = typeof document !== 'undefined'
+      && document.getElementById('app')?.classList.contains('columns-mode')
+      && this.columnsViewController;
+
+    if (isColumns) {
+      const cols = this.columnsViewController.getColumns(side);
+      const activeIdx = this.columnsViewController.getActiveColumnIndex(side);
+      const col = cols?.[activeIdx];
+      if (col) {
+        dirPath = col.path || dirPath;
+        const picked = col.selectedItem || (col.selectedIndex >= 0 ? col.items?.[col.selectedIndex] : null);
+        if (picked?.base && picked.base !== '..') bases = [picked.base];
+      }
+    } else {
+      const sel = pane?.activeTab?.selectedBases;
+      if (sel && sel.size > 0) bases = [...sel];
+    }
+
+    if (!bases.length) {
+      const { item, vis } = this.getFilteredSelection ? this.getFilteredSelection(side) : { item: null, vis: [] };
+      if (item?.base && item.base !== '..') bases = [item.base];
+      else {
+        const firstValid = vis?.find((it: any) => it.base && it.base !== '..');
+        if (firstValid) bases = [firstValid.base];
+      }
+    }
+
+    return { dirPath, bases };
+  }
+
+  private revealModal(overlay: HTMLElement | null, input?: HTMLInputElement | null, select = false): void {
+    requestAnimationFrame(() => {
+      overlay?.classList.remove('hidden');
+      overlay?.setAttribute('aria-hidden', 'false');
+      if (input) {
+        input.focus({ preventScroll: true });
+        if (select) input.select();
+      }
+    });
   }
 
   public async swapPanels(): Promise<void> {
@@ -138,32 +357,19 @@ export class FileOpsController {
     leftPane.activeTab?.clearSelection();
     rightPane.activeTab?.clearSelection();
 
-    await this.refreshAll();
-    this.setStatus('Swapped left and right panels (Ctrl+U).');
-  }
-
-  public async goRoot(side: 'left' | 'right' = this.state.active): Promise<void> {
-    const pane = this.state[side];
-    let rootPath = '/';
-    if (pane.path.includes(':')) {
-      const driveMatch = pane.path.match(/^[a-zA-Z]:/);
-      rootPath = driveMatch ? `${driveMatch[0]}\\` : 'C:\\';
-    }
-    pane.activeTab?.pushHistory(pane.path);
-    pane.path = rootPath;
-    pane.activeTab?.clearSelection();
-    await this.loadDir(side);
-    this.setStatus(`Jumped to root: ${rootPath} (Ctrl+\\)`);
+    await Promise.all([this.loadDir('left'), this.loadDir('right')]);
+    this.setStatus('Panels swapped.');
   }
 
   public async toggleBranchView(side: 'left' | 'right' = this.state.active): Promise<void> {
+    const apiObj = typeof this.api === 'function' ? this.api() : this.api;
     const pane = this.state[side];
     pane.isBranchView = !pane.isBranchView;
 
     if (pane.isBranchView) {
       this.setStatus(`Loading Flat Branch View (Ctrl+B) for ${pane.path}…`);
       try {
-        const res = await this.api().readFlatBranch(pane.path);
+        const res = await apiObj.readFlatBranch(pane.path);
         if (res && res.ok) {
           pane.items = res.items || [];
           pane.cursor = 0;
@@ -182,75 +388,71 @@ export class FileOpsController {
     }
   }
 
+  public async generateDuplicateName(dirPath: string, base: string, isDirectory?: boolean): Promise<string> {
+    const apiObj = typeof this.api === 'function' ? this.api() : this.api;
+    const dotIdx = base.lastIndexOf('.');
+    const treatAsFile = isDirectory !== true && dotIdx > 0;
+    const stem = treatAsFile ? base.substring(0, dotIdx) : base;
+    const ext = treatAsFile ? base.substring(dotIdx) : '';
+
+    let candidate = `${stem} - Copy${ext}`;
+    let counter = 2;
+
+    try {
+      const dirRes = await apiObj.readDir(dirPath);
+      const existingNames = new Set((dirRes?.items || []).map((it: any) => it.base || it.name));
+      while (existingNames.has(candidate)) {
+        candidate = `${stem} - Copy ${counter}${ext}`;
+        counter++;
+      }
+    } catch {}
+
+    return candidate;
+  }
+
   public async cloneSelection(side: 'left' | 'right' = this.state.active): Promise<void> {
-    const pane = this.state[side];
-    const bases = this.getSelectedBases(side);
+    const apiObj = typeof this.api === 'function' ? this.api() : this.api;
+    const { dirPath, bases } = this.collectTargets(side);
+
     if (!bases.length) {
-      this.setStatus('No file selected to clone.');
+      this.setStatus('No file or folder selected to duplicate.');
       return;
     }
 
-    const base = bases[0];
-    const dotIdx = base.lastIndexOf('.');
-    let defaultCloneName = '';
-    if (dotIdx > 0) {
-      const stem = base.substring(0, dotIdx);
-      const ext = base.substring(dotIdx);
-      defaultCloneName = `${stem} - Copy${ext}`;
-    } else {
-      defaultCloneName = `${base} - Copy`;
+    let duplicated = 0;
+    let failed = 0;
+    let lastError = '';
+
+    const visItems = this.getFilteredSelection ? (this.getFilteredSelection(side).vis || []) : [];
+    for (const base of bases) {
+      if (!base || base === '..') continue;
+      const src = await apiObj.pathJoin(dirPath, base);
+      const srcItem = visItems.find((it: any) => it.base === base);
+      const cloneName = await this.generateDuplicateName(dirPath, base, srcItem?.isDir);
+      const dst = await apiObj.pathJoin(dirPath, cloneName);
+      try {
+        const res = await apiObj.copy(src, dst, 'overwrite');
+        if (res && res.ok === false) {
+          failed++;
+          lastError = res.error || 'Copy failed';
+        } else {
+          duplicated++;
+        }
+      } catch (err: any) {
+        failed++;
+        lastError = err?.message || String(err);
+      }
     }
 
-    const overlay = document.getElementById('modal-overlay');
-    const input = document.getElementById('rename-input') as HTMLInputElement;
-    const title = document.getElementById('rename-dialog-title') || document.querySelector('#modal-rename h2');
-    const subtitle = document.querySelector('#modal-rename .mac-dialog-subtitle');
-    const btnOk = document.getElementById('rename-ok');
-    const btnCancel = document.getElementById('rename-cancel');
-
-    if (title) title.textContent = 'Clone / Copy Here (Shift+F5)';
-    if (subtitle) subtitle.textContent = `Create a copy of "${base}" in the same folder.`;
-    if (btnOk) btnOk.textContent = 'Copy';
-    if (input) input.value = defaultCloneName;
-    overlay?.classList.remove('hidden');
-
-    const close = () => {
-      overlay?.classList.add('hidden');
-      if (title) title.textContent = 'Rename';
-      if (subtitle) subtitle.textContent = 'Enter a new name for this file or folder.';
-      if (btnOk) btnOk.textContent = 'Rename';
-      if (input) input.onkeydown = null;
-      this.focusActiveList();
-    };
-
-    const apply = async () => {
-      const cloneName = input.value.trim();
-      if (!cloneName || cloneName === base) { close(); return; }
-      const src = await this.api().pathJoin(pane.path, base);
-      const dst = await this.api().pathJoin(pane.path, cloneName);
-      try {
-        await this.api().copy(src, dst, 'overwrite');
-        this.setStatus(`✓ Cloned "${base}" as "${cloneName}".`);
-      } catch (err: any) {
-        this.setStatus(`Clone failed: ${err?.message || err}`);
-      }
-      close();
-      await this.refreshAll();
-    };
-
-    if (btnOk) btnOk.onclick = () => void apply();
-    if (btnCancel) btnCancel.onclick = () => close();
-    if (input) {
-      input.onkeydown = (ev) => {
-        if (ev.key === 'Escape') { ev.preventDefault(); close(); }
-        if (ev.key === 'Enter') { ev.preventDefault(); void apply(); }
-      };
-      input.focus();
-      input.select();
+    await this.refreshAll();
+    if (duplicated > 0) {
+      this.setStatus(`✓ Duplicated ${duplicated} item(s)${failed > 0 ? ` (${failed} failed: ${lastError})` : ''}.`);
+    } else if (failed > 0) {
+      this.setStatus(`Duplicate failed: ${lastError || 'Unknown error'}`);
     }
   }
 
-  private async _resolveOverwritePolicy(side: 'left' | 'right', o: 'left' | 'right', bases: string[]): Promise<'overwrite' | 'skip' | null> {
+    private async _resolveOverwritePolicy(side: 'left' | 'right', o: 'left' | 'right', bases: string[]): Promise<'overwrite' | 'skip' | null> {
     const conflicts: string[] = [];
     let truncated = false;
     let scanFailed = false;
@@ -547,10 +749,11 @@ export class FileOpsController {
         iconEl.innerHTML = `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#0a84ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>`;
       }
       if (input) input.value = item.base;
-      overlay?.classList.remove('hidden');
+      this.revealModal(overlay, input, true);
 
       const close = () => {
         overlay?.classList.add('hidden');
+        overlay?.setAttribute('aria-hidden', 'true');
         if (input) input.onkeydown = null;
         this.focusActiveList();
       };
@@ -582,18 +785,20 @@ export class FileOpsController {
       if (okBtn) okBtn.onclick = () => void apply();
       if (cancelBtn) cancelBtn.onclick = () => close();
       if (input) {
+        input.readOnly = false;
         input.onkeydown = (ev) => {
           if (ev.key === 'Escape') { ev.preventDefault(); close(); }
           if (ev.key === 'Enter') { ev.preventDefault(); void apply(); }
         };
-        input.focus();
-        input.select();
       }
       return;
     }
 
-    const bases = this.getSelectedBases(side);
-    if (!bases.length) return;
+    const { dirPath, bases } = this.collectTargets(side);
+    if (!bases.length) {
+      this.setStatus('No file or folder selected to rename.');
+      return;
+    }
 
     if (bases.length > 1) {
       return this.openBatchRename(side, bases);
@@ -602,21 +807,30 @@ export class FileOpsController {
     const visItems = this.getFilteredSelection(side).vis || [];
     const itemQuery = visItems.find((v: any) => v.base === bases[0]);
     const item = itemQuery || { base: bases[0] };
-    if (!item || item.base === '' || item.base === '..') return;
+    if (!item || item.base === '' || item.base === '..') {
+      this.setStatus('No file or folder selected to rename.');
+      return;
+    }
 
-    const rawSrc = item.fullPath || (await this.api().pathJoin(this.state[side].path, item.base));
+    const rawSrc = item.fullPath || (await this.api().pathJoin(dirPath, item.base));
     const src = String(rawSrc).replace(/[/\\]+$/, '');
     if (title) title.textContent = 'Rename';
     if (subtitle) subtitle.textContent = `Enter a new name for "${item.base}".`;
     if (okBtn) okBtn.textContent = 'Rename';
+    if (okBtn) okBtn.classList.remove('mac-btn--danger');
     if (iconEl) {
       iconEl.innerHTML = `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#0a84ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>`;
     }
-    if (input) input.value = item.base;
-    overlay?.classList.remove('hidden');
+    if (input) {
+      input.readOnly = false;
+      input.style.textAlign = '';
+      input.value = item.base;
+    }
+    this.revealModal(overlay, input, true);
 
     const close = () => {
       overlay?.classList.add('hidden');
+      overlay?.setAttribute('aria-hidden', 'true');
       if (input) input.onkeydown = null;
       this.focusActiveList();
     };
@@ -652,67 +866,86 @@ export class FileOpsController {
         if (ev.key === 'Escape') { ev.preventDefault(); close(); }
         if (ev.key === 'Enter') { ev.preventDefault(); void apply(); }
       };
-      input.focus();
-      input.select();
     }
   }
 
+  private _deleteBusy = false;
+
+  private async confirmDelete(summary: string, permanent: boolean): Promise<boolean> {
+    const trash = !permanent && this.state.config?.useTrash !== false;
+    const choice = await showChoiceDialog({
+      title: 'Delete',
+      message: trash
+        ? `Move ${summary} to Trash?`
+        : `Permanently delete ${summary}? This cannot be undone.`,
+      allowBackdropDismiss: false,
+      choices: [
+        { label: 'Cancel', value: 'cancel' },
+        { label: 'Delete', value: 'ok', primary: true, danger: true },
+      ],
+    });
+    return choice === 'ok';
+  }
+
   public async beginDelete(opts: any = {}): Promise<void> {
+    if (this._deleteBusy) return;
+    this._deleteBusy = true;
+    try {
+      await this.runDelete(opts);
+    } finally {
+      this._deleteBusy = false;
+    }
+  }
+
+  private async runDelete(opts: any = {}): Promise<void> {
     const side = this.state.active as 'left' | 'right';
+    const apiObj = typeof this.api === 'function' ? this.api() : this.api;
+    const permanent = opts?.permanent === true;
+    const trash = permanent ? false : this.state.config?.useTrash !== false;
+    const reload = () => this.refreshAll({ force: true });
+
     if (opts?.targetPath && opts?.targetItem) {
       const base = opts.targetItem.base;
-      const permanent = opts.permanent === true;
-      const trash = permanent ? false : this.state.config.useTrash;
-      const mode = trash ? 'to Trash' : 'PERMANENTLY (no trash)';
-      const confirmed = await this.htmlConfirm(`Delete ${base} ${mode}?`, {
-        title: 'Delete',
-        subtitle: permanent ? 'This item will be permanently deleted.' : 'This item will be moved to the Trash.',
-        okText: 'Delete',
-        isDanger: true,
-      });
-      if (!confirmed) return;
+      if (!(await this.confirmDelete(`"${base}"`, permanent))) return;
+      this.setStatus(`Deleting ${base}…`);
       try {
-        const res = await this.api().deletePath(opts.targetPath, trash);
+        const res = await apiObj.deletePath(String(opts.targetPath).replace(/[/\\]+$/, ''), trash);
         if (res && res.ok === false) {
           this.setStatus(res.error || `Delete failed: ${base}`);
         } else {
           this.setStatus(`Deleted ${base}.`);
         }
       } catch (err: any) {
-        this.setStatus(err?.message || String(err));
+        this.setStatus(`Delete failed: ${err?.message || err}`);
       }
-      await this.refreshAll();
+      await reload();
       return;
     }
 
-    const bases = this.getSelectedBases(side);
-    if (!bases.length) return;
-    const permanent = opts?.permanent === true;
-    const trash = permanent ? false : this.state.config.useTrash;
-    const mode = trash ? 'to Trash' : 'PERMANENTLY (no trash)';
-    const summary = bases.length === 1 ? bases[0] : `${bases.length} items`;
-    const confirmed = await this.htmlConfirm(`Delete ${summary} ${mode}?`, {
-      title: 'Delete',
-      subtitle: permanent ? 'This item will be permanently deleted.' : 'This item will be moved to the Trash.',
-      okText: 'Delete',
-      isDanger: true,
-    });
-    if (!confirmed) return;
+    const { dirPath, bases } = this.collectTargets(side);
+    if (!bases.length) {
+      this.setStatus('No file or folder selected to delete.');
+      return;
+    }
+    const summary = bases.length === 1 ? `"${bases[0]}"` : `${bases.length} items`;
+    if (!(await this.confirmDelete(summary, permanent))) return;
+
+    this.setStatus(`Deleting ${summary}…`);
     let deleted = 0;
     const errors: string[] = [];
     const visItems = this.getFilteredSelection(side).vis || [];
-    const remote = isRemotePath(this.state[side].path);
+    const remote = isRemotePath(dirPath || this.state[side].path);
 
     for (const base of bases) {
       const itemQuery = visItems.find((v: any) => v.base === base);
       try {
         if (remote.isRemote) {
           const remoteSub = remote.remotePath === '/' ? `/${base}` : `${remote.remotePath.replace(/\/+$/, '')}/${base}`;
-          await this.api().remoteDelete(remote.profileId, remoteSub, itemQuery?.isDir ?? false);
+          await apiObj.remoteDelete(remote.profileId, remoteSub, itemQuery?.isDir ?? false);
           deleted++;
         } else {
-          const src = itemQuery?.fullPath || (await this.api().pathJoin(this.state[side].path, base));
-          const res = await this.api().deletePath(src, trash);
+          const src = await apiObj.pathJoin(dirPath, base);
+          const res = await apiObj.deletePath(String(src).replace(/[/\\]+$/, ''), trash);
           if (res && res.ok === false) {
             errors.push(res.error || `Delete failed: ${base}`);
           } else {
@@ -727,9 +960,11 @@ export class FileOpsController {
       this.setStatus(`Deleted ${deleted}/${bases.length} item(s). Errors: ${errors.join('; ')}`);
     } else if (deleted > 0) {
       this.setStatus(`Deleted ${deleted} item(s).`);
+    } else {
+      this.setStatus('Delete failed.');
     }
-    this.state[side].activeTab.clearSelection();
-    await this.refreshAll();
+    this.state[side].activeTab?.clearSelection();
+    await reload();
   }
 
   public async compressSelection(side: 'left' | 'right' = this.state.active): Promise<void> {

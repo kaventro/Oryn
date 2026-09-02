@@ -63,8 +63,8 @@ pub fn set_dock_icon(app: tauri::AppHandle, icon_id: String) -> Result<(), Strin
             let rgba = img.to_rgba8();
             let (width, height) = rgba.dimensions();
             let tauri_img = tauri::image::Image::new_owned(rgba.into_raw(), width, height);
-            if let Some(win) = app.get_webview_window("main") {
-                let _ = win.set_icon(tauri_img);
+            for win in app.webview_windows().values() {
+                let _ = win.set_icon(tauri_img.clone());
             }
         }
     }

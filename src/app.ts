@@ -188,7 +188,7 @@ function updatePaneClass(): void {
 }
 
 function focusActiveList(): void {
-  (document.getElementById(state.active === 'left' ? 'list-left' : 'list-right') as HTMLElement | null)?.focus();
+  (document.getElementById(state.active === 'left' ? 'list-left' : 'list-right') as HTMLElement | null)?.focus({ preventScroll: true });
 }
 
 function syncFilterInput(): void {
@@ -216,7 +216,7 @@ function renderPane(side: 'left' | 'right'): void {
       if (document.getElementById('app')?.classList.contains('columns-mode') && listRendererInst?.columnsViewController) {
         void listRendererInst.columnsViewController.syncPane(side, state[side]);
       } else {
-        listRendererInst.paintVirtualPane(side, true);
+        listRendererInst.paintVirtualPane(side, false);
       }
     }
     statusBarController.refresh();
@@ -302,7 +302,7 @@ async function init(): Promise<void> {
     getFilteredSelection: (side) => panelControllerInst.getFilteredSelection(side),
     fullPath: (side, item) => panelControllerInst.fullPath(state[side], item),
     loadDir: (s) => panelControllerInst.loadDir(s),
-    refreshAll: () => panelControllerInst.refreshAll(),
+    refreshAll: (opts) => panelControllerInst.refreshAll(opts),
     focusActiveList,
   });
 
@@ -513,6 +513,7 @@ async function init(): Promise<void> {
     api,
     state,
     otherSide,
+    fileOps,
     syncFilterInput,
     updatePaneClass,
     focusActiveList,
@@ -568,6 +569,10 @@ async function init(): Promise<void> {
       state.active = side;
       if (activePath) {
         state[side].path = activePath;
+        void panelControllerInst.refreshGitMeta(side, { annotateItems: false }).then(() => {
+          pathHeaderControllerInst.renderTitle(side, state[side]?.path);
+          statusBarController.refresh();
+        });
       }
       syncFilterInput();
       updatePaneClass();
@@ -577,6 +582,8 @@ async function init(): Promise<void> {
   });
   listRendererInst.columnsViewController = columnsViewController;
   commandsController.columnsViewController = columnsViewController;
+  fileOps.columnsViewController = columnsViewController;
+  panelControllerInst.columnsViewController = columnsViewController;
 
   const viewController = new ViewController({
     state,

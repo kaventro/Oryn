@@ -31,7 +31,7 @@
 
 .ctx-item {
   position: relative;
-  padding: 4.5px 8px;
+  padding: 3.5px 8px;
   cursor: pointer;
   font-size: 0.78rem;
   line-height: 1.3;
@@ -154,7 +154,7 @@
 
 .ctx-sep {
   height: 1px;
-  margin: 6px 10px;
+  margin: 4px 8px;
   background: var(--ghost-line);
   pointer-events: none;
 }

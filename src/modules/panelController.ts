@@ -1,9 +1,11 @@
 // src/modules/panelController.ts
 import { filteredItems } from './formatUtils.ts';
+import { applyGitStatusToItems, fetchGitSnapshot } from './gitStatusMapper.ts';
 import { isRemotePath, formatRemotePath } from './remoteController.ts';
 import type { AppState, Item } from './stateModels.ts';
 
 export interface PanelControllerDeps {
+  columnsViewController?: any;
   state: AppState;
   api: () => any;
   setStatus: (msg: string) => void;
@@ -18,6 +20,7 @@ export interface PanelControllerDeps {
 }
 
 export class PanelController {
+  public columnsViewController?: any;
   public state: AppState;
   public api: () => any;
   public setStatus: (msg: string) => void;
@@ -44,6 +47,7 @@ export class PanelController {
     this.hideFilterDrop = deps.hideFilterDrop || (() => {});
     this.tagController = deps.tagController || null;
     this._refreshPromise = null;
+    this.columnsViewController = deps.columnsViewController;
   }
 
   public getFilteredSelection(side: 'left' | 'right'): { vis: Item[]; item: Item | null; index: number } {
@@ -125,57 +129,16 @@ export class PanelController {
           }
         } else {
           pane.cursor = 0;
-          const hostEl = document.getElementById(`list-${side}`);
-          if (hostEl) hostEl.scrollTop = 0;
+          if (typeof document !== 'undefined') {
+            const hostEl = document.getElementById(`list-${side}`);
+            if (hostEl) hostEl.scrollTop = 0;
+          }
         }
       }
       if (currentSeq !== pane.loadSeq) return;
 
       if (!remote.isRemote) {
-        // Check Git status for repo and file badges
-        try {
-          const repo = await ow.gitIsRepo(pane.path);
-          if (repo && repo.ok && repo.root) {
-            const status = await ow.gitStatus(repo.root);
-            if (status && status.ok) {
-              pane.git = {
-                isRepo: true,
-                root: repo.root,
-                branch: status.branch,
-                ahead: status.ahead,
-                behind: status.behind,
-              };
-              const relToRepo = pane.path.startsWith(repo.root)
-                ? pane.path.slice(repo.root.length).replace(/^[/\\]+/, '')
-                : '';
-              const prefix = relToRepo ? (relToRepo.replace(/[/\\]+$/, '') + '/') : '';
-
-              const fileStatusMap = new Map<string, string>();
-              (status.files || []).forEach((f: any) => {
-                let fPath: string = f.file;
-                if (prefix && fPath.startsWith(prefix)) {
-                  fPath = fPath.slice(prefix.length);
-                }
-                const baseName = fPath.split(/[/\\]/)[0];
-                const tag = f.index !== ' ' && f.index !== '?'
-                  ? (f.index === 'A' ? 'A' : 'M')
-                  : (f.worktree === '?' ? '?' : (f.worktree === 'D' ? 'D' : 'M'));
-                fileStatusMap.set(baseName, tag);
-              });
-
-              pane.items.forEach((it) => {
-                if (it.base !== '..') {
-                  it.gitStatus = fileStatusMap.get(it.base) || null;
-                }
-              });
-            }
-          } else {
-            pane.git = null;
-            pane.items.forEach((it) => { it.gitStatus = null; });
-          }
-        } catch {
-          pane.git = null;
-        }
+        await this.refreshGitMeta(side, { annotateItems: true });
 
         if (this.tagController && pane.path) {
           pane.items.forEach((it) => {
@@ -374,17 +337,39 @@ export class PanelController {
     this.focusActiveList();
   }
 
-  public async refreshAll(): Promise<void> {
-    if (this._refreshPromise) return this._refreshPromise;
-    this._refreshPromise = (async () => {
+  public async refreshGitMeta(
+    side: 'left' | 'right',
+    options?: { annotateItems?: boolean },
+  ): Promise<void> {
+    const pane = this.state[side];
+    if (!pane?.path || isRemotePath(pane.path).isRemote) {
+      pane.git = null;
+      return;
+    }
+    const snapshot = await fetchGitSnapshot(this.api(), pane.path);
+    pane.git = snapshot.git;
+    if (options?.annotateItems !== false) {
+      applyGitStatusToItems(pane.path, pane.items, snapshot);
+    }
+  }
+
+  public async refreshAll(opts?: { force?: boolean }): Promise<void> {
+    if (this._refreshPromise && !opts?.force) return this._refreshPromise;
+    const run = (async () => {
       if (typeof this.api().clearSearchCache === 'function') await this.api().clearSearchCache();
       await Promise.all([this.loadDir('left'), this.loadDir('right')]);
-      this.setStatus('Panels refreshed.');
+      if (this.columnsViewController) {
+        await Promise.all([
+          this.columnsViewController.syncPane('left', this.state.left),
+          this.columnsViewController.syncPane('right', this.state.right),
+        ]);
+      }
     })();
+    this._refreshPromise = run;
     try {
-      await this._refreshPromise;
+      await run;
     } finally {
-      this._refreshPromise = null;
+      if (this._refreshPromise === run) this._refreshPromise = null;
     }
   }
 

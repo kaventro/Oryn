@@ -621,6 +621,10 @@ body.platform-mac .win-caption-controls {
   gap: 10px;
   flex-shrink: 0;
   flex-wrap: wrap;
+  position: relative;
+  z-index: 10;
+  -webkit-app-region: no-drag !important;
+  pointer-events: auto !important;
 }
 
 .mac-pill-group {
@@ -631,6 +635,8 @@ body.platform-mac .win-caption-controls {
   align-items: stretch;
   overflow: hidden;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  -webkit-app-region: no-drag !important;
+  pointer-events: auto !important;
 }
 
 .mac-toolbar-btn {
@@ -648,10 +654,18 @@ body.platform-mac .win-caption-controls {
   border-right: 1px solid rgba(255, 255, 255, 0.06);
   transition: all 0.1s ease;
   height: 28px;
+  -webkit-app-region: no-drag !important;
+  pointer-events: auto !important;
+  user-select: none;
 }
 
 .mac-toolbar-btn:last-child {
   border-right: none;
+}
+
+.mac-toolbar-btn svg,
+.mac-toolbar-btn span {
+  pointer-events: none;
 }
 
 .mac-toolbar-btn:hover {

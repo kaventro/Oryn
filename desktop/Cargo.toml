@@ -1,6 +1,6 @@
 [package]
 name = "Oryn"
-version = "0.0.2"
+version = "0.0.3"
 description = "Oryn — a modern, keyboard-driven dual-pane file manager"
 authors = ["Kaventro"]
 edition = "2021"
