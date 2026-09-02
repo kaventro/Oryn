@@ -844,7 +844,7 @@ async function init(): Promise<void> {
   document.getElementById('btn-more-menu')?.addEventListener('click', (e) => {
     e.stopPropagation();
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    ctxMenuController.show(rect.left, rect.bottom + 4, state.active);
+    ctxMenuController.showMoreMenu(rect.left, rect.bottom + 4, state.active);
   });
 
   // Setup all UI
