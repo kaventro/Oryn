@@ -61,8 +61,10 @@
 }
 
 .ctx-check {
-  display: inline-block;
-  width: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
   font-size: 0.75rem;
   color: var(--primary);
   text-align: center;

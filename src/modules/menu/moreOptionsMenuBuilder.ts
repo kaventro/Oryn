@@ -71,8 +71,16 @@ export class MoreOptionsMenuBuilder {
           if (curSort === s.id) {
             const chk = document.createElement('span');
             chk.className = 'ctx-check';
-            chk.textContent = pane?.sortAsc ? '✓ ▲' : '✓ ▼';
+            chk.textContent = '✓';
             left.appendChild(chk);
+
+            const arrow = document.createElement('span');
+            arrow.className = 'ctx-sort-dir';
+            arrow.textContent = pane?.sortAsc ? '▲' : '▼';
+            arrow.style.fontSize = '0.65rem';
+            arrow.style.opacity = '0.8';
+            arrow.style.marginRight = '2px';
+            left.appendChild(arrow);
           }
           const txt = document.createElement('span');
           txt.textContent = s.label;
@@ -87,7 +95,11 @@ export class MoreOptionsMenuBuilder {
                 pane.sortField = s.id;
                 pane.sortAsc = true;
               }
-              if (deps.loadDir) void deps.loadDir(side);
+              if (deps.renderPane) {
+                deps.renderPane(side);
+              } else if (deps.loadDir) {
+                void deps.loadDir(side);
+              }
             }
           };
           subEl.appendChild(subItem);

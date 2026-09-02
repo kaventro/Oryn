@@ -16,6 +16,7 @@ export interface CtxMenuDeps {
   beginRename?: (opts?: any) => Promise<void> | void;
   beginDelete?: (opts?: any) => Promise<void> | void;
   loadDir?: (s: 'left' | 'right') => Promise<void> | void;
+  renderPane?: (s: 'left' | 'right') => void;
   openGitBlame?: (f: string, r?: any) => Promise<void> | void;
   openGitDiff?: (f: string, r?: any) => Promise<void> | void;
   openGitLog?: (f: string, r?: any) => Promise<void> | void;
@@ -49,6 +50,7 @@ export class CtxMenuController {
   public beginRename?: (opts?: any) => Promise<void> | void;
   public beginDelete?: (opts?: any) => Promise<void> | void;
   public loadDir?: (s: 'left' | 'right') => Promise<void> | void;
+  public renderPane?: (s: 'left' | 'right') => void;
   public openGitBlame?: (f: string, r?: any) => Promise<void> | void;
   public openGitDiff?: (f: string, r?: any) => Promise<void> | void;
   public openGitLog?: (f: string, r?: any) => Promise<void> | void;
@@ -78,6 +80,7 @@ export class CtxMenuController {
     this.beginRename = deps.beginRename;
     this.beginDelete = deps.beginDelete;
     this.loadDir = deps.loadDir;
+    this.renderPane = deps.renderPane;
     this.openGitBlame = deps.openGitBlame;
     this.openGitDiff = deps.openGitDiff;
     this.openGitLog = deps.openGitLog;

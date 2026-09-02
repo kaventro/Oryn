@@ -341,6 +341,7 @@ async function init(): Promise<void> {
     beginRename: (opts) => fileOps.beginRename(opts),
     beginDelete: (opts) => fileOps.beginDelete(opts),
     loadDir: (s) => panelControllerInst.loadDir(s),
+    renderPane: (s) => renderPane(s),
     openGitBlame: (f, r) => gitController.openBlameForFile(f, null, r),
     openGitDiff: (f) => gitController.openDiffForFile(f),
     openGitLog: (f) => gitController.openLogForFile(f),
@@ -553,6 +554,7 @@ async function init(): Promise<void> {
 
   const columnsViewController = new ColumnsViewController({
     api,
+    state,
     rowRenderer: listRendererInst.rowRenderer,
     iconRegistry: listRendererInst.iconRegistry,
     showCtxMenu: (x, y, side, emptyArea, item, dirPath) => ctxMenuController.show(x, y, side, emptyArea, item, dirPath),

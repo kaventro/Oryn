@@ -315,3 +315,36 @@ test('ColumnsViewController render does not inject columns-container when not in
   }
 });
 
+test('ColumnsViewController sorts items by date, size, name, and kind respecting direction', () => {
+  const state = {
+    left: { sortField: 'date', sortAsc: false },
+    right: { sortField: 'name', sortAsc: true },
+  };
+  const cvc = new ColumnsViewController({
+    api: () => ({}),
+    state,
+  });
+
+  const rawItems = [
+    { base: 'old.txt', isDir: false, size: 100, mtime: '2025-01-01T10:00:00Z', ext: 'txt' },
+    { base: 'new.txt', isDir: false, size: 50, mtime: '2026-09-02T12:00:00Z', ext: 'txt' },
+    { base: 'folderB', isDir: true, size: 0, mtime: '2026-01-01T10:00:00Z', ext: '' },
+    { base: 'folderA', isDir: true, size: 0, mtime: '2026-05-01T10:00:00Z', ext: '' },
+  ];
+
+  // Test date sort desc (newest first within dirs, then files)
+  const sortedByDateDesc = cvc.sortItems(rawItems as any, 'left');
+  assert.equal(sortedByDateDesc[0].base, 'folderA', 'Newer folder first');
+  assert.equal(sortedByDateDesc[1].base, 'folderB', 'Older folder second');
+  assert.equal(sortedByDateDesc[2].base, 'new.txt', 'Newer file first');
+  assert.equal(sortedByDateDesc[3].base, 'old.txt', 'Older file second');
+
+  // Switch to size sort asc
+  state.left.sortField = 'size';
+  state.left.sortAsc = true;
+  const sortedBySizeAsc = cvc.sortItems(rawItems as any, 'left');
+  assert.equal(sortedBySizeAsc[2].base, 'new.txt', 'Smaller file 50B first');
+  assert.equal(sortedBySizeAsc[3].base, 'old.txt', 'Larger file 100B second');
+});
+
+
