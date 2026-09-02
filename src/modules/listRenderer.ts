@@ -268,7 +268,7 @@ export class ListRenderer {
     this.paintVirtualPane('left', false);
     this.paintVirtualPane('right', false);
     if (this.focusActiveList) this.focusActiveList();
-    else hostEl.focus();
+    else hostEl.focus({ preventScroll: true });
   }
 
   public onPaneListContextMenu(e: MouseEvent): void {
@@ -301,7 +301,7 @@ export class ListRenderer {
       this.paintVirtualPane('right', false);
     }
     if (this.focusActiveList) this.focusActiveList();
-    else hostEl.focus();
+    else hostEl.focus({ preventScroll: true });
     if (e.button === 2) {
       this.onPaneListContextMenu(e);
     }

@@ -44,16 +44,24 @@ export interface ChoiceOption {
   label: string;
   value: string;
   primary?: boolean;
+  danger?: boolean;
 }
 
 export interface ChoiceDialogOpts {
   title: string;
   message: string;
   choices: ChoiceOption[];
+  allowBackdropDismiss?: boolean;
 }
 
-export function showChoiceDialog({ title, message, choices }: ChoiceDialogOpts): Promise<string | null> {
+export function showChoiceDialog({
+  title,
+  message,
+  choices,
+  allowBackdropDismiss = false,
+}: ChoiceDialogOpts): Promise<string | null> {
   const overlay = ensureDom();
+  overlay.style.zIndex = '20000';
   const titleEl = overlay.querySelector('#choice-title') as HTMLElement;
   const msgEl = overlay.querySelector('#choice-message') as HTMLElement;
   const actionsEl = overlay.querySelector('#choice-actions') as HTMLElement;
@@ -63,7 +71,10 @@ export function showChoiceDialog({ title, message, choices }: ChoiceDialogOpts):
   actionsEl.replaceChildren();
 
   return new Promise((resolve) => {
+    let settled = false;
     const close = (value: string | null) => {
+      if (settled) return;
+      settled = true;
       overlay.classList.add('hidden');
       overlay.setAttribute('aria-hidden', 'true');
       document.removeEventListener('keydown', onKey, true);
@@ -77,6 +88,18 @@ export function showChoiceDialog({ title, message, choices }: ChoiceDialogOpts):
         e.stopPropagation();
         close(null);
       }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        e.stopPropagation();
+        const primary = choices.find((c) => c.primary) || choices[choices.length - 1];
+        close(primary?.value ?? null);
+      }
+    };
+
+    const pick = (e: Event, value: string) => {
+      e.preventDefault();
+      e.stopPropagation();
+      close(value);
     };
 
     let firstBtn: HTMLButtonElement | null = null;
@@ -84,20 +107,30 @@ export function showChoiceDialog({ title, message, choices }: ChoiceDialogOpts):
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.textContent = choice.label;
-      btn.onclick = () => close(choice.value);
+      if (choice.primary) btn.classList.add('mac-btn', 'mac-btn--primary');
+      else btn.classList.add('mac-btn', 'mac-btn--secondary');
+      if (choice.danger) btn.classList.add('mac-btn--danger');
+      btn.onpointerdown = (e) => pick(e, choice.value);
+      btn.onclick = (e) => pick(e, choice.value);
       actionsEl.appendChild(btn);
       if (choice.primary && !firstBtn) firstBtn = btn;
     }
     if (!firstBtn) firstBtn = actionsEl.querySelector('button');
 
-    overlay.onclick = (e) => {
-      if (e.target === overlay) close(null);
-    };
+    overlay.onclick = null;
     document.addEventListener('keydown', onKey, true);
 
     overlay.classList.remove('hidden');
     overlay.setAttribute('aria-hidden', 'false');
-    setTimeout(() => firstBtn?.focus(), 0);
+    setTimeout(() => firstBtn?.focus({ preventScroll: true }), 0);
+    if (allowBackdropDismiss) {
+      setTimeout(() => {
+        if (settled) return;
+        overlay.onclick = (e) => {
+          if (e.target === overlay) close(null);
+        };
+      }, 300);
+    }
   });
 }
 

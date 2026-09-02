@@ -506,6 +506,39 @@ export class KeyboardController {
       return;
     }
 
+    // Standard File Operations: Copy (Ctrl+C/Cmd+C), Cut (Ctrl+X/Cmd+X), Paste (Ctrl+V/Cmd+V), Duplicate (Ctrl+D/Cmd+D)
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && !isInputField) {
+      if (e.code === 'KeyC') {
+        e.preventDefault();
+        void this.fileOps.copySelectionToClipboard(state.active);
+        return;
+      }
+      if (e.code === 'KeyX') {
+        e.preventDefault();
+        void this.fileOps.cutSelectionToClipboard(state.active);
+        return;
+      }
+      if (e.code === 'KeyV') {
+        e.preventDefault();
+        void this.fileOps.pasteFromClipboard(state.active);
+        return;
+      }
+      if (e.code === 'KeyD' && !e.shiftKey) {
+        e.preventDefault();
+        void this.fileOps.cloneSelection(state.active);
+        return;
+      }
+      if (e.code === 'KeyN') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          this.commandsController.runCommand('mkdir');
+        } else {
+          this.commandsController.runCommand('newFile');
+        }
+        return;
+      }
+    }
+
     // Dynamic Hotkeys Matching via HotkeyRegistry
     if (this.hotkeyRegistry && !inRename && !inPathEdit && !inCmdLine && !searchOpen && !propertiesOpen) {
       const matchedActionId = this.hotkeyRegistry.findActionForEvent(e);

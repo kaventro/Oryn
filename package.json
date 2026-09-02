@@ -1,6 +1,6 @@
 {
   "name": "Oryn",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "private": true,
   "type": "module",
   "description": "A modern, keyboard-driven dual-pane file manager built with Tauri 2 and Vite",

@@ -153,6 +153,53 @@ test('ColumnsViewController forwards context menu requests with item and column 
   });
 });
 
+test('ColumnsViewController copies gitStatus onto column items and keeps it when expanding', async () => {
+  const mockDirs: Record<string, Array<{ name: string; isDir: boolean }>> = {
+    '/git-cols-repo': [
+      { name: 'src', isDir: true },
+      { name: 'README.md', isDir: false },
+    ],
+    '/git-cols-repo/src': [
+      { name: 'app.ts', isDir: false },
+    ],
+  };
+  const api = () => ({
+    readDir: async (p: string) => mockDirs[p] || [],
+    pathJoin: async (p: string, c: string) => `${p}/${c}`,
+    gitIsRepo: async () => ({ ok: true, root: '/git-cols-repo' }),
+    gitStatus: async () => ({
+      ok: true,
+      branch: 'main',
+      ahead: 0,
+      behind: 0,
+      files: [
+        { file: 'README.md', index: ' ', worktree: 'M' },
+        { file: 'src/app.ts', index: 'A', worktree: ' ' },
+      ],
+    }),
+  });
+
+  const { clearGitStatusCache } = await import('../gitStatusMapper.ts');
+  clearGitStatusCache();
+
+  const cvc = new ColumnsViewController({ api });
+  await cvc.loadRoot('left', {
+    path: '/git-cols-repo',
+    items: [
+      { base: 'src', isDir: true },
+      { base: 'README.md', isDir: false },
+    ],
+  });
+
+  const rootItems = cvc.getColumns('left')[0].items;
+  assert.equal(rootItems.find((i) => i.base === 'README.md')?.gitStatus, 'M');
+  assert.equal(rootItems.find((i) => i.base === 'src')?.gitStatus, 'A');
+
+  await cvc.selectItem(0, 0, 'left');
+  const srcItems = cvc.getColumns('left')[1].items;
+  assert.equal(srcItems.find((i) => i.base === 'app.ts')?.gitStatus, 'A');
+});
+
 test('ColumnsViewController triggers onActivateSide with active panel and path', async () => {
   let activatedSide = '';
   let activatedPath = '';

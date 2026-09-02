@@ -120,3 +120,46 @@ test('PanelController openSelected enters subdirectory and resets cursor', async
   assert.equal(state.left.cursor, 0);
   assert.equal(focused, true);
 });
+
+test('PanelController loadDir attaches git branch and per-item status badges', async () => {
+  const { clearGitStatusCache } = await import('./gitStatusMapper.ts');
+  clearGitStatusCache();
+
+  const state = new AppState();
+  state.left.path = '/git-pane-repo/ios';
+
+  const mockApi = {
+    readDir: async () => ({
+      ok: true,
+      items: [
+        { base: 'App.swift', isDir: false },
+        { base: 'clean.txt', isDir: false },
+      ],
+    }),
+    gitIsRepo: async () => ({ ok: true, root: '/git-pane-repo' }),
+    gitStatus: async () => ({
+      ok: true,
+      branch: 'feature/ui',
+      ahead: 1,
+      behind: 0,
+      files: [{ file: 'ios/App.swift', index: ' ', worktree: 'M' }],
+    }),
+    watchDirs: async () => {},
+  };
+
+  const controller = new PanelController({
+    state,
+    api: () => mockApi,
+    setStatus: () => {},
+    renderPane: () => {},
+    updatePaneClass: () => {},
+    focusActiveList: () => {},
+  });
+
+  await controller.loadDir('left');
+  assert.equal(state.left.git?.branch, 'feature/ui');
+  assert.equal(state.left.git?.ahead, 1);
+  assert.equal(state.left.items.find((i) => i.base === 'App.swift')?.gitStatus, 'M');
+  assert.equal(state.left.items.find((i) => i.base === 'clean.txt')?.gitStatus, null);
+});
+

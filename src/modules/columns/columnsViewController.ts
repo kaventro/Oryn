@@ -1,4 +1,5 @@
 // src/modules/columns/columnsViewController.ts
+import { applyGitStatusToItems, fetchGitSnapshot } from '../gitStatusMapper.ts';
 
 export interface ColumnItem {
   base: string;
@@ -6,6 +7,7 @@ export interface ColumnItem {
   size: number;
   mtime: string | number;
   ext: string;
+  gitStatus?: string | null;
 }
 
 export interface ColumnStack {
@@ -55,6 +57,22 @@ export class ColumnsViewController {
     return this.paneColumns[side] || [];
   }
 
+    getActiveColumn(side: 'left' | 'right' = this.side): { path: string; selectedItem: ColumnItem | null; selectedIndex: number; colIndex: number } | null {
+    const cols = this.paneColumns[side] || [];
+    if (!cols.length) return null;
+    
+    // Find the rightmost column that has a selected item
+    for (let i = cols.length - 1; i >= 0; i--) {
+      if (cols[i]?.selectedItem?.base && cols[i]?.selectedItem?.base !== '..') {
+        return { ...cols[i], colIndex: i };
+      }
+    }
+    
+    // Fallback to activeColIndex or rightmost column
+    const activeIdx = Math.min(Math.max(0, this.activeColIndexes[side] || 0), cols.length - 1);
+    return { ...cols[activeIdx], colIndex: activeIdx };
+  }
+
   getActiveColumnIndex(side: 'left' | 'right' = this.side): number {
     return this.activeColIndexes[side] || 0;
   }
@@ -70,11 +88,23 @@ export class ColumnsViewController {
     const matchingIdx = cols.findIndex((c) => c.path === rootPath);
     if (matchingIdx >= 0) {
       this.activeColIndexes[side] = matchingIdx;
+      for (const col of cols) {
+        col.items = await this.fetchDirectory(col.path);
+        if (col.selectedIndex >= 0 && col.items[col.selectedIndex]) {
+          col.selectedItem = col.items[col.selectedIndex];
+        }
+      }
       this.render(side);
       this.scrollToColumn(side, matchingIdx);
     } else if (cols[0].path !== rootPath) {
       await this.loadRoot(side, pane);
     } else {
+      for (const col of cols) {
+        col.items = await this.fetchDirectory(col.path);
+        if (col.selectedIndex >= 0 && col.items[col.selectedIndex]) {
+          col.selectedItem = col.items[col.selectedIndex];
+        }
+      }
       this.render(side);
     }
   }
@@ -99,8 +129,17 @@ export class ColumnsViewController {
             size: i.size || 0,
             mtime: i.mtime || '',
             ext: i.ext || (i.base || i.name || '').split('.').pop()?.toLowerCase() || '',
+            gitStatus: i.gitStatus || null,
           }))
       : await this.fetchDirectory(rootPath);
+
+    if (items.length && pane.items && pane.items.length) {
+      const apiObj = typeof this.api === 'function' ? this.api() : this.api;
+      if (typeof apiObj?.gitIsRepo === 'function') {
+        const snapshot = await fetchGitSnapshot(apiObj, rootPath);
+        applyGitStatusToItems(rootPath, items, snapshot);
+      }
+    }
 
     this.paneColumns[side] = [
       {
@@ -362,6 +401,12 @@ export class ColumnsViewController {
 
         nameEl.appendChild(iconWrap);
         nameEl.appendChild(textEl);
+        if (item.gitStatus) {
+          const gitBadge = document.createElement('span');
+          gitBadge.className = `git-status-tag git-status-tag--${item.gitStatus}`;
+          gitBadge.textContent = item.gitStatus;
+          nameEl.appendChild(gitBadge);
+        }
         rowEl.appendChild(nameEl);
 
         rowEl.addEventListener('click', (e) => {
@@ -405,11 +450,11 @@ export class ColumnsViewController {
         colEl.appendChild(emptyEl);
       }
 
+      container!.appendChild(colEl);
+
       if (savedScrollTops[colIdx] != null) {
         colEl.scrollTop = savedScrollTops[colIdx];
       }
-
-      container!.appendChild(colEl);
     });
 
     const lastCol = cols[cols.length - 1];
@@ -521,7 +566,7 @@ export class ColumnsViewController {
       const res = await apiObj.readDir(dirPath);
       const raw = Array.isArray(res) ? res : (res?.items || res?.entries || []);
       const entries = Array.isArray(raw) ? raw : [];
-      return entries
+      const items: ColumnItem[] = entries
         .filter((e: any) => {
           const b = e.base || e.name || '';
           return b && b !== '..';
@@ -532,7 +577,11 @@ export class ColumnsViewController {
           size: e.size || 0,
           mtime: e.mtime || e.modified || 0,
           ext: e.ext || (e.base || e.name || '').split('.').pop()?.toLowerCase() || '',
+          gitStatus: e.gitStatus || null,
         }));
+      const snapshot = await fetchGitSnapshot(apiObj, dirPath);
+      applyGitStatusToItems(dirPath, items, snapshot);
+      return items;
     } catch (_) {
       return [];
     }

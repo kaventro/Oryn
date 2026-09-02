@@ -48,6 +48,7 @@ export interface CommandsDeps {
 }
 
 export class CommandsController {
+  public fileOps?: any;
   public api: () => any;
   public state: any;
   public setStatus: (msg: string) => void;
@@ -85,6 +86,7 @@ export class CommandsController {
     this.selectionController = deps.selectionController;
     this.sidebarController = deps.sidebarController;
     this.columnsViewController = deps.columnsViewController;
+    this.fileOps = deps.fileOps || deps.fileOpsController;
     this.otherSide = deps.otherSide;
     this.getFilteredSelection = deps.getFilteredSelection;
     this.fullPath = deps.fullPath;
@@ -108,7 +110,12 @@ export class CommandsController {
     if (el) el.classList.add('hidden');
   }
 
+  private _cmdLock: string | null = null;
+
   runCommand(cmd: string, payload: any = null): void {
+    if (this._cmdLock === cmd) return;
+    this._cmdLock = cmd;
+    queueMicrotask(() => { this._cmdLock = null; });
     this.closeAllMenus();
     switch (cmd) {
       case 'refresh':
@@ -121,8 +128,10 @@ export class CommandsController {
         void this.api().closeWindow();
         break;
       case 'copy':
-      case 'duplicate':
         if (this.copyToOther) void this.copyToOther();
+        break;
+      case 'duplicate':
+        if (this.fileOps?.cloneSelection) void this.fileOps.cloneSelection();
         break;
       case 'move':
         if (this.moveToOther) void this.moveToOther();
@@ -427,9 +436,10 @@ export class CommandsController {
       });
 
       menubar.querySelectorAll('.menu-item').forEach((item) => {
-        item.addEventListener('click', () => {
-          const cmd = (item as HTMLElement).dataset.cmd;
-          if (cmd) this.runCommand(cmd);
+        item.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const c = (item as HTMLElement).dataset.cmd;
+          if (c) this.runCommand(c);
         });
       });
     }
@@ -437,8 +447,9 @@ export class CommandsController {
     document.addEventListener('click', (e) => {
       const b = (e.target as HTMLElement).closest('[data-cmd]') as HTMLElement | null;
       if (b && !b.closest('#menubar')) {
-        const cmd = b.dataset.cmd;
-        if (cmd) this.runCommand(cmd);
+        e.preventDefault();
+        const c = b.dataset.cmd;
+        if (c) this.runCommand(c);
       }
       if (!(e.target as HTMLElement).closest('#ctx-menu') && !(e.target as HTMLElement).closest('#btn-more-menu')) {
         this.hideCtxMenu();
