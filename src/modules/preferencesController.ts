@@ -281,9 +281,14 @@ export class PreferencesController {
         e.stopPropagation();
         this.settings.dockIcon = icon.id;
         this._saveAndNotify();
-        this.storage.applyDockIcon(icon.id);
         this._updateDockIcons();
-        this._flashStatus(`Dock icon updated: ${icon.name}`);
+        void this.storage.applyDockIcon(icon.id).then(
+          () => this._flashStatus(`App icon updated: ${icon.name}`),
+          (err: unknown) => {
+            const msg = err instanceof Error ? err.message : String(err);
+            this._flashStatus(`Could not update app icon: ${msg}`);
+          },
+        );
       });
 
       grid.appendChild(opt);

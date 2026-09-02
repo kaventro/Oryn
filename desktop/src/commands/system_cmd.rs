@@ -114,6 +114,7 @@ pub struct SystemLocationsOut {
     pub music: Option<String>,
     pub videos: Option<String>,
     pub applications: Option<String>,
+    pub favorites: Vec<crate::services::os_favorites::FavoriteFolder>,
     pub drives: Vec<DiskLocation>,
 }
 
@@ -320,6 +321,7 @@ pub fn system_get_locations() -> SystemLocationsOut {
         music,
         videos,
         applications,
+        favorites: crate::services::os_favorites::read_os_favorites(),
         drives,
     }
 }
@@ -344,5 +346,9 @@ mod tests {
         assert!(!locs.username.is_empty());
         assert!(locs.home.is_some());
         assert!(!locs.drives.is_empty());
+        for fav in &locs.favorites {
+            assert!(!fav.path.is_empty());
+            assert!(!fav.name.is_empty());
+        }
     }
 }

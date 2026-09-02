@@ -55,6 +55,11 @@
   max-height: 90vh;
 }
 
+.git-modal .search-header {
+  padding: 16px 24px 14px;
+  gap: 12px;
+}
+
 .git-branch-badge {
   flex: 1;
   font-size: 13px;
