@@ -442,6 +442,11 @@
 
 .columns-column .row-name-text {
   font-size: 12.5px;
+  min-width: 0;
+}
+
+.columns-column .git-status-tag {
+  margin-left: 0;
 }
 
 .columns-column .row.dir .row-name::after {

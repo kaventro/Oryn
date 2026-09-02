@@ -61,6 +61,7 @@ const MENU_ICONS: Record<string, string> = {
 };
 
 export class CtxMenuController {
+  public fileOps?: any;
   private api: () => any;
   public state: any;
   private setStatus: (msg: string) => void;
@@ -266,10 +267,18 @@ export class CtxMenuController {
 
       wrap.addEventListener('mouseenter', () => {
         const rect = submenu.getBoundingClientRect();
-        if (rect.right > window.innerWidth - 8) {
-          submenu.classList.add('flip-left');
-        } else {
-          submenu.classList.remove('flip-left');
+        if (typeof window !== 'undefined') {
+          if (rect.right > window.innerWidth - 8) {
+            submenu.classList.add('flip-left');
+          } else {
+            submenu.classList.remove('flip-left');
+          }
+          if (rect.bottom > window.innerHeight - 8) {
+            const overflow = rect.bottom - (window.innerHeight - 8);
+            submenu.style.top = `${-4 - overflow}px`;
+          } else {
+            submenu.style.top = '-4px';
+          }
         }
       });
 
@@ -880,6 +889,14 @@ export class CtxMenuController {
         { iconKey: 'rename', shortcut: 'F2' },
       );
       add(
+        'Duplicate',
+        () => {
+          this.state.active = side;
+          if (this.runCommand) this.runCommand('duplicate');
+        },
+        { iconKey: 'copy', shortcut: isMac ? '⌘D' : 'Ctrl+D' },
+      );
+      add(
         'Delete…',
         async () => {
           this.state.active = side;
@@ -901,14 +918,38 @@ export class CtxMenuController {
     this.el.classList.remove('hidden');
     const winW = typeof window !== 'undefined' ? window.innerWidth : 1200;
     const winH = typeof window !== 'undefined' ? window.innerHeight : 800;
-    const pad = 8;
+    const pad = 10;
+
+    // Reset max-height before measuring to get true scrollHeight
+    this.el.style.maxHeight = '';
     const r = this.el.getBoundingClientRect ? this.el.getBoundingClientRect() : { left: x, top: y, right: x + 220, bottom: y + 300, width: 220, height: 300 };
+    const menuW = r.width || (this.el as any).offsetWidth || 230;
+    const menuH = (this.el as any).scrollHeight || r.height || (this.el as any).offsetHeight || 300;
+
     let nx = x;
-    let ny = y;
-    if (x + r.width > winW - pad) nx = Math.max(pad, winW - pad - r.width);
-    if (y + r.height > winH - pad) ny = Math.max(pad, winH - pad - r.height);
+    if (nx + menuW > winW - pad) {
+      nx = Math.max(pad, winW - pad - menuW);
+    }
     if (nx < pad) nx = pad;
+
+    let ny = y;
+    const maxAvailableH = winH - 2 * pad;
+
+    if (ny + menuH > winH - pad) {
+      const upwardY = winH - pad - menuH;
+      if (upwardY >= pad) {
+        ny = upwardY;
+        this.el.style.maxHeight = `${menuH + 4}px`;
+      } else {
+        ny = pad;
+        this.el.style.maxHeight = `${maxAvailableH}px`;
+      }
+    } else {
+      this.el.style.maxHeight = `${winH - ny - pad}px`;
+    }
+
     if (ny < pad) ny = pad;
+
     this.el.style.left = `${Math.round(nx)}px`;
     this.el.style.top = `${Math.round(ny)}px`;
   }
