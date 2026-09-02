@@ -44,7 +44,7 @@ tar = "0.4.45"
 image = { version = "0.25", default-features = false, features = ["png"] }
 flate2 = "1.1.9"
 filetime = "0.2"
-sha2 = "0.10"
+sha2 = "0.11"
 md-5 = "0.10"
 hex = "0.4"
 base64 = "0.22"
