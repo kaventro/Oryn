@@ -256,7 +256,7 @@ export class ContextMenuBuilder {
     }
 
     // Tags Row
-    if (item && item.base !== '' && item.base !== '..' && deps.tagController) {
+    if (item && item.base !== '' && item.base !== '..' && deps.tagController && deps.tagController.isEnabled !== false) {
       items.push({
         id: 'tagsRow',
         customRender: (container: HTMLElement) => {

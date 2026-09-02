@@ -140,13 +140,15 @@ export class PanelController {
       if (!remote.isRemote) {
         await this.refreshGitMeta(side, { annotateItems: true });
 
-        if (this.tagController && pane.path) {
+        if (this.tagController && pane.path && this.tagController.isEnabled !== false) {
           pane.items.forEach((it) => {
             if (it.base !== '..') {
               const fp = it.fullPath || `${pane.path.replace(/[/\\]+$/, '')}/${it.base}`;
               it.tags = this.tagController.getTagsForFile(fp);
             }
           });
+        } else if (pane.items) {
+          pane.items.forEach((it) => { it.tags = undefined; });
         }
       } else {
         pane.git = null;

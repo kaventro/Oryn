@@ -488,6 +488,16 @@ async function init(): Promise<void> {
     if (remoteToggleBtn) {
       remoteToggleBtn.style.display = isSftpEnabled ? 'inline-flex' : 'none';
     }
+    const isTagsEnabled = settings.enableTags !== false;
+    tagController.isEnabled = isTagsEnabled;
+    const tagsSection = document.getElementById('sidebar-tags-section');
+    if (tagsSection) {
+      tagsSection.style.display = isTagsEnabled ? 'block' : 'none';
+    }
+    const propTagsCard = document.querySelector('.properties-tags-card') as HTMLElement | null;
+    if (propTagsCard) {
+      propTagsCard.style.display = isTagsEnabled ? 'block' : 'none';
+    }
   };
 
   const preferencesController = new PreferencesController({

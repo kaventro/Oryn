@@ -35,6 +35,7 @@ export class TagController {
   public fileTags: Record<string, string[]>;
   public customTags: Tag[];
   public activeTagFilter: string | null;
+  public isEnabled: boolean = true;
 
   constructor(deps: TagControllerDeps) {
     this.api = deps.api;
@@ -73,10 +74,11 @@ export class TagController {
       localStorage.setItem('Oryn.customTags', JSON.stringify(this.customTags));
       localStorage.setItem('Oswin.fileTags', JSON.stringify(this.fileTags));
       localStorage.setItem('Oswin.customTags', JSON.stringify(this.customTags));
-    } catch { }
+    } catch {}
   }
 
   public getAllTags(): Tag[] {
+    if (this.isEnabled === false) return [];
     return [...DEFAULT_TAGS, ...this.customTags];
   }
 
@@ -85,6 +87,7 @@ export class TagController {
   }
 
   public getTagsForFile(filePath?: string | null): string[] {
+    if (this.isEnabled === false) return [];
     if (!filePath) return [];
     const normalized = filePath.replace(/[/\\]+$/, '');
     return this.fileTags[normalized] || [];
@@ -197,8 +200,14 @@ export class TagController {
   }
 
   public renderSidebar(): void {
+    if (typeof document === 'undefined') return;
     const nav = document.getElementById('sidebar-tags-nav');
     if (!nav) return;
+
+    if (this.isEnabled === false) {
+      nav.replaceChildren();
+      return;
+    }
 
     nav.replaceChildren();
     const allTags = this.getAllTags();
