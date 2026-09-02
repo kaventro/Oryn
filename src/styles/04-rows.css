@@ -381,6 +381,10 @@
 
 /* Columns view mode (Miller columns) */
 
+.columns-container {
+  display: none !important;
+}
+
 .columns-mode .pane-col-head {
   display: none !important;
 }
@@ -393,11 +397,11 @@
 }
 
 .columns-mode .pane-list {
-  display: none;
+  display: none !important;
 }
 
 .columns-mode .columns-container {
-  display: flex;
+  display: flex !important;
   flex-direction: row;
   height: 100%;
   width: 100%;

@@ -163,3 +163,43 @@ test('PanelController loadDir attaches git branch and per-item status badges', a
   assert.equal(state.left.items.find((i) => i.base === 'clean.txt')?.gitStatus, null);
 });
 
+test('PanelController refreshAll skips syncing columnsViewController when not in columns-mode', async () => {
+  const state = new AppState();
+  state.left.path = '/folderA';
+  state.right.path = '/folderB';
+
+  const mockApi = {
+    readDir: async () => ({ ok: true, items: [] }),
+    watchDirs: async () => {},
+  };
+
+  let synced = false;
+  const mockColumnsVC = {
+    syncPane: async () => { synced = true; },
+  };
+
+  const mockApp = { classList: { contains: (c: string) => c === 'list-mode' } };
+  const mockDoc = {
+    getElementById: (id: string) => (id === 'app' ? mockApp : null),
+  };
+  (globalThis as any).document = mockDoc;
+
+  try {
+    const controller = new PanelController({
+      state,
+      api: () => mockApi,
+      setStatus: () => {},
+      renderPane: () => {},
+      updatePaneClass: () => {},
+      focusActiveList: () => {},
+      columnsViewController: mockColumnsVC,
+    });
+
+    await controller.refreshAll({ force: true });
+    assert.equal(synced, false, 'columnsViewController should not be synced in list mode');
+  } finally {
+    delete (globalThis as any).document;
+  }
+});
+
+

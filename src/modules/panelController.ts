@@ -359,10 +359,13 @@ export class PanelController {
       if (typeof this.api().clearSearchCache === 'function') await this.api().clearSearchCache();
       await Promise.all([this.loadDir('left'), this.loadDir('right')]);
       if (this.columnsViewController) {
-        await Promise.all([
-          this.columnsViewController.syncPane('left', this.state.left),
-          this.columnsViewController.syncPane('right', this.state.right),
-        ]);
+        const isColumns = typeof document !== 'undefined' && Boolean(document.getElementById('app')?.classList.contains('columns-mode'));
+        if (isColumns) {
+          await Promise.all([
+            this.columnsViewController.syncPane('left', this.state.left),
+            this.columnsViewController.syncPane('right', this.state.right),
+          ]);
+        }
       }
     })();
     this._refreshPromise = run;

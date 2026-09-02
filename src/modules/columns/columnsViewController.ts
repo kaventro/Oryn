@@ -325,6 +325,12 @@ export class ColumnsViewController {
    */
   render(side: 'left' | 'right' = this.side): void {
     if (typeof document === 'undefined') return;
+    const appEl = document.getElementById('app');
+    if (appEl && !appEl.classList.contains('columns-mode')) {
+      const existing = document.querySelector(`#pane-${side} .columns-container`);
+      existing?.remove();
+      return;
+    }
     const paneBody = document.querySelector(`#pane-${side} .pane-body`);
     if (!paneBody) return;
 

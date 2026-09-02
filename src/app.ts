@@ -148,6 +148,7 @@ function applyPaneMode(mode: string): void {
     appEl?.classList.remove('dual-pane-mode');
     appEl?.classList.add('single-pane-mode');
     paneToggleBtn?.classList.remove('active');
+    state.active = 'left';
   }
   savePaneMode(mode as 'single' | 'dual');
   paintVirtualPane('left', false);

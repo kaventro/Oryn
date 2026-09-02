@@ -296,3 +296,22 @@ test('ColumnsViewController goBack and goForward navigate without resetting colu
   assert.equal(cvc.getColumns('left').length, 3, 'syncPane keeps column stack');
   assert.equal(cvc.getActiveColumnIndex('left'), 1);
 });
+
+test('ColumnsViewController render does not inject columns-container when not in columns-mode', () => {
+  let removed = false;
+  const mockApp = { classList: { contains: (c: string) => c === 'list-mode' } };
+  const mockContainer = { remove: () => { removed = true; } };
+  const mockDoc = {
+    getElementById: (id: string) => (id === 'app' ? mockApp : null),
+    querySelector: (sel: string) => (sel.includes('columns-container') ? mockContainer : null),
+  };
+  (globalThis as any).document = mockDoc;
+  try {
+    const cvc = new ColumnsViewController({ api: () => ({}) });
+    cvc.render('left');
+    assert.equal(removed, true, 'existing container is removed and columns are not appended');
+  } finally {
+    delete (globalThis as any).document;
+  }
+});
+

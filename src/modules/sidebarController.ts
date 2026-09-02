@@ -418,7 +418,10 @@ export class SidebarController {
 
     document.querySelectorAll('.sidebar-item').forEach((el) => el.classList.remove('active'));
     btnEl.classList.add('active');
-
+    const isSingle = typeof document !== 'undefined' && Boolean(document.getElementById('app')?.classList.contains('single-pane-mode'));
+    if (isSingle) {
+      this.state.active = 'left';
+    }
     const side = this.state.active;
     if (this.navigateTo) {
       await this.navigateTo(side, p);
