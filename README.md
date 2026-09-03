@@ -10,6 +10,9 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/kaventro/Oryn/actions/workflows/ci.yml"><img src="https://github.com/kaventro/Oryn/actions/workflows/ci.yml/badge.svg" alt="CI Status" /></a>
+  <a href="https://codecov.io/gh/kaventro/Oryn"><img src="https://codecov.io/gh/kaventro/Oryn/branch/main/graph/badge.svg" alt="Codecov Coverage" /></a>
+  <a href="https://codescene.io"><img src="https://img.shields.io/badge/CodeScene-Code%20Health-brightgreen?logo=codescene&logoColor=white" alt="CodeScene Code Health" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL_3.0-blue.svg" alt="License: AGPL-3.0" /></a>
   <a href="https://v2.tauri.app"><img src="https://img.shields.io/badge/Tauri-2.11.x-FFC131?logo=tauri&logoColor=white" alt="Tauri 2.11.x" /></a>
   <a href="https://www.rust-lang.org"><img src="https://img.shields.io/badge/Rust-1.98.0+-orange?logo=rust&logoColor=white" alt="Rust 1.98.0+" /></a>

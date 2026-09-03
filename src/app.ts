@@ -148,6 +148,7 @@ function applyPaneMode(mode: string): void {
     appEl?.classList.remove('dual-pane-mode');
     appEl?.classList.add('single-pane-mode');
     paneToggleBtn?.classList.remove('active');
+    state.active = 'left';
   }
   savePaneMode(mode as 'single' | 'dual');
   paintVirtualPane('left', false);
@@ -340,6 +341,7 @@ async function init(): Promise<void> {
     beginRename: (opts) => fileOps.beginRename(opts),
     beginDelete: (opts) => fileOps.beginDelete(opts),
     loadDir: (s) => panelControllerInst.loadDir(s),
+    renderPane: (s) => renderPane(s),
     openGitBlame: (f, r) => gitController.openBlameForFile(f, null, r),
     openGitDiff: (f) => gitController.openDiffForFile(f),
     openGitLog: (f) => gitController.openLogForFile(f),
@@ -486,6 +488,16 @@ async function init(): Promise<void> {
     if (remoteToggleBtn) {
       remoteToggleBtn.style.display = isSftpEnabled ? 'inline-flex' : 'none';
     }
+    const isTagsEnabled = settings.enableTags !== false;
+    tagController.isEnabled = isTagsEnabled;
+    const tagsSection = document.getElementById('sidebar-tags-section');
+    if (tagsSection) {
+      tagsSection.style.display = isTagsEnabled ? 'block' : 'none';
+    }
+    const propTagsCard = document.querySelector('.properties-tags-card') as HTMLElement | null;
+    if (propTagsCard) {
+      propTagsCard.style.display = isTagsEnabled ? 'block' : 'none';
+    }
   };
 
   const preferencesController = new PreferencesController({
@@ -552,6 +564,7 @@ async function init(): Promise<void> {
 
   const columnsViewController = new ColumnsViewController({
     api,
+    state,
     rowRenderer: listRendererInst.rowRenderer,
     iconRegistry: listRendererInst.iconRegistry,
     showCtxMenu: (x, y, side, emptyArea, item, dirPath) => ctxMenuController.show(x, y, side, emptyArea, item, dirPath),
@@ -843,7 +856,7 @@ async function init(): Promise<void> {
   document.getElementById('btn-more-menu')?.addEventListener('click', (e) => {
     e.stopPropagation();
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    ctxMenuController.show(rect.left, rect.bottom + 4, state.active);
+    ctxMenuController.showMoreMenu(rect.left, rect.bottom + 4, state.active);
   });
 
   // Setup all UI

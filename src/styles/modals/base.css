@@ -188,8 +188,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 0 14px 0;
-  margin-bottom: 12px;
+  padding: 16px 24px 14px;
+  margin-bottom: 0;
   border-bottom: 1px solid var(--mac-divider, rgba(255, 255, 255, 0.07));
 }
 

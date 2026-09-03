@@ -140,13 +140,15 @@ export class PanelController {
       if (!remote.isRemote) {
         await this.refreshGitMeta(side, { annotateItems: true });
 
-        if (this.tagController && pane.path) {
+        if (this.tagController && pane.path && this.tagController.isEnabled !== false) {
           pane.items.forEach((it) => {
             if (it.base !== '..') {
               const fp = it.fullPath || `${pane.path.replace(/[/\\]+$/, '')}/${it.base}`;
               it.tags = this.tagController.getTagsForFile(fp);
             }
           });
+        } else if (pane.items) {
+          pane.items.forEach((it) => { it.tags = undefined; });
         }
       } else {
         pane.git = null;
@@ -359,10 +361,13 @@ export class PanelController {
       if (typeof this.api().clearSearchCache === 'function') await this.api().clearSearchCache();
       await Promise.all([this.loadDir('left'), this.loadDir('right')]);
       if (this.columnsViewController) {
-        await Promise.all([
-          this.columnsViewController.syncPane('left', this.state.left),
-          this.columnsViewController.syncPane('right', this.state.right),
-        ]);
+        const isColumns = typeof document !== 'undefined' && Boolean(document.getElementById('app')?.classList.contains('columns-mode'));
+        if (isColumns) {
+          await Promise.all([
+            this.columnsViewController.syncPane('left', this.state.left),
+            this.columnsViewController.syncPane('right', this.state.right),
+          ]);
+        }
       }
     })();
     this._refreshPromise = run;

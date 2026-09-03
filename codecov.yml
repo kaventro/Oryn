@@ -4,15 +4,34 @@ codecov:
 coverage:
   precision: 2
   round: down
-  range: 50..100
+  range: "50...100"
   status:
     project:
       default:
         target: auto
         threshold: 2%
+      frontend:
+        flags:
+          - frontend
+        target: auto
+        threshold: 2%
+      backend:
+        flags:
+          - backend
+        target: auto
+        threshold: 2%
     patch:
       default:
-        target: 70%
+        target: auto
+        threshold: 5%
+
+flags:
+  frontend:
+    paths:
+      - src/
+  backend:
+    paths:
+      - desktop/
 
 comment:
   layout: "reach,diff,flags,tree"
@@ -22,4 +41,9 @@ comment:
 ignore:
   - "desktop/build.rs"
   - "desktop/gen/**"
+  - "desktop/target/**"
+  - "src/**/*.test.ts"
   - "src/**/*.test.js"
+  - "node_modules/**"
+  - "dist/**"
+  - "coverage/**"

@@ -17,7 +17,26 @@ const SVG_ICONS: Record<string, string> = {
   usb: `<svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="#30d158" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="4" r="2"/><circle cx="18" cy="8" r="2"/><rect x="4" y="16" width="4" height="4"/><path d="M10 6v10a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2V8"/><line x1="6" y1="16" x2="10" y2="12"/></svg>`,
   pinned: `<svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="#ffd60a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/><polygon points="12 11 13.2 13.5 16 13.8 14 15.7 14.5 18.5 12 17.1 9.5 18.5 10 15.7 8 13.8 10.8 13.5 12 11" fill="#ffd60a" fill-opacity="0.6"/></svg>`,
   folder: `<svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="#0a84ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/></svg>`,
+  developer: `<svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="#0a84ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 12-8.5 8.5a2.12 2.12 0 0 1-3 0 2.12 2.12 0 0 1 0-3L12 9"/><path d="M17.64 15 22 10.64"/><path d="m21.5 11.5-1.9-1.9A2 2 0 0 0 18.2 9H16l-1.5-4.5A2 2 0 0 0 12.6 3H9"/></svg>`,
 };
+
+export function favoriteIconKey(path: string, locations?: any): keyof typeof SVG_ICONS {
+  const n = normalizePathStr(path).toLowerCase();
+  const base = pathBasename(path).toLowerCase();
+  const loc = (key: string) => normalizePathStr(locations?.[key] || '').toLowerCase();
+  if (n && n === loc('home')) return 'home';
+  if (n && n === loc('desktop')) return 'desktop';
+  if (n && n === loc('documents')) return 'documents';
+  if (n && n === loc('downloads')) return 'downloads';
+  if (n && n === loc('pictures')) return 'pictures';
+  if (n && n === loc('music')) return 'music';
+  if (n && n === loc('videos')) return 'videos';
+  if (n && n === loc('applications')) return 'applications';
+  if (base === 'developer' || base === 'applications') {
+    return base === 'developer' ? 'developer' : 'applications';
+  }
+  return 'folder';
+}
 
 function normalizePathStr(p?: string | null): string {
   if (!p) return '';
@@ -267,102 +286,77 @@ export class SidebarController {
     if (!this.favNav) return;
     this.favNav.replaceChildren();
 
-    const os = this.locations?.os || '';
-    const isMac = os === 'macos' || (typeof navigator !== 'undefined' && /Mac/.test(navigator.userAgent || ''));
+    const osFavorites: Array<{ name?: string; path?: string }> = Array.isArray(this.locations?.favorites)
+      ? this.locations.favorites
+      : [];
+    const seen = new Set<string>();
 
-    const stdItems: Array<{ id: string; path: string; label: string; icon: string }> = [];
+    const appendItem = (path: string, label: string, iconHtml: string, extra?: { pinId?: string }) => {
+      const clean = normalizePathStr(path);
+      const key = clean.toLowerCase();
+      if (!clean || seen.has(key)) return;
+      seen.add(key);
 
-    const homePath = this.locations?.home || '~';
-    const homeLabel = this.locations?.username || pathBasename(this.locations?.home || '') || 'Home';
-    stdItems.push({ id: 'fav-home', path: homePath, label: homeLabel, icon: SVG_ICONS.home });
-
-    const coreDirs = [
-      { key: 'desktop', id: 'fav-desktop', label: 'Desktop', icon: SVG_ICONS.desktop, fallback: '~/Desktop' },
-      { key: 'documents', id: 'fav-documents', label: 'Documents', icon: SVG_ICONS.documents, fallback: '~/Documents' },
-      { key: 'downloads', id: 'fav-downloads', label: 'Downloads', icon: SVG_ICONS.downloads, fallback: '~/Downloads' },
-    ];
-    coreDirs.forEach(({ key, id, label, icon, fallback }) => {
-      stdItems.push({ id, path: this.locations?.[key] || fallback, label, icon });
-    });
-
-    const mediaDirs = [
-      { key: 'pictures', id: 'fav-pictures', label: 'Pictures', icon: SVG_ICONS.pictures },
-      { key: 'music', id: 'fav-music', label: 'Music', icon: SVG_ICONS.music },
-      { key: 'videos', id: 'fav-videos', label: 'Videos', icon: SVG_ICONS.videos },
-    ];
-    mediaDirs.forEach(({ key, id, label, icon }) => {
-      if (this.locations?.[key]) stdItems.push({ id, path: this.locations[key], label, icon });
-    });
-
-    if (isMac && this.locations?.applications) {
-      stdItems.push({ id: 'fav-applications', path: this.locations.applications, label: 'Applications', icon: SVG_ICONS.applications });
-    }
-
-    stdItems.forEach((item) => {
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = 'sidebar-item';
-      btn.id = item.id;
-      btn.dataset.path = item.path;
-      btn.title = item.path;
-      btn.innerHTML = `${item.icon}<span class="sidebar-item-label">${escHtml(item.label)}</span>`;
+      btn.className = extra?.pinId ? 'sidebar-item sidebar-item--pinned' : 'sidebar-item';
+      btn.dataset.path = path;
+      if (extra?.pinId) btn.dataset.pinId = extra.pinId;
+      btn.title = `${label}\n${path}`;
+      btn.innerHTML = `${iconHtml}<span class="sidebar-item-label">${escHtml(label)}</span>`;
 
       btn.addEventListener('click', async () => {
-        await this.handleItemClick(item.path, btn);
+        await this.handleItemClick(path, btn);
       });
 
-      this.favNav?.appendChild(btn);
-    });
-
-    if (this.pinnedFolders.length > 0) {
-      const sep = document.createElement('div');
-      sep.className = 'sidebar-pinned-divider';
-      this.favNav.appendChild(sep);
-
-      this.pinnedFolders.forEach((pin) => {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'sidebar-item sidebar-item--pinned';
-        btn.dataset.path = pin.path;
-        btn.dataset.pinId = pin.id;
-        btn.title = `${pin.name}\n${pin.path}`;
-
-        const iconWrap = document.createElement('span');
-        iconWrap.innerHTML = SVG_ICONS.pinned;
-        if (iconWrap.firstElementChild) {
-          btn.appendChild(iconWrap.firstElementChild);
-        }
-
-        const label = document.createElement('span');
-        label.className = 'sidebar-item-label';
-        label.textContent = pin.name;
-        btn.appendChild(label);
-
+      if (extra?.pinId) {
         const removeBtn = document.createElement('span');
         removeBtn.className = 'sidebar-item-remove';
         removeBtn.innerHTML = '✕';
         removeBtn.title = 'Unpin folder';
         removeBtn.addEventListener('click', (e) => {
           e.stopPropagation();
-          this.unpinFolder(pin.id);
+          this.unpinFolder(extra.pinId!);
         });
         btn.appendChild(removeBtn);
-
-        btn.addEventListener('click', async () => {
-          await this.handleItemClick(pin.path, btn);
-        });
-
         btn.addEventListener('contextmenu', (e) => {
           e.preventDefault();
           e.stopPropagation();
-          if (confirm(`Unpin "${pin.name}" from Favorites?`)) {
-            this.unpinFolder(pin.id);
+          if (confirm(`Unpin "${label}" from Favorites?`)) {
+            this.unpinFolder(extra.pinId!);
           }
         });
+      }
 
-        this.favNav?.appendChild(btn);
-      });
+      this.favNav?.appendChild(btn);
+    };
+
+    for (const fav of osFavorites) {
+      const path = String(fav?.path || '');
+      if (!path) continue;
+      const label = String(fav?.name || pathBasename(path));
+      const icon = SVG_ICONS[favoriteIconKey(path, this.locations)] || SVG_ICONS.folder;
+      appendItem(path, label, icon);
     }
+
+    const pinExtras = this.pinnedFolders.filter((pin) => !seen.has(normalizePathStr(pin.path).toLowerCase()));
+    if (osFavorites.length > 0 && pinExtras.length > 0) {
+      const sep = document.createElement('div');
+      sep.className = 'sidebar-pinned-divider';
+      this.favNav.appendChild(sep);
+    }
+    for (const pin of pinExtras) {
+      appendItem(pin.path, pin.name, SVG_ICONS.pinned, { pinId: pin.id });
+    }
+
+    if (!this.favNav.children.length) {
+      const empty = document.createElement('div');
+      empty.className = 'sidebar-empty-msg';
+      empty.style.cssText = 'padding: 6px 12px; font-size: 11px; color: #8e8e93;';
+      empty.textContent = 'No system favorites yet. Use + to pin a folder.';
+      this.favNav.appendChild(empty);
+    }
+
   }
 
   public renderLocations(): void {
@@ -424,7 +418,10 @@ export class SidebarController {
 
     document.querySelectorAll('.sidebar-item').forEach((el) => el.classList.remove('active'));
     btnEl.classList.add('active');
-
+    const isSingle = typeof document !== 'undefined' && Boolean(document.getElementById('app')?.classList.contains('single-pane-mode'));
+    if (isSingle) {
+      this.state.active = 'left';
+    }
     const side = this.state.active;
     if (this.navigateTo) {
       await this.navigateTo(side, p);

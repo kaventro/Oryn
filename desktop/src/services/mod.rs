@@ -13,4 +13,5 @@ pub mod fs_transfer;
 pub mod fs_vfs;
 pub mod fs_watcher;
 pub mod fs_zip;
+pub mod os_favorites;
 pub mod remote;
