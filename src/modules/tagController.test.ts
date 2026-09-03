@@ -13,7 +13,7 @@ test('TagController manages file tags and respects isEnabled toggle', () => {
 
   const tc = new TagController({
     api: () => ({}),
-    state: { left: {} as any, right: {} as any, active: 'left' },
+    state: { left: {} as any, right: {} as any, active: 'left' } as any,
     setStatus: () => {},
     renderPane: () => {},
   });

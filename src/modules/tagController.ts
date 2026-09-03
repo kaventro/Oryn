@@ -21,7 +21,7 @@ export const DEFAULT_TAGS: Tag[] = [
 
 export interface TagControllerDeps {
   api: () => any;
-  state: AppState;
+  state: any;
   setStatus: (msg: string) => void;
   renderPane: (side: 'left' | 'right') => void;
 }
