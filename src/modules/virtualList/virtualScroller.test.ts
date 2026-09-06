@@ -144,7 +144,7 @@ test('VirtualScroller.ensureChrome creates DOM chrome and wires event listeners'
     assert.equal(scrollCalled, 0, 'scroll should be throttled by rAF');
     hostEl.dispatchEvent('scroll'); // ignored because raf is already pending
     assert.ok(rafCallback);
-    rafCallback(0);
+    (rafCallback as any)(0);
     assert.equal(scrollCalled, 1);
 
     // Test other event dispatchers
