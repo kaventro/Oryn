@@ -40,3 +40,43 @@ pub fn zip_extract(input: ZipExtractIn) -> Result<Value, String> {
         "tmpDir": tmp.to_string_lossy().to_string()
     }))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_zip_extract_command() {
+        let tmp = tempdir().unwrap();
+        let zip_file = tmp.path().join("archive.zip");
+        let file = fs::File::create(&zip_file).unwrap();
+        let mut writer = zip::ZipWriter::new(file);
+        let opts = zip::write::SimpleFileOptions::default();
+        writer.start_file("sample.txt", opts).unwrap();
+        writer.write_all(b"zip sample data").unwrap();
+        writer.finish().unwrap();
+
+        let res = zip_extract(ZipExtractIn {
+            zip_path: zip_file.to_str().unwrap().into(),
+            entry_name: "sample.txt".into(),
+        }).unwrap();
+
+        assert_eq!(res["ok"], true);
+        let extracted_path = res["path"].as_str().unwrap();
+        assert_eq!(fs::read_to_string(extracted_path).unwrap(), "zip sample data");
+
+        // Nonexistent entry
+        assert!(zip_extract(ZipExtractIn {
+            zip_path: zip_file.to_str().unwrap().into(),
+            entry_name: "missing.txt".into(),
+        }).is_err());
+
+        // Nonexistent zip
+        assert!(zip_extract(ZipExtractIn {
+            zip_path: "not_a_file.zip".into(),
+            entry_name: "sample.txt".into(),
+        }).is_err());
+    }
+}

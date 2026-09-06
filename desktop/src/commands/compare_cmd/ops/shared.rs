@@ -124,3 +124,52 @@ pub fn sort_rows(mut v: Vec<Value>) -> Vec<Value> {
     });
     v
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_buffer_looks_binary() {
+        assert!(!buffer_looks_binary(b"Hello world\nThis is plain text"));
+        assert!(buffer_looks_binary(b"Hello\x00World"));
+        assert!(buffer_looks_binary(&[1, 2, 3, 4]));
+    }
+
+    #[test]
+    fn test_sort_rows() {
+        let rows = vec![
+            json!({"rel": "z.txt"}),
+            json!({"rel": "a.txt"}),
+            json!({"rel": "m.txt"}),
+        ];
+        let sorted = sort_rows(rows);
+        assert_eq!(sorted[0]["rel"], "a.txt");
+        assert_eq!(sorted[1]["rel"], "m.txt");
+        assert_eq!(sorted[2]["rel"], "z.txt");
+    }
+
+    #[test]
+    fn test_build_dir_map_and_binary_differ() {
+        let tmp = tempdir().unwrap();
+        let sub = tmp.path().join("nested");
+        std::fs::create_dir(&sub).unwrap();
+        let f1 = sub.join("one.txt");
+        let f2 = sub.join("two.txt");
+        std::fs::write(&f1, b"identical content").unwrap();
+        std::fs::write(&f2, b"identical content").unwrap();
+
+        let map = build_dir_map(tmp.path()).unwrap();
+        assert!(map.contains_key("nested"));
+        assert!(map.contains_key("nested/one.txt"));
+
+        let diff = binary_differ(&f1, &f2).unwrap();
+        assert!(!diff); // Not different
+
+        std::fs::write(&f2, b"modified content").unwrap();
+        let diff2 = binary_differ(&f1, &f2).unwrap();
+        assert!(diff2); // Different
+    }
+}

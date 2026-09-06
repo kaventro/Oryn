@@ -196,4 +196,29 @@ mod tests {
         ZipProvider.extract_to(&src, &dst).unwrap();
         assert_eq!(std::fs::read(&dst).unwrap(), b"hello");
     }
+
+    #[test]
+    fn invalid_zip_path_errors() {
+        assert!(ZipProvider.read_dir("/path/to/some/random/file.txt").is_err());
+        assert!(ZipProvider.extract_to("/path/to/random/file.txt", std::path::Path::new("out")).is_err());
+    }
+
+    #[test]
+    fn zip_extract_dir_fails() {
+        let tmp = tempfile::tempdir().unwrap();
+        let zip_path = make_zip(tmp.path());
+        let src = format!("{}/docs", zip_path.to_str().unwrap());
+        let dst = tmp.path().join("out_dir");
+        assert!(ZipProvider.extract_to(&src, &dst).is_err());
+    }
+
+    #[test]
+    fn lists_zip_with_backslash() {
+        let tmp = tempfile::tempdir().unwrap();
+        let zip_path = make_zip(tmp.path());
+        let inner = format!("{}\\docs", zip_path.to_str().unwrap());
+        let items = ZipProvider.read_dir(&inner).unwrap();
+        let names: Vec<&str> = items.iter().map(|i| i.base.as_str()).collect();
+        assert_eq!(names, vec!["img", "guide.md"]);
+    }
 }

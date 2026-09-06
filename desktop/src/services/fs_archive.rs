@@ -212,4 +212,45 @@ mod tests {
             b"Nested content"
         );
     }
+
+    #[test]
+    fn test_compress_zip_edge_cases() {
+        let tmp = tempdir().unwrap();
+        let zip_path = tmp.path().join("test.zip");
+        // Empty sources should error
+        assert!(compress_zip(&[], &zip_path).is_err());
+
+        // Single file source
+        let file = tmp.path().join("single.txt");
+        fs::write(&file, b"content").unwrap();
+        assert!(compress_zip(&[file], &zip_path).is_ok());
+        assert!(zip_path.exists());
+    }
+
+    #[test]
+    fn test_extract_archive_errors_and_tar() {
+        let tmp = tempdir().unwrap();
+        let nonexistent = tmp.path().join("missing.zip");
+        let dest = tmp.path().join("out");
+        assert!(extract_archive(&nonexistent, &dest).is_err());
+
+        let invalid_fmt = tmp.path().join("bad.xyz");
+        fs::write(&invalid_fmt, b"invalid").unwrap();
+        assert!(extract_archive(&invalid_fmt, &dest).is_err());
+
+        // Plain tar extraction
+        let tar_path = tmp.path().join("test.tar");
+        let file = File::create(&tar_path).unwrap();
+        let mut builder = tar::Builder::new(file);
+        let mut header = tar::Header::new_gnu();
+        header.set_size(7);
+        header.set_mode(0o644);
+        header.set_cksum();
+        builder.append_data(&mut header, "test.txt", &b"tar dir"[..]).unwrap();
+        builder.finish().unwrap();
+
+        let tar_out = tmp.path().join("tar_out");
+        extract_archive(&tar_path, &tar_out).unwrap();
+        assert_eq!(fs::read(tar_out.join("test.txt")).unwrap(), b"tar dir");
+    }
 }

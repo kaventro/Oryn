@@ -229,4 +229,63 @@ mod tests {
         safe_write_file(&target, b"world", false).unwrap();
         assert_eq!(fs::read_to_string(&target).unwrap(), "world");
     }
+
+    #[test]
+    fn test_fs_write_commands() {
+        let tmp = tempdir().unwrap();
+        let sub = tmp.path().join("new_dir");
+        let file = sub.join("new_file.txt");
+        let renamed = sub.join("renamed_file.txt");
+
+        // fs_mkdir
+        assert!(fs_mkdir(MkdirIn {
+            path: sub.to_str().unwrap().into(),
+        }).is_ok());
+        assert!(sub.is_dir());
+
+        // fs_create_file
+        assert!(fs_create_file(CreateFileIn {
+            path: file.to_str().unwrap().into(),
+            content: Some("created text".into()),
+        }).is_ok());
+        assert_eq!(fs::read_to_string(&file).unwrap(), "created text");
+
+        // fs_write_file_text
+        assert!(fs_write_file_text(WriteFileTextIn {
+            path: file.to_str().unwrap().into(),
+            content: "updated text".into(),
+        }).is_ok());
+        assert_eq!(fs::read_to_string(&file).unwrap(), "updated text");
+
+        // fs_rename
+        assert!(fs_rename(RenameIn {
+            src: file.to_str().unwrap().into(),
+            dst: renamed.to_str().unwrap().into(),
+        }).is_ok());
+        assert!(renamed.exists());
+        assert!(!file.exists());
+
+        // fs_compress & fs_extract
+        let zip_dest = tmp.path().join("compressed.zip");
+        let comp_res = fs_compress(CompressIn {
+            sources: vec![renamed.to_str().unwrap().into()],
+            destination: zip_dest.to_str().unwrap().into(),
+        }).unwrap();
+        assert!(comp_res.ok);
+        assert!(zip_dest.exists());
+
+        let extract_dest = tmp.path().join("extracted_dir");
+        let ext_res = fs_extract(ExtractIn {
+            archive: zip_dest.to_str().unwrap().into(),
+            destination: extract_dest.to_str().unwrap().into(),
+        }).unwrap();
+        assert!(ext_res.ok);
+
+        // fs_delete
+        assert!(fs_delete(DeleteIn {
+            full_path: renamed.to_str().unwrap().into(),
+            use_trash: Some(false),
+        }).is_ok());
+        assert!(!renamed.exists());
+    }
 }

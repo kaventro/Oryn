@@ -1,3 +1,4 @@
+pub mod archive_cmd;
 pub mod compare_cmd;
 pub mod dialog_cmd;
 pub mod fs;
