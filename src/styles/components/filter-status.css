@@ -208,6 +208,30 @@
 
 
 
+.nx-update-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.nx-update-btn-secondary {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 5px;
+  color: #d1d1d6;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 9px;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.nx-update-btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+}
+
 .nx-update-action {
   background: rgba(10, 132, 255, 0.16);
   border: 1px solid rgba(10, 132, 255, 0.35);
@@ -217,6 +241,7 @@
   font-size: 11px;
   font-weight: 600;
   padding: 2px 9px;
+  transition: background 0.12s ease;
 }
 
 .nx-update-action:hover {
@@ -234,4 +259,21 @@
 
 .mac-pref-link-btn:hover {
   text-decoration: underline;
+}
+
+.mac-pref-action-btn {
+  background: rgba(10, 132, 255, 0.16);
+  border: 1px solid rgba(10, 132, 255, 0.35);
+  border-radius: 6px;
+  color: #79c0ff;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 12px;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.mac-pref-action-btn:hover {
+  background: rgba(10, 132, 255, 0.28);
+  border-color: rgba(10, 132, 255, 0.5);
 }

@@ -186,6 +186,10 @@ export class PreferencesController {
       this.settings.enableTags = checked;
     });
 
+    this._bindSwitch('pref-enable-auto-update', (checked) => {
+      this.settings.enableAutoUpdate = checked;
+    });
+
     this._bindSwitch('pref-dual-drive-defaults', (checked) => {
       this.settings.dualPaneDriveDefaults = checked;
       this._setDriveSelectsDisabled(!checked);
@@ -521,6 +525,9 @@ export class PreferencesController {
 
     const tags = document.getElementById('pref-enable-tags') as HTMLInputElement | null;
     if (tags) tags.checked = this.settings.enableTags !== false;
+
+    const au = document.getElementById('pref-enable-auto-update') as HTMLInputElement | null;
+    if (au) au.checked = this.settings.enableAutoUpdate !== false;
 
     const dd = document.getElementById('pref-dual-drive-defaults') as HTMLInputElement | null;
     if (dd) dd.checked = this.settings.dualPaneDriveDefaults !== false;

@@ -472,7 +472,10 @@
         </div>
         <div class="nx-xfer-meta">
           <span id="nx-update-msg" class="nx-xfer-file"></span>
-          <button type="button" id="nx-update-action" class="nx-update-action" style="display:none;"></button>
+          <div class="nx-update-actions" id="nx-update-actions">
+            <button type="button" id="nx-update-later" class="nx-update-btn-secondary" style="display:none;">Next Time</button>
+            <button type="button" id="nx-update-action" class="nx-update-action" style="display:none;"></button>
+          </div>
         </div>
       </div>
 
@@ -751,6 +754,29 @@
                     <input type="checkbox" id="pref-enable-tags" checked>
                     <span class="mac-slider"></span>
                   </label>
+                </div>
+              </div>
+            </div>
+
+            <div class="mac-pref-group">
+              <div class="mac-pref-section-title">Software Updates</div>
+              <div class="mac-pref-card">
+                <div class="mac-pref-row">
+                  <div class="mac-pref-row-info">
+                    <span class="mac-pref-row-title">Automatic Updates</span>
+                    <span class="mac-pref-row-desc">Automatically check for updates on startup</span>
+                  </div>
+                  <label class="mac-switch">
+                    <input type="checkbox" id="pref-enable-auto-update" checked>
+                    <span class="mac-slider"></span>
+                  </label>
+                </div>
+                <div class="mac-pref-row">
+                  <div class="mac-pref-row-info">
+                    <span class="mac-pref-row-title">Check for Updates</span>
+                    <span class="mac-pref-row-desc">Manually check if a newer version of Oryn is available</span>
+                  </div>
+                  <button type="button" id="pref-check-updates-btn" class="mac-pref-action-btn">Check Now</button>
                 </div>
               </div>
             </div>
