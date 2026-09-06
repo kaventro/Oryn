@@ -361,7 +361,7 @@ mod tests {
             assert!(res["total"].as_u64().unwrap() > 0);
         }
 
-        let bad_res = system_get_path_space(PathSpaceIn { path: "///invalid_mount_point_xyz///".into() });
+        let bad_res = system_get_path_space(PathSpaceIn { path: "nonexistent_relative_no_mount".into() });
         assert_eq!(bad_res["ok"], false);
     }
 }
