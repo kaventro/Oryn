@@ -318,4 +318,70 @@ mod tests {
 
         assert!(data_url.starts_with("data:image/png;base64,"));
     }
+
+    #[tokio::test]
+    async fn test_fs_read_commands() {
+        assert!(config_load().is_ok());
+
+        let tmp = tempfile::tempdir().unwrap();
+        let sub = tmp.path().join("subdir");
+        std::fs::create_dir(&sub).unwrap();
+        let f = sub.join("test.txt");
+        std::fs::write(&f, "hello reading world").unwrap();
+
+        // fs_read_dir
+        let dir_res = fs_read_dir(ReadDirIn {
+            path: tmp.path().to_str().unwrap().into(),
+        }).unwrap();
+        assert!(dir_res.ok);
+
+        // fs_read_flat_branch
+        let flat_res = fs_read_flat_branch(ReadDirIn {
+            path: tmp.path().to_str().unwrap().into(),
+        }).await.unwrap();
+        assert!(flat_res.ok);
+        assert!(!flat_res.items.is_empty());
+
+        // fs_stat_props
+        let stat_res = fs_stat_props(StatIn {
+            path: f.to_str().unwrap().into(),
+        }).unwrap();
+        assert!(stat_res.ok);
+        assert_eq!(stat_res.props.size, 19);
+
+        // fs_read_file_text
+        let text = fs_read_file_text(ReadFileIn {
+            path: f.to_str().unwrap().into(),
+            max_bytes: Some(5),
+        }).unwrap();
+        assert_eq!(text, "hello");
+
+        // fs_probe_text
+        let probe = fs_probe_text(ReadFileIn {
+            path: f.to_str().unwrap().into(),
+            max_bytes: None,
+        }).unwrap();
+        assert!(probe.is_text);
+
+        // fs_get_dir_size
+        let size_res = fs_get_dir_size(DirSizeIn {
+            path: tmp.path().to_str().unwrap().into(),
+        }).await.unwrap();
+        assert!(size_res.ok);
+        assert!(size_res.size >= 19);
+
+        // fs_analyze_dir
+        let ana_res = fs_analyze_dir(DirSizeIn {
+            path: tmp.path().to_str().unwrap().into(),
+        }).await.unwrap();
+        assert!(ana_res.total_size >= 19);
+
+        // fs_scan_duplicates
+        let dup_res = fs_scan_duplicates(DuplicatesIn {
+            path: tmp.path().to_str().unwrap().into(),
+            min_size_bytes: None,
+            max_results: None,
+        }).await.unwrap();
+        assert!(dup_res.ok);
+    }
 }

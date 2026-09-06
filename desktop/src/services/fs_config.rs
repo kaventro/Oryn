@@ -74,3 +74,33 @@ pub fn resolve_delete_options(use_trash_override: Option<bool>) -> ServiceResult
         log_path,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_config_paths() {
+        assert!(data_dir().is_ok());
+        let cfg_path = config_path().unwrap();
+        assert!(cfg_path.ends_with("config.json"));
+        let del_log = deletion_log_path().unwrap();
+        assert!(del_log.ends_with("deleted_paths.log"));
+    }
+
+    #[test]
+    fn test_load_config_and_resolve_delete_options() {
+        let cfg = load_config().unwrap();
+        assert!(cfg.is_object());
+
+        let opts_default = resolve_delete_options(None).unwrap();
+        // Default use_trash is true unless overridden by existing config
+        assert!(opts_default.log_path.is_some());
+
+        let opts_override_false = resolve_delete_options(Some(false)).unwrap();
+        assert!(!opts_override_false.use_trash);
+
+        let opts_override_true = resolve_delete_options(Some(true)).unwrap();
+        assert!(opts_override_true.use_trash);
+    }
+}

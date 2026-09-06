@@ -69,3 +69,78 @@ pub fn compare_files(input: CompareFilesIn) -> Result<Value, String> {
         })),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_compare_files_errors() {
+        let tmp = tempdir().unwrap();
+        let f1 = tmp.path().join("f1.txt");
+        let d1 = tmp.path().join("dir");
+        std::fs::create_dir(&d1).unwrap();
+        std::fs::write(&f1, b"hello").unwrap();
+
+        // Nonexistent
+        assert!(compare_files(CompareFilesIn {
+            left_path: "missing.txt".into(),
+            right_path: f1.to_str().unwrap().into(),
+        }).is_err());
+
+        // Directory
+        assert!(compare_files(CompareFilesIn {
+            left_path: d1.to_str().unwrap().into(),
+            right_path: f1.to_str().unwrap().into(),
+        }).is_err());
+    }
+
+    #[test]
+    fn test_compare_files_identical_and_diffy() {
+        let tmp = tempdir().unwrap();
+        let f1 = tmp.path().join("left.txt");
+        let f2 = tmp.path().join("right.txt");
+        let f3 = tmp.path().join("different.txt");
+
+        std::fs::write(&f1, "line 1\nline 2\n").unwrap();
+        std::fs::write(&f2, "line 1\nline 2\n").unwrap();
+        std::fs::write(&f3, "line 1\nline changed\n").unwrap();
+
+        // Identical
+        let same_res = compare_files(CompareFilesIn {
+            left_path: f1.to_str().unwrap().into(),
+            right_path: f2.to_str().unwrap().into(),
+        }).unwrap();
+        assert_eq!(same_res["ok"], true);
+        assert_eq!(same_res["same"], true);
+
+        // Diff
+        let diff_res = compare_files(CompareFilesIn {
+            left_path: f1.to_str().unwrap().into(),
+            right_path: f3.to_str().unwrap().into(),
+        }).unwrap();
+        assert_eq!(diff_res["ok"], true);
+        assert_eq!(diff_res["same"], false);
+        assert_eq!(diff_res["engine"], "diffy");
+        assert!(diff_res["diff"].as_str().unwrap().contains("line changed"));
+    }
+
+    #[test]
+    fn test_compare_files_binary() {
+        let tmp = tempfile::tempdir().unwrap();
+        let b1 = tmp.path().join("bin1.dat");
+        let b2 = tmp.path().join("bin2.dat");
+
+        std::fs::write(&b1, &[0u8, 1, 2, 3, 0, 5]).unwrap();
+        std::fs::write(&b2, &[0u8, 1, 9, 9, 0, 5, 8]).unwrap();
+
+        let res = compare_files(CompareFilesIn {
+            left_path: b1.to_str().unwrap().into(),
+            right_path: b2.to_str().unwrap().into(),
+        }).unwrap();
+        assert_eq!(res["ok"], true);
+        assert_eq!(res["same"], false);
+        assert_eq!(res["engine"], "binary");
+    }
+}

@@ -260,4 +260,55 @@ mod tests {
         assert_eq!(res.duplicate_groups[0].files.len(), 3);
         assert_eq!(res.duplicate_files_count, 3);
     }
+
+    #[test]
+    fn test_scan_duplicates_nonexistent_and_empty() {
+        assert!(scan_duplicates(DuplicateScanOptions {
+            path: "non_existent_dir_12345".into(),
+            min_size_bytes: None,
+            max_results: None,
+        }).is_err());
+
+        let tmp = tempfile::tempdir().unwrap();
+        let res = scan_duplicates(DuplicateScanOptions {
+            path: tmp.path().to_string_lossy().to_string(),
+            min_size_bytes: None,
+            max_results: None,
+        }).unwrap();
+        assert!(res.ok);
+        assert_eq!(res.total_scanned, 0);
+        assert_eq!(res.duplicate_groups.len(), 0);
+    }
+
+    #[test]
+    fn test_scan_duplicates_large_file_hashing_and_max_results() {
+        let tmp = tempfile::tempdir().unwrap();
+        // Create 2 identical files of 2.5 MB to exercise large file hashing (lines 198-220)
+        let size = 2500 * 1024;
+        let mut data = vec![0xABu8; size];
+        data[0] = 0x12;
+        data[size / 2] = 0x34;
+        data[size - 1] = 0x56;
+
+        fs::write(tmp.path().join("large1.bin"), &data).unwrap();
+        fs::write(tmp.path().join("large2.bin"), &data).unwrap();
+
+        // Also a smaller pair of duplicate files
+        let small = b"small duplicate pair 123456789";
+        fs::write(tmp.path().join("small1.txt"), small).unwrap();
+        fs::write(tmp.path().join("small2.txt"), small).unwrap();
+
+        // Test with max_results = 1
+        let res = scan_duplicates(DuplicateScanOptions {
+            path: tmp.path().to_string_lossy().to_string(),
+            min_size_bytes: Some(10),
+            max_results: Some(1),
+        }).unwrap();
+
+        assert!(res.ok);
+        assert_eq!(res.total_scanned, 4);
+        assert_eq!(res.duplicate_groups.len(), 1);
+        // The largest group is the 2.5MB group because it has higher total_wasted
+        assert_eq!(res.duplicate_groups[0].size, size as u64);
+    }
 }

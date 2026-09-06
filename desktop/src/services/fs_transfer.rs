@@ -192,3 +192,47 @@ pub async fn move_path(
         Err(error) => Err(anyhow::anyhow!(error.to_string())),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_transfer_control_lifecycle() {
+        let control = TransferControl::default();
+        assert!(!control.is_aborted());
+        control.request_abort();
+        assert!(control.is_aborted());
+        control.reset();
+        assert!(!control.is_aborted());
+    }
+
+    #[test]
+    fn test_transfer_out_states() {
+        let success = TransferOut::success(CopyStats {
+            copied: 5,
+            symlinks: 1,
+            skipped_existing: 2,
+            symlinks_skipped: 1,
+            ..Default::default()
+        });
+        assert!(success.ok);
+        assert_eq!(success.copied, Some(6));
+        assert_eq!(success.skipped, Some(3));
+        assert!(success.cancelled.is_none());
+
+        let cancelled = TransferOut::cancelled();
+        assert!(!cancelled.ok);
+        assert_eq!(cancelled.cancelled, Some(true));
+
+        let failed = TransferOut::failed("disk full".into());
+        assert!(!failed.ok);
+        assert_eq!(failed.error.as_deref(), Some("disk full"));
+
+        let from_engine_aborted = TransferOut::from_engine(Err(CopyError::Aborted));
+        assert_eq!(from_engine_aborted.cancelled, Some(true));
+
+        let from_engine_failed = TransferOut::from_engine(Err(CopyError::Failed("io error".into())));
+        assert_eq!(from_engine_failed.error.as_deref(), Some("io error"));
+    }
+}

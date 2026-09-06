@@ -217,4 +217,47 @@ mod tests {
         let names: Vec<&str> = items.iter().map(|i| i.base.as_str()).collect();
         assert_eq!(names, vec!["a.md"]);
     }
+
+    #[test]
+    fn extracts_from_targz() {
+        let tmp = tempfile::tempdir().unwrap();
+        let tar_path = make_targz(tmp.path());
+        let src = format!("{}/readme.txt", tar_path.to_str().unwrap());
+        let dst = tmp.path().join("out_readme.txt");
+        TarProvider.extract_to(&src, &dst).unwrap();
+        assert_eq!(std::fs::read(&dst).unwrap(), b"hello");
+    }
+
+    #[test]
+    fn uncompressed_tar_read_and_extract() {
+        let tmp = tempfile::tempdir().unwrap();
+        let tar_path = tmp.path().join("plain.tar");
+        let file = File::create(&tar_path).unwrap();
+        let mut builder = tar::Builder::new(file);
+
+        let mut header = tar::Header::new_gnu();
+        header.set_size(4);
+        header.set_mode(0o644);
+        header.set_cksum();
+        builder
+            .append_data(&mut header, "test.txt", &b"data"[..])
+            .unwrap();
+        builder.finish().unwrap();
+
+        let items = TarProvider.read_dir(tar_path.to_str().unwrap()).unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].base, "test.txt");
+
+        let dst = tmp.path().join("out_test.txt");
+        let src = format!("{}/test.txt", tar_path.to_str().unwrap());
+        TarProvider.extract_to(&src, &dst).unwrap();
+        assert_eq!(std::fs::read(&dst).unwrap(), b"data");
+    }
+
+    #[test]
+    fn invalid_tar_path_fails() {
+        assert!(TarProvider.read_dir("nonexistent.tar.gz").is_err());
+        assert!(TarProvider.read_dir("not_a_tar.txt").is_err());
+        assert!(TarProvider.extract_to("not_tar.txt", std::path::Path::new("out")).is_err());
+    }
 }

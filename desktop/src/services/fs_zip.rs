@@ -83,3 +83,31 @@ fn run_zip_command(
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_compress_zip_missing_path() {
+        assert!(compress_zip("/nonexistent/file/path/xyz").is_err());
+    }
+
+    #[test]
+    fn test_compress_zip_creates_archive_and_increments_suffix() {
+        let tmp = tempdir().unwrap();
+        let target = tmp.path().join("my_doc.txt");
+        fs::write(&target, b"test content").unwrap();
+
+        let zip1 = compress_zip(target.to_str().unwrap()).unwrap();
+        assert!(Path::new(&zip1).exists());
+        assert!(zip1.ends_with("my_doc.txt.zip") || zip1.ends_with("my_doc.zip"));
+
+        // Running again should create a suffixed version
+        let zip2 = compress_zip(target.to_str().unwrap()).unwrap();
+        assert!(Path::new(&zip2).exists());
+        assert_ne!(zip1, zip2);
+        assert!(zip2.contains("(1)"));
+    }
+}

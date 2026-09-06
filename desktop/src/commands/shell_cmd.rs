@@ -285,3 +285,20 @@ pub fn clipboard_write(input: ClipboardIn) -> Result<(), String> {
         .set_text(input.text)
         .map_err(|e| e.to_string())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_shell_exec() {
+        let res = shell_exec(ShellExecIn {
+            cmd: "echo test_output_123".into(),
+            cwd: None,
+        }).await.unwrap();
+
+        assert_eq!(res["ok"], true);
+        assert!(res["stdout"].as_str().unwrap().contains("test_output_123"));
+        assert_eq!(res["code"], 0);
+    }
+}

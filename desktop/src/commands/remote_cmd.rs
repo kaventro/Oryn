@@ -243,3 +243,56 @@ pub fn remote_upload(
     ops::upload_file(&guard, Path::new(&local_src), &remote_dst).map_err(|e| e.to_string())?;
     Ok(ack())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_resolve_profile_credentials() {
+        let prof = RemoteProfile {
+            id: "test-id-123".into(),
+            name: "Server".into(),
+            password: Some("secret123".into()),
+            expected_fingerprint: Some("".into()),
+            ..Default::default()
+        };
+
+        let resolved = resolve_profile_credentials(prof);
+        assert_eq!(resolved.expected_fingerprint, None);
+        assert_eq!(resolved.password.as_deref(), Some("secret123"));
+    }
+
+    #[test]
+    fn test_remote_list_and_save_profile() {
+        let initial = remote_list_profiles();
+        assert!(initial.is_ok());
+
+        let new_prof = RemoteProfile {
+            id: "unique-test-profile-id".into(),
+            name: "Test Node".into(),
+            password: Some("mypass".into()),
+            passphrase: Some("mypassphrase".into()),
+            ..Default::default()
+        };
+
+        let profiles = remote_save_profile(new_prof).unwrap();
+        let found = profiles.iter().find(|p| p.id == "unique-test-profile-id").unwrap();
+        assert_eq!(found.password.as_deref(), Some("••••••••"));
+
+        // Test resolve_profile_credentials when profile is stored
+        let masked = RemoteProfile {
+            id: "unique-test-profile-id".into(),
+            password: Some("••••••••".into()),
+            passphrase: Some("••••••••".into()),
+            expected_fingerprint: None,
+            ..Default::default()
+        };
+        let resolved = resolve_profile_credentials(masked);
+        assert_eq!(resolved.password.as_deref(), Some("mypass"));
+        assert_eq!(resolved.passphrase.as_deref(), Some("mypassphrase"));
+
+        // Clean up
+        let _ = crate::services::remote::profile::delete_profile("unique-test-profile-id");
+    }
+}

@@ -130,4 +130,34 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn test_path_commands() {
+        assert_eq!(
+            path_join("/foo".into(), "bar".into()).unwrap(),
+            Path::new("/foo").join("bar").to_string_lossy().to_string()
+        );
+
+        assert_eq!(
+            path_dirname(PathArg { path: "/a/b/c.txt".into() }).unwrap(),
+            Path::new("/a/b/c.txt").parent().unwrap().to_string_lossy().to_string()
+        );
+
+        assert_eq!(
+            path_basename(PathArg { path: "/a/b/c.txt".into() }).unwrap(),
+            "c.txt"
+        );
+        assert_eq!(
+            path_basename(PathArg { path: "".into() }).unwrap(),
+            ""
+        );
+
+        // path_normalize
+        assert_eq!(path_normalize(PathArg { path: "  ".into() }).unwrap(), "");
+        let norm = path_normalize(PathArg { path: "a/b/../c".into() }).unwrap();
+        assert!(norm.contains("c"));
+
+        // app_get_home
+        assert!(app_get_home().is_ok());
+    }
 }

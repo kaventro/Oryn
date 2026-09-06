@@ -226,4 +226,46 @@ mod tests {
             .mode();
         assert_eq!(mode & 0o777, 0o755);
     }
+
+    #[test]
+    fn open_nonexistent_fails() {
+        let non_existent = Path::new("this/path/does/not/exist/at/all");
+        assert!(SafeRoot::open(non_existent).is_err());
+    }
+
+    #[test]
+    fn create_dir_all_and_resolved_path() {
+        let (tmp, safe) = root();
+        // Empty path should just return root
+        let res_empty = safe.create_dir_all(Path::new("")).unwrap();
+        assert_eq!(res_empty, tmp.path().join("root"));
+
+        // Nested dirs with CurDir
+        let res_nested = safe.create_dir_all(Path::new("./sub/nested")).unwrap();
+        assert!(tmp.path().join("root/sub/nested").is_dir());
+        assert_eq!(res_nested, tmp.path().join("root/sub/nested"));
+
+        // resolved_path
+        let resolved = safe.resolved_path(Path::new("./sub/nested/file.txt")).unwrap();
+        assert_eq!(resolved, tmp.path().join("root/sub/nested/file.txt"));
+    }
+
+    #[test]
+    fn create_file_refuses_empty_path() {
+        let (_tmp, safe) = root();
+        assert!(safe.create_file(Path::new(""), None).is_err());
+        assert!(safe.create_file(Path::new("."), None).is_err());
+    }
+
+    #[test]
+    fn rejects_absolute_and_prefix_paths() {
+        let (_tmp, safe) = root();
+        #[cfg(windows)]
+        {
+            assert!(safe.create_file(Path::new(r"C:\test.txt"), None).is_err());
+            assert!(safe.create_dir_all(Path::new(r"\\server\share")).is_err());
+        }
+        assert!(safe.create_file(Path::new("/root/test.txt"), None).is_err());
+        assert!(safe.create_dir_all(Path::new("/var/log")).is_err());
+    }
 }
