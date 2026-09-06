@@ -272,18 +272,27 @@ mod tests {
             id: "unique-test-profile-id".into(),
             name: "Test Node".into(),
             password: Some("mypass".into()),
+            passphrase: Some("mypassphrase".into()),
             ..Default::default()
         };
 
-        let saved = remote_save_profile(new_prof);
-        if let Ok(profiles) = saved {
-            let found = profiles.iter().find(|p| p.id == "unique-test-profile-id");
-            assert!(found.is_some());
-            // password must be sanitized
-            assert_eq!(found.unwrap().password.as_deref(), Some("••••••••"));
+        let profiles = remote_save_profile(new_prof).unwrap();
+        let found = profiles.iter().find(|p| p.id == "unique-test-profile-id").unwrap();
+        assert_eq!(found.password.as_deref(), Some("••••••••"));
 
-            // clean up
-            let _ = crate::services::remote::profile::delete_profile("unique-test-profile-id");
-        }
+        // Test resolve_profile_credentials when profile is stored
+        let masked = RemoteProfile {
+            id: "unique-test-profile-id".into(),
+            password: Some("••••••••".into()),
+            passphrase: Some("••••••••".into()),
+            expected_fingerprint: None,
+            ..Default::default()
+        };
+        let resolved = resolve_profile_credentials(masked);
+        assert_eq!(resolved.password.as_deref(), Some("mypass"));
+        assert_eq!(resolved.passphrase.as_deref(), Some("mypassphrase"));
+
+        // Clean up
+        let _ = crate::services::remote::profile::delete_profile("unique-test-profile-id");
     }
 }

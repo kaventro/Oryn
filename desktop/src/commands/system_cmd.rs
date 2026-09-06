@@ -354,12 +354,10 @@ mod tests {
 
     #[test]
     fn test_system_get_path_space() {
-        let cur = std::env::current_dir().unwrap().to_string_lossy().to_string();
-        let res = system_get_path_space(PathSpaceIn { path: cur });
-        // Under standard environments, the current dir has a disk
-        if res["ok"].as_bool() == Some(true) {
-            assert!(res["total"].as_u64().unwrap() > 0);
-        }
+        let root = if cfg!(windows) { "C:\\" } else { "/" };
+        let res = system_get_path_space(PathSpaceIn { path: root.into() });
+        assert_eq!(res["ok"], true);
+        assert!(res["total"].as_u64().unwrap() > 0);
 
         let bad_res = system_get_path_space(PathSpaceIn { path: "nonexistent_relative_no_mount".into() });
         assert_eq!(bad_res["ok"], false);
