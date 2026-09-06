@@ -19,6 +19,7 @@ export interface ColumnStack {
 
 export interface ColumnsViewDeps {
   api: () => any;
+  state?: any;
   iconRegistry?: any;
   rowRenderer?: any;
   onOpenSelected?: (path: string, isDir: boolean) => void;
@@ -31,6 +32,7 @@ export interface ColumnsViewDeps {
 
 export class ColumnsViewController {
   private api: () => any;
+  public state?: any;
   public iconRegistry?: any;
   public onOpenSelected?: (path: string, isDir: boolean) => void;
   public onPreviewSelected?: (fp: string, item: ColumnItem) => void;
@@ -44,6 +46,7 @@ export class ColumnsViewController {
 
   constructor(deps: ColumnsViewDeps) {
     this.api = deps.api;
+    this.state = deps.state;
     this.iconRegistry = deps.iconRegistry;
     this.onOpenSelected = deps.onOpenSelected;
     this.onPreviewSelected = deps.onPreviewSelected;
@@ -51,6 +54,46 @@ export class ColumnsViewController {
     this.onDrop = deps.onDrop;
     this.onActivateSide = deps.onActivateSide;
     this.setStatus = deps.setStatus;
+  }
+
+  sortItems(items: ColumnItem[], side: 'left' | 'right' = this.side): ColumnItem[] {
+    const pane = this.state ? this.state[side] : null;
+    const field = pane?.sortField || 'name';
+    const asc = pane?.sortAsc !== false;
+    const dir = asc ? 1 : -1;
+
+    const parseTime = (val: any): number => {
+      if (typeof val === 'number') return val;
+      if (!val) return 0;
+      const parsed = Date.parse(String(val));
+      return isNaN(parsed) ? 0 : parsed;
+    };
+
+    return items.slice().sort((a, b) => {
+      if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
+      if (field === 'name') {
+        return a.base.localeCompare(b.base) * dir;
+      }
+      if (field === 'ext') {
+        const extA = a.ext || '';
+        const extB = b.ext || '';
+        if (extA !== extB) return extA.localeCompare(extB) * dir;
+        return a.base.localeCompare(b.base) * dir;
+      }
+      if (field === 'size') {
+        const sa = a.size || 0;
+        const sb = b.size || 0;
+        if (sa !== sb) return (sa - sb) * dir;
+        return a.base.localeCompare(b.base) * dir;
+      }
+      if (field === 'date') {
+        const da = parseTime(a.mtime);
+        const db = parseTime(b.mtime);
+        if (da !== db) return (da - db) * dir;
+        return a.base.localeCompare(b.base) * dir;
+      }
+      return 0;
+    });
   }
 
   getColumns(side: 'left' | 'right' = this.side): ColumnStack[] {
@@ -90,8 +133,12 @@ export class ColumnsViewController {
       this.activeColIndexes[side] = matchingIdx;
       for (const col of cols) {
         col.items = await this.fetchDirectory(col.path);
-        if (col.selectedIndex >= 0 && col.items[col.selectedIndex]) {
-          col.selectedItem = col.items[col.selectedIndex];
+        if (col.selectedItem) {
+          const newIdx = col.items.findIndex((it) => it.base === col.selectedItem?.base);
+          if (newIdx >= 0) {
+            col.selectedIndex = newIdx;
+            col.selectedItem = col.items[newIdx];
+          }
         }
       }
       this.render(side);
@@ -101,8 +148,12 @@ export class ColumnsViewController {
     } else {
       for (const col of cols) {
         col.items = await this.fetchDirectory(col.path);
-        if (col.selectedIndex >= 0 && col.items[col.selectedIndex]) {
-          col.selectedItem = col.items[col.selectedIndex];
+        if (col.selectedItem) {
+          const newIdx = col.items.findIndex((it) => it.base === col.selectedItem?.base);
+          if (newIdx >= 0) {
+            col.selectedIndex = newIdx;
+            col.selectedItem = col.items[newIdx];
+          }
         }
       }
       this.render(side);
@@ -132,6 +183,8 @@ export class ColumnsViewController {
             gitStatus: i.gitStatus || null,
           }))
       : await this.fetchDirectory(rootPath);
+
+    items = this.sortItems(items, side);
 
     if (items.length && pane.items && pane.items.length) {
       const apiObj = typeof this.api === 'function' ? this.api() : this.api;
@@ -325,6 +378,12 @@ export class ColumnsViewController {
    */
   render(side: 'left' | 'right' = this.side): void {
     if (typeof document === 'undefined') return;
+    const appEl = document.getElementById('app');
+    if (appEl && !appEl.classList.contains('columns-mode')) {
+      const existing = document.querySelector(`#pane-${side} .columns-container`);
+      existing?.remove();
+      return;
+    }
     const paneBody = document.querySelector(`#pane-${side} .pane-body`);
     if (!paneBody) return;
 
@@ -581,7 +640,7 @@ export class ColumnsViewController {
         }));
       const snapshot = await fetchGitSnapshot(apiObj, dirPath);
       applyGitStatusToItems(dirPath, items, snapshot);
-      return items;
+      return this.sortItems(items, this.side);
     } catch (_) {
       return [];
     }

@@ -14,8 +14,7 @@
   min-width: 220px;
   max-width: 290px;
   max-height: calc(100vh - 20px);
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: visible;
   padding: 4px;
   border-radius: var(--radius-md);
   background: color-mix(in srgb, var(--surface) 85%, transparent);
@@ -62,8 +61,10 @@
 }
 
 .ctx-check {
-  display: inline-block;
-  width: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
   font-size: 0.75rem;
   color: var(--primary);
   text-align: center;
@@ -132,10 +133,10 @@
   position: absolute;
   left: 100%;
   top: -4px;
-  min-width: 200px;
-  padding: 6px 0;
+  min-width: 190px;
+  padding: 4px;
   border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--surface) 85%, transparent);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
   backdrop-filter: blur(28px);
   -webkit-backdrop-filter: blur(28px);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45), inset 0 0 0 1px color-mix(in srgb, var(--primary) 15%, transparent);
@@ -146,9 +147,11 @@
 .ctx-submenu.flip-left {
   left: auto;
   right: 100%;
+  margin-right: 2px;
 }
 
-.ctx-item-parent:hover > .ctx-submenu {
+.ctx-item-parent:hover > .ctx-submenu,
+.ctx-item-parent:focus-within > .ctx-submenu {
   display: block;
 }
 

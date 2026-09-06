@@ -18,6 +18,7 @@ export interface AppSettingsData {
   leftDefaultDrive?: string;
   rightDefaultDrive?: string;
   enableSftp?: boolean;
+  enableTags?: boolean;
 }
 
 /**
@@ -42,6 +43,7 @@ export class AppSettings {
   public leftDefaultDrive: string;
   public rightDefaultDrive: string;
   public enableSftp: boolean;
+  public enableTags: boolean;
 
   constructor(initial: AppSettingsData = {}) {
     this.paneMode = initial.paneMode === 'single' ? 'single' : 'dual';
@@ -52,6 +54,7 @@ export class AppSettings {
     this.showStatusBarTerminal = initial.showStatusBarTerminal !== false;
     this.confirmDelete = initial.confirmDelete !== false;
     this.enableSftp = Boolean(initial.enableSftp);
+    this.enableTags = initial.enableTags !== false;
     this.overwritePolicy = ['prompt', 'overwrite', 'skip'].includes(initial.overwritePolicy as string)
       ? (initial.overwritePolicy as 'prompt' | 'overwrite' | 'skip')
       : 'prompt';
@@ -98,6 +101,7 @@ export class AppSettings {
       leftDefaultDrive: this.leftDefaultDrive,
       rightDefaultDrive: this.rightDefaultDrive,
       enableSftp: this.enableSftp,
+      enableTags: this.enableTags,
     };
   }
 

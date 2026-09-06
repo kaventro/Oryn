@@ -17,7 +17,7 @@ test('gitTagFromEntry maps staged, untracked, modified, and deleted', () => {
 });
 
 test('applyGitStatusToItems badges nested files onto the parent folder at repo root', () => {
-  const items = [
+  const items: Array<{ base: string; gitStatus?: string | null }> = [
     { base: 'src' },
     { base: 'README.md' },
     { base: 'clean.txt' },
@@ -35,7 +35,7 @@ test('applyGitStatusToItems badges nested files onto the parent folder at repo r
 });
 
 test('applyGitStatusToItems only maps files under the current directory prefix', () => {
-  const items = [
+  const items: Array<{ base: string; gitStatus?: string | null }> = [
     { base: 'App.swift' },
     { base: 'src' },
   ];

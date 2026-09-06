@@ -70,8 +70,14 @@ export function filteredItems(pane: { filter?: string; items: PaneItem[]; sortFi
       return a.base.localeCompare(b.base) * dir;
     }
     if (field === 'date') {
-      const da = Number(a.mtime) || 0;
-      const db = Number(b.mtime) || 0;
+      const parseTime = (val: any): number => {
+        if (typeof val === 'number') return val;
+        if (!val) return 0;
+        const parsed = Date.parse(String(val));
+        return isNaN(parsed) ? 0 : parsed;
+      };
+      const da = parseTime(a.mtime);
+      const db = parseTime(b.mtime);
       if (da !== db) return (da - db) * dir;
       return a.base.localeCompare(b.base) * dir;
     }

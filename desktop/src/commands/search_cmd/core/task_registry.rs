@@ -4,7 +4,6 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::sync::watch;
 
-
 #[derive(Clone)]
 pub struct CancellationSignal {
     state: Arc<CancellationState>,
@@ -48,7 +47,6 @@ impl CancellationSignal {
         Arc::ptr_eq(&self.state, &other.state)
     }
 }
-
 
 #[derive(Default)]
 pub struct SearchTaskRegistry {

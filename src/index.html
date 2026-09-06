@@ -50,42 +50,7 @@
             <button type="button" class="sidebar-add-tag-btn" id="btn-add-pinned-folder"
               title="Pin Current Folder to Favorites">+</button>
           </div>
-          <nav class="sidebar-nav" id="sidebar-favorites-nav">
-            <button type="button" class="sidebar-item" id="fav-home" data-path="~">
-              <svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="#0a84ff" stroke-width="2"
-                stroke-linecap="round" stroke-linejoin="round">
-                <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                <polyline points="9 22 9 12 15 12 15 22" />
-              </svg>
-              <span class="sidebar-item-label" id="fav-home-label">Home</span>
-            </button>
-            <button type="button" class="sidebar-item" id="fav-desktop" data-path="~/Desktop">
-              <svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="#0a84ff" stroke-width="2"
-                stroke-linecap="round" stroke-linejoin="round">
-                <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
-                <line x1="8" y1="21" x2="16" y2="21" />
-                <line x1="12" y1="17" x2="12" y2="21" />
-              </svg>
-              <span class="sidebar-item-label">Desktop</span>
-            </button>
-            <button type="button" class="sidebar-item" id="fav-documents" data-path="~/Documents">
-              <svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="#0a84ff" stroke-width="2"
-                stroke-linecap="round" stroke-linejoin="round">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                <polyline points="14 2 14 8 20 8" />
-              </svg>
-              <span class="sidebar-item-label">Documents</span>
-            </button>
-            <button type="button" class="sidebar-item" id="fav-downloads" data-path="~/Downloads">
-              <svg class="sidebar-icon" viewBox="0 0 24 24" fill="none" stroke="#0a84ff" stroke-width="2"
-                stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="7 10 12 15 17 10" />
-                <line x1="12" y1="15" x2="12" y2="3" />
-              </svg>
-              <span class="sidebar-item-label">Downloads</span>
-            </button>
-          </nav>
+          <nav class="sidebar-nav" id="sidebar-favorites-nav"></nav>
         </div>
 
         <!-- LOCATIONS -->
@@ -699,12 +664,12 @@
             </div>
 
             <div class="mac-pref-group">
-              <div class="mac-pref-section-title">Dock Icon</div>
+              <div class="mac-pref-section-title">App Icon</div>
               <div class="mac-pref-card">
                 <div class="mac-pref-row mac-pref-row--dock-icon">
                   <div class="mac-pref-row-info">
-                    <span class="mac-pref-row-title">Dock icon</span>
-                    <span class="mac-pref-row-desc">Choose the icon the app will use in the dock</span>
+                    <span class="mac-pref-row-title">App icon</span>
+                    <span class="mac-pref-row-desc">macOS Dock or Windows taskbar icon for this window</span>
                   </div>
                   <div class="mac-dock-icons-grid" id="pref-dock-icons-grid"></div>
                 </div>
@@ -774,6 +739,16 @@
                   </div>
                   <label class="mac-switch">
                     <input type="checkbox" id="pref-show-status-terminal" checked>
+                    <span class="mac-slider"></span>
+                  </label>
+                </div>
+                <div class="mac-pref-row">
+                  <div class="mac-pref-row-info">
+                    <span class="mac-pref-row-title">Enable Color Tags</span>
+                    <span class="mac-pref-row-desc">Show color tags in sidebar, file items, and menus</span>
+                  </div>
+                  <label class="mac-switch">
+                    <input type="checkbox" id="pref-enable-tags" checked>
                     <span class="mac-slider"></span>
                   </label>
                 </div>

@@ -125,7 +125,12 @@ export class PropertiesController {
     if (this.mtimeEl) this.mtimeEl.textContent = formatIsoLocal(props.mtime);
 
     // Tags list
-    if (this.tagsListEl && this.tagController) {
+    const tagsCard = document.querySelector('.properties-tags-card') as HTMLElement | null;
+    const isTagsEnabled = !this.tagController || this.tagController.isEnabled !== false;
+    if (tagsCard) {
+      tagsCard.style.display = isTagsEnabled ? 'block' : 'none';
+    }
+    if (this.tagsListEl && this.tagController && isTagsEnabled) {
       this.tagsListEl.replaceChildren();
       const allTags = this.tagController.getAllTags?.() || [];
       const fileTags = this.tagController.getTagsForFile?.(props.path) || [];

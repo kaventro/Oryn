@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { SidebarController } from './sidebarController.ts';
+import { SidebarController, favoriteIconKey } from './sidebarController.ts';
 
 // Mock localStorage
 const mockStorage: Record<string, string> = {};
@@ -117,4 +117,85 @@ test('SidebarController setupCollapsibleSections handles collapse and persistenc
   listeners['click']({ target: header });
   assert.equal(section.classList.contains('collapsed'), true);
   assert.equal(mockStorage['Oryn.sidebar.tags.collapsed'], 'true');
+});
+
+test('favoriteIconKey maps known system folders and Developer', () => {
+  const locs = {
+    home: '/Users/me',
+    desktop: '/Users/me/Desktop',
+    documents: '/Users/me/Documents',
+    downloads: '/Users/me/Downloads',
+    applications: '/Applications',
+  };
+  assert.equal(favoriteIconKey('/Users/me/Desktop', locs), 'desktop');
+  assert.equal(favoriteIconKey('/Users/me/Developer', locs), 'developer');
+  assert.equal(favoriteIconKey('/Applications', locs), 'applications');
+  assert.equal(favoriteIconKey('/Users/me/Custom', locs), 'folder');
+});
+
+test('renderFavorites uses OS favorites instead of a hardcoded list', async () => {
+  mockStorage['Oryn.pinnedFolders'] = '[]';
+  const children: any[] = [];
+  const favNav = {
+    children,
+    replaceChildren() { children.length = 0; },
+    appendChild(node: any) { children.push(node); return node; },
+  };
+  globalThis.document = {
+    getElementById: (id: string) => (id === 'sidebar-favorites-nav' ? favNav : null),
+    querySelectorAll: () => [],
+    createElement: (tag: string) => ({
+      tagName: tag,
+      type: '',
+      className: '',
+      dataset: {},
+      title: '',
+      innerHTML: '',
+      textContent: '',
+      style: { cssText: '' },
+      appendChild() {},
+      addEventListener() {},
+    }),
+  } as any;
+
+  const controller = new SidebarController({
+    api: () => ({
+      getSystemLocations: async () => ({
+        os: 'macos',
+        username: 'blesseddays',
+        home: '/Users/blesseddays',
+        desktop: '/Users/blesseddays/Desktop',
+        documents: '/Users/blesseddays/Documents',
+        downloads: '/Users/blesseddays/Downloads',
+        pictures: '/Users/blesseddays/Pictures',
+        music: '/Users/blesseddays/Music',
+        videos: '/Users/blesseddays/Movies',
+        applications: '/Applications',
+        favorites: [
+          { name: 'Applications', path: '/Applications' },
+          { name: 'Desktop', path: '/Users/blesseddays/Desktop' },
+          { name: 'Documents', path: '/Users/blesseddays/Documents' },
+          { name: 'Developer', path: '/Users/blesseddays/Developer' },
+          { name: 'Downloads', path: '/Users/blesseddays/Downloads' },
+        ],
+        drives: [],
+      }),
+    }),
+    state: { active: 'left', left: { path: '/Users/blesseddays' } },
+    setStatus: () => {},
+    navigateTo: async () => {},
+    focusActiveList: () => {},
+  });
+
+  await controller.setup();
+  assert.equal(children.length, 5);
+  assert.deepEqual(children.map((c) => c.dataset.path), [
+    '/Applications',
+    '/Users/blesseddays/Desktop',
+    '/Users/blesseddays/Documents',
+    '/Users/blesseddays/Developer',
+    '/Users/blesseddays/Downloads',
+  ]);
+  assert.equal(children.some((c) => String(c.innerHTML).includes('Pictures')), false);
+  assert.equal(children.some((c) => String(c.dataset.path || '').includes('Pictures')), false);
 });

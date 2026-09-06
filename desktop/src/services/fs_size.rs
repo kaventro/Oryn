@@ -110,7 +110,7 @@ pub fn analyze_directory(root: &Path) -> std::io::Result<DiskSpaceAnalysis> {
     }
 
     // Sort descending by size
-    items.sort_by(|a, b| b.size.cmp(&a.size));
+    items.sort_by_key(|a| std::cmp::Reverse(a.size));
 
     let mut total_size = 0u64;
     let mut total_files = 0u64;

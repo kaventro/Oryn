@@ -296,3 +296,55 @@ test('ColumnsViewController goBack and goForward navigate without resetting colu
   assert.equal(cvc.getColumns('left').length, 3, 'syncPane keeps column stack');
   assert.equal(cvc.getActiveColumnIndex('left'), 1);
 });
+
+test('ColumnsViewController render does not inject columns-container when not in columns-mode', () => {
+  let removed = false;
+  const mockApp = { classList: { contains: (c: string) => c === 'list-mode' } };
+  const mockContainer = { remove: () => { removed = true; } };
+  const mockDoc = {
+    getElementById: (id: string) => (id === 'app' ? mockApp : null),
+    querySelector: (sel: string) => (sel.includes('columns-container') ? mockContainer : null),
+  };
+  (globalThis as any).document = mockDoc;
+  try {
+    const cvc = new ColumnsViewController({ api: () => ({}) });
+    cvc.render('left');
+    assert.equal(removed, true, 'existing container is removed and columns are not appended');
+  } finally {
+    delete (globalThis as any).document;
+  }
+});
+
+test('ColumnsViewController sorts items by date, size, name, and kind respecting direction', () => {
+  const state = {
+    left: { sortField: 'date', sortAsc: false },
+    right: { sortField: 'name', sortAsc: true },
+  };
+  const cvc = new ColumnsViewController({
+    api: () => ({}),
+    state,
+  });
+
+  const rawItems = [
+    { base: 'old.txt', isDir: false, size: 100, mtime: '2025-01-01T10:00:00Z', ext: 'txt' },
+    { base: 'new.txt', isDir: false, size: 50, mtime: '2026-09-02T12:00:00Z', ext: 'txt' },
+    { base: 'folderB', isDir: true, size: 0, mtime: '2026-01-01T10:00:00Z', ext: '' },
+    { base: 'folderA', isDir: true, size: 0, mtime: '2026-05-01T10:00:00Z', ext: '' },
+  ];
+
+  // Test date sort desc (newest first within dirs, then files)
+  const sortedByDateDesc = cvc.sortItems(rawItems as any, 'left');
+  assert.equal(sortedByDateDesc[0].base, 'folderA', 'Newer folder first');
+  assert.equal(sortedByDateDesc[1].base, 'folderB', 'Older folder second');
+  assert.equal(sortedByDateDesc[2].base, 'new.txt', 'Newer file first');
+  assert.equal(sortedByDateDesc[3].base, 'old.txt', 'Older file second');
+
+  // Switch to size sort asc
+  state.left.sortField = 'size';
+  state.left.sortAsc = true;
+  const sortedBySizeAsc = cvc.sortItems(rawItems as any, 'left');
+  assert.equal(sortedBySizeAsc[2].base, 'new.txt', 'Smaller file 50B first');
+  assert.equal(sortedBySizeAsc[3].base, 'old.txt', 'Larger file 100B second');
+});
+
+

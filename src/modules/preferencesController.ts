@@ -182,6 +182,10 @@ export class PreferencesController {
       this.settings.enableSftp = checked;
     });
 
+    this._bindSwitch('pref-enable-tags', (checked) => {
+      this.settings.enableTags = checked;
+    });
+
     this._bindSwitch('pref-dual-drive-defaults', (checked) => {
       this.settings.dualPaneDriveDefaults = checked;
       this._setDriveSelectsDisabled(!checked);
@@ -281,9 +285,14 @@ export class PreferencesController {
         e.stopPropagation();
         this.settings.dockIcon = icon.id;
         this._saveAndNotify();
-        this.storage.applyDockIcon(icon.id);
         this._updateDockIcons();
-        this._flashStatus(`Dock icon updated: ${icon.name}`);
+        void this.storage.applyDockIcon(icon.id).then(
+          () => this._flashStatus(`App icon updated: ${icon.name}`),
+          (err: unknown) => {
+            const msg = err instanceof Error ? err.message : String(err);
+            this._flashStatus(`Could not update app icon: ${msg}`);
+          },
+        );
       });
 
       grid.appendChild(opt);
@@ -509,6 +518,9 @@ export class PreferencesController {
 
     const sftp = document.getElementById('pref-enable-sftp') as HTMLInputElement | null;
     if (sftp) sftp.checked = Boolean(this.settings.enableSftp);
+
+    const tags = document.getElementById('pref-enable-tags') as HTMLInputElement | null;
+    if (tags) tags.checked = this.settings.enableTags !== false;
 
     const dd = document.getElementById('pref-dual-drive-defaults') as HTMLInputElement | null;
     if (dd) dd.checked = this.settings.dualPaneDriveDefaults !== false;

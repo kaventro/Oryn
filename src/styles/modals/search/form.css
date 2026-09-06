@@ -189,7 +189,12 @@
 .search-start-btn:active { transform: scale(0.97); }
 
 .search-action-btn {
-  padding: 8px 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 14px;
+  line-height: 1.2;
   border: none;
   border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--primary) 10%, var(--surface-container));

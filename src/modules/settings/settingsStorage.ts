@@ -76,7 +76,7 @@ export class SettingsStorageService {
     } catch { }
 
     this.applyTheme(s.trayTheme);
-    this.applyDockIcon(s.dockIcon);
+    void this.applyDockIcon(s.dockIcon);
     this._notify(s);
   }
 
@@ -91,11 +91,12 @@ export class SettingsStorageService {
     }
   }
 
-  public applyDockIcon(iconId: string): void {
+  public async applyDockIcon(iconId: string): Promise<void> {
     const validId = String(iconId || '1').replace(/\.png$/, '');
-    try {
-      (window as any).ow?.setDockIcon?.(validId);
-    } catch {}
+    const api = (window as any).ow;
+    if (typeof api?.setDockIcon === 'function') {
+      await api.setDockIcon(validId);
+    }
     try {
       const link = document.querySelector("link[rel~='icon']") as HTMLLinkElement | null;
       if (link) {
