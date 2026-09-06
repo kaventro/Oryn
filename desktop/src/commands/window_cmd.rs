@@ -98,11 +98,8 @@ mod tests {
     fn oversized_png_is_scaled_to_window_icon_size() {
         let img = image::RgbaImage::from_pixel(1254, 1254, image::Rgba([10, 20, 30, 255]));
         let mut buf = Vec::new();
-        img.write_to(
-            &mut std::io::Cursor::new(&mut buf),
-            image::ImageFormat::Png,
-        )
-        .unwrap();
+        img.write_to(&mut std::io::Cursor::new(&mut buf), image::ImageFormat::Png)
+            .unwrap();
         let (rgba, width, height) = png_to_square_rgba(&buf, WINDOW_ICON_PX).unwrap();
         assert_eq!(width, 256);
         assert_eq!(height, 256);

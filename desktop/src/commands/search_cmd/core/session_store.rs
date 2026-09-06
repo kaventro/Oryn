@@ -113,7 +113,6 @@ impl CacheState {
     }
 }
 
-
 #[derive(Default)]
 pub struct SearchSessionStore {
     inner: Mutex<SessionState>,

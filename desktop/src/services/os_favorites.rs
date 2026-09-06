@@ -11,11 +11,11 @@ pub struct FavoriteFolder {
 pub fn read_os_favorites() -> Vec<FavoriteFolder> {
     #[cfg(target_os = "macos")]
     {
-        return macos::read();
+        macos::read()
     }
     #[cfg(target_os = "windows")]
     {
-        return windows::read();
+        windows::read()
     }
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
@@ -252,7 +252,11 @@ mod windows {
         let mut files: Vec<PathBuf> = entries.filter_map(|e| e.ok().map(|e| e.path())).collect();
         files.sort();
         for path in files {
-            if path.extension().and_then(|e| e.to_str()).map(|e| e.eq_ignore_ascii_case("lnk")) == Some(true)
+            if path
+                .extension()
+                .and_then(|e| e.to_str())
+                .map(|e| e.eq_ignore_ascii_case("lnk"))
+                == Some(true)
             {
                 if let Ok(bytes) = std::fs::read(&path) {
                     if let Some(target) = utf16le_dirs_in(&bytes).into_iter().next() {

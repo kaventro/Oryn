@@ -171,7 +171,7 @@ pub fn scan_duplicates(opts: DuplicateScanOptions) -> Result<DuplicateScanResult
     }
 
     // Sort by wasted bytes descending (heaviest duplicate sets first)
-    duplicate_groups.sort_by(|a, b| b.total_wasted.cmp(&a.total_wasted));
+    duplicate_groups.sort_by_key(|a| std::cmp::Reverse(a.total_wasted));
 
     if let Some(max) = opts.max_results {
         if duplicate_groups.len() > max {
