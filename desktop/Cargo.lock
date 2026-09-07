@@ -46,6 +46,7 @@ dependencies = [
  "trash",
  "walkdir",
  "win32job",
+ "windows-sys 0.59.0",
  "zip 8.6.0",
 ]
 

@@ -61,6 +61,11 @@ objc2-foundation = { version = "0.3", features = ["NSData"] }
 
 [target."cfg(windows)".dependencies]
 win32job = "2.0.3"
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_Graphics_Gdi",
+] }
 
 [dev-dependencies]
 tempfile = "3"
