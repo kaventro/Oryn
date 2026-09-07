@@ -50,9 +50,7 @@ export class FileOpsController {
     const isColumns = typeof document !== 'undefined' && document.getElementById('app')?.classList.contains('columns-mode') && this.columnsViewController;
 
     if (isColumns) {
-      const cols = this.columnsViewController.getColumns(side);
-      const activeIdx = this.columnsViewController.getActiveColumnIndex(side);
-      const col = cols[activeIdx];
+      const col = this.columnsViewController.getActiveColumn(side);
       if (col) {
         dirPath = col.path;
         if (col.selectedItem && col.selectedItem.base && col.selectedItem.base !== '..') {
@@ -110,9 +108,7 @@ export class FileOpsController {
     const isColumns = typeof document !== 'undefined' && document.getElementById('app')?.classList.contains('columns-mode') && this.columnsViewController;
 
     if (isColumns) {
-      const cols = this.columnsViewController.getColumns(side);
-      const activeIdx = this.columnsViewController.getActiveColumnIndex(side);
-      const col = cols[activeIdx];
+      const col = this.columnsViewController.getActiveColumn(side);
       if (col) {
         dirPath = col.path;
         if (col.selectedItem && col.selectedItem.base && col.selectedItem.base !== '..') {
@@ -172,9 +168,7 @@ export class FileOpsController {
     let targetDir = pane.path;
 
     if (typeof document !== 'undefined' && document.getElementById('app')?.classList.contains('columns-mode') && this.columnsViewController) {
-      const cols = this.columnsViewController.getColumns(side);
-      const activeIdx = this.columnsViewController.getActiveColumnIndex(side);
-      const col = cols[activeIdx];
+      const col = this.columnsViewController.getActiveColumn(side);
       if (col) {
         targetDir = col.path;
       }
@@ -306,9 +300,7 @@ export class FileOpsController {
       && this.columnsViewController;
 
     if (isColumns) {
-      const cols = this.columnsViewController.getColumns(side);
-      const activeIdx = this.columnsViewController.getActiveColumnIndex(side);
-      const col = cols?.[activeIdx];
+      const col = this.columnsViewController.getActiveColumn(side);
       if (col) {
         dirPath = col.path || dirPath;
         const picked = col.selectedItem || (col.selectedIndex >= 0 ? col.items?.[col.selectedIndex] : null);
@@ -319,7 +311,7 @@ export class FileOpsController {
       if (sel && sel.size > 0) bases = [...sel];
     }
 
-    if (!bases.length) {
+    if (!bases.length && !isColumns) {
       const { item, vis } = this.getFilteredSelection ? this.getFilteredSelection(side) : { item: null, vis: [] };
       if (item?.base && item.base !== '..') bases = [item.base];
       else {
@@ -908,15 +900,25 @@ export class FileOpsController {
       const base = opts.targetItem.base;
       if (!(await this.confirmDelete(`"${base}"`, permanent))) return;
       this.setStatus(`Deleting ${base}…`);
+      let deleted = false;
       try {
         const res = await apiObj.deletePath(String(opts.targetPath).replace(/[/\\]+$/, ''), trash);
         if (res && res.ok === false) {
           this.setStatus(res.error || `Delete failed: ${base}`);
         } else {
           this.setStatus(`Deleted ${base}.`);
+          deleted = true;
         }
       } catch (err: any) {
         this.setStatus(`Delete failed: ${err?.message || err}`);
+      }
+      if (deleted) {
+        const targetClean = String(opts.targetPath).replace(/[/\\]+$/, '');
+        const curPanePath = this.state[side]?.path || '';
+        if (curPanePath === targetClean || curPanePath.startsWith(targetClean + '/') || curPanePath.startsWith(targetClean + '\\')) {
+          const parentDir = await apiObj.pathDirname(targetClean);
+          if (parentDir) this.state[side].path = parentDir;
+        }
       }
       await reload();
       return;
@@ -963,6 +965,18 @@ export class FileOpsController {
     } else {
       this.setStatus('Delete failed.');
     }
+
+    if (deleted > 0) {
+      const curPanePath = this.state[side]?.path || '';
+      for (const base of bases) {
+        const targetFullPath = await apiObj.pathJoin(dirPath, base);
+        if (curPanePath === targetFullPath || curPanePath.startsWith(targetFullPath + '/') || curPanePath.startsWith(targetFullPath + '\\')) {
+          this.state[side].path = dirPath;
+          break;
+        }
+      }
+    }
+
     this.state[side].activeTab?.clearSelection();
     await reload();
   }

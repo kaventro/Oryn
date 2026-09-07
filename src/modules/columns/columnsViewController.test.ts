@@ -800,5 +800,57 @@ test('ColumnsViewController render in columns-mode with inspector, preview and u
   }
 });
 
+test('ColumnsViewController syncPane prunes child column and updates selection when selected folder is deleted', async () => {
+  const mockDirs: Record<string, any[]> = {
+    '/root': [
+      { name: 'folderA', isDir: true },
+      { name: 'folderB', isDir: true },
+    ],
+    '/root/folderA': [
+      { name: 'fileInsideA.txt', isDir: false },
+    ],
+  };
 
+  const api = () => ({
+    readDir: async (p: string) => {
+      if (mockDirs[p]) return mockDirs[p];
+      return { ok: false, error: 'Directory not found' };
+    },
+    pathJoin: async (p: string, c: string) => `${p}/${c}`,
+    pathDirname: async (p: string) => (p === '/root' ? '/' : '/root'),
+  });
 
+  const cvc = new ColumnsViewController({ api });
+
+  // Initial load: loadRoot at /root
+  await cvc.loadRoot('left', { path: '/root', items: [] });
+  assert.equal(cvc.getColumns('left').length, 1);
+  assert.equal(cvc.getColumns('left')[0].items.length, 2);
+
+  // User selects folderA (index 0)
+  await cvc.selectItem(0, 0, 'left');
+  assert.equal(cvc.getColumns('left').length, 2);
+  assert.equal(cvc.getColumns('left')[0].selectedItem?.base, 'folderA');
+  assert.equal(cvc.getColumns('left')[1].path, '/root/folderA');
+  assert.equal(cvc.getColumns('left')[1].items.length, 1);
+
+  // Now simulate folderA being deleted from disk
+  mockDirs['/root'] = [{ name: 'folderB', isDir: true }];
+  delete mockDirs['/root/folderA'];
+
+  // Refresh via syncPane
+  await cvc.syncPane('left', { path: '/root' });
+
+  // Columns after index 0 must be pruned!
+  const cols = cvc.getColumns('left');
+  assert.equal(cols[0].items.length, 1);
+  assert.equal(cols[0].items[0].base, 'folderB');
+  // Selected item should update to folderB instead of staying as deleted folderA
+  assert.equal(cols[0].selectedItem?.base, 'folderB');
+  assert.equal(cols[0].selectedIndex, 0);
+
+  // If folderB has a child column created because folderB is a directory, verify it points to /root/folderB, not /root/folderA!
+  for (let i = 1; i < cols.length; i++) {
+    assert.notEqual(cols[i].path, '/root/folderA');
+  }
+});

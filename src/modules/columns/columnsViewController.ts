@@ -120,32 +120,95 @@ export class ColumnsViewController {
     return this.activeColIndexes[side] || 0;
   }
 
+  async checkDirectoryExists(dirPath: string): Promise<boolean> {
+    try {
+      const apiObj = typeof this.api === 'function' ? this.api() : this.api;
+      const res = await apiObj.readDir(dirPath);
+      if (res && res.ok === false) return false;
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   async syncPane(side: 'left' | 'right', pane: any): Promise<void> {
     this.side = side;
     const rootPath = pane.path;
-    const cols = this.paneColumns[side];
+    let cols = this.paneColumns[side];
     if (!cols || cols.length === 0) {
       await this.loadRoot(side, pane);
       return;
     }
+
     const matchingIdx = cols.findIndex((c) => c.path === rootPath);
-    if (matchingIdx >= 0) {
-      this.activeColIndexes[side] = matchingIdx;
-      for (const col of cols) {
-        col.items = await this.fetchDirectory(col.path);
-        if (col.selectedItem) {
-          const newIdx = col.items.findIndex((it) => it.base === col.selectedItem?.base);
-          if (newIdx >= 0) {
-            col.selectedIndex = newIdx;
-            col.selectedItem = col.items[newIdx];
+    if (matchingIdx < 0) {
+      await this.loadRoot(side, pane);
+      return;
+    }
+
+    this.activeColIndexes[side] = matchingIdx;
+
+    let validColCount = cols.length;
+    for (let i = 0; i < cols.length; i++) {
+      const col = cols[i];
+      const exists = await this.checkDirectoryExists(col.path);
+      if (!exists) {
+        validColCount = i;
+        break;
+      }
+
+      col.items = await this.fetchDirectory(col.path);
+
+      if (col.selectedItem) {
+        const newIdx = col.items.findIndex((it) => it.base === col.selectedItem?.base);
+        if (newIdx >= 0) {
+          col.selectedIndex = newIdx;
+          col.selectedItem = col.items[newIdx];
+        } else {
+          // The selected item was removed/deleted!
+          validColCount = i + 1;
+          if (col.items.length > 0) {
+            col.selectedIndex = Math.min(Math.max(0, col.selectedIndex), col.items.length - 1);
+            col.selectedItem = col.items[col.selectedIndex];
+          } else {
+            col.selectedIndex = -1;
+            col.selectedItem = null;
           }
+          break;
         }
       }
-      this.render(side);
-      this.scrollToColumn(side, matchingIdx);
-    } else {
-      await this.loadRoot(side, pane);
     }
+
+    if (validColCount === 0) {
+      await this.loadRoot(side, pane);
+      return;
+    }
+
+    this.paneColumns[side] = cols.slice(0, validColCount);
+    cols = this.paneColumns[side];
+
+    // If the last surviving column has a selected directory that doesn't have a child column yet, expand it
+    const lastCol = cols[cols.length - 1];
+    if (lastCol && lastCol.selectedItem && lastCol.selectedItem.isDir && lastCol.selectedItem.base !== '..') {
+      const subPath = await this.joinPath(lastCol.path, lastCol.selectedItem.base);
+      const subExists = await this.checkDirectoryExists(subPath);
+      if (subExists) {
+        const subItems = await this.fetchDirectory(subPath);
+        this.paneColumns[side].push({
+          path: subPath,
+          items: subItems,
+          selectedIndex: -1,
+          selectedItem: null,
+        });
+      }
+    }
+
+    // Clamp activeColIndex
+    const maxActiveIdx = this.paneColumns[side].length - 1;
+    this.activeColIndexes[side] = Math.min(Math.max(0, this.activeColIndexes[side] || 0), maxActiveIdx);
+
+    this.render(side);
+    this.scrollToColumn(side, this.activeColIndexes[side]);
   }
 
   /**
