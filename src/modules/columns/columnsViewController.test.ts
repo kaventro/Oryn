@@ -347,4 +347,458 @@ test('ColumnsViewController sorts items by date, size, name, and kind respecting
   assert.equal(sortedBySizeAsc[3].base, 'old.txt', 'Larger file 100B second');
 });
 
+test('ColumnsViewController sortItems edge cases (ext, date ties, size ties, parseTime fallbacks)', () => {
+  const state = {
+    left: { sortField: 'ext', sortAsc: true },
+  };
+  const cvc = new ColumnsViewController({
+    api: () => ({}),
+    state,
+  });
+
+  const items = [
+    { base: 'b.txt', isDir: false, ext: 'txt', size: 100, mtime: 1000 },
+    { base: 'a.txt', isDir: false, ext: 'txt', size: 100, mtime: 1000 },
+    { base: 'c.doc', isDir: false, ext: 'doc', size: 200, mtime: 2000 },
+    { base: 'z_dir', isDir: true, ext: '', size: 0, mtime: 500 },
+  ];
+
+  // 1. Sort by ext asc: folder first, then doc, then a.txt, then b.txt (tied ext resolved by name)
+  const byExt = cvc.sortItems(items as any, 'left');
+  assert.equal(byExt[0].base, 'z_dir');
+  assert.equal(byExt[1].base, 'c.doc');
+  assert.equal(byExt[2].base, 'a.txt');
+  assert.equal(byExt[3].base, 'b.txt');
+
+  // 2. Sort by size with ties (a.txt and b.txt both 100B)
+  state.left.sortField = 'size';
+  const bySize = cvc.sortItems(items as any, 'left');
+  assert.equal(bySize[1].base, 'a.txt');
+  assert.equal(bySize[2].base, 'b.txt');
+
+  // 3. Sort by date with ties and parseTime edge cases
+  state.left.sortField = 'date';
+  const itemsWithVariousDates = [
+    { base: 'num_time', isDir: false, mtime: 5000 },
+    { base: 'str_time', isDir: false, mtime: '2026-01-01T00:00:00Z' },
+    { base: 'invalid_time', isDir: false, mtime: 'not-a-valid-date' },
+    { base: 'no_time', isDir: false, mtime: 0 },
+    { base: 'num_time_tie', isDir: false, mtime: 5000 },
+  ];
+  const byDate = cvc.sortItems(itemsWithVariousDates as any, 'left');
+  assert.equal(byDate.length, 5);
+
+  // 4. Unknown sort field fallback
+  state.left.sortField = 'unknown_field';
+  const byUnknown = cvc.sortItems(items as any, 'left');
+  assert.equal(byUnknown.length, 4);
+});
+
+test('ColumnsViewController getActiveColumn and getActiveColumnIndex', () => {
+  const cvc = new ColumnsViewController({ api: () => ({}) });
+
+  // 1. Empty stack returns null
+  assert.equal(cvc.getActiveColumn('left'), null);
+  assert.equal(cvc.getActiveColumnIndex('left'), 0);
+
+  // 2. Populated stack with selected item
+  cvc.paneColumns.left = [
+    {
+      path: '/root',
+      items: [{ base: 'src', isDir: true, size: 0, mtime: 0, ext: '' }],
+      selectedIndex: 0,
+      selectedItem: { base: 'src', isDir: true, size: 0, mtime: 0, ext: '' },
+    },
+    {
+      path: '/root/src',
+      items: [{ base: '..', isDir: true, size: 0, mtime: 0, ext: '' }],
+      selectedIndex: 0,
+      selectedItem: { base: '..', isDir: true, size: 0, mtime: 0, ext: '' },
+    },
+  ];
+  cvc.activeColIndexes.left = 1;
+
+  // Column 1 has '..' selected, so rightmost search finds Column 0
+  const active = cvc.getActiveColumn('left');
+  assert.equal(active?.path, '/root');
+  assert.equal(active?.colIndex, 0);
+
+  // When neither column has a valid non-parent item selected, fallbacks to activeColIndex
+  cvc.paneColumns.left[0].selectedItem = null;
+  const fallbackActive = cvc.getActiveColumn('left');
+  assert.equal(fallbackActive?.path, '/root/src');
+  assert.equal(fallbackActive?.colIndex, 1);
+});
+
+test('ColumnsViewController syncPane edge cases (empty stack, mismatched root, and refreshes)', async () => {
+  const mockDirs: Record<string, any[]> = {
+    '/dirA': [{ name: 'file1.txt', isDir: false }],
+    '/dirB': [{ name: 'file2.txt', isDir: false }],
+  };
+  const api = () => ({
+    readDir: async (p: string) => mockDirs[p] || [],
+    pathJoin: async (p: string, c: string) => `${p}/${c}`,
+  });
+
+  const cvc = new ColumnsViewController({ api });
+
+  // 1. syncPane with empty columns calls loadRoot
+  await cvc.syncPane('left', { path: '/dirA', items: [] });
+  assert.equal(cvc.getColumns('left').length, 1);
+  assert.equal(cvc.getColumns('left')[0].path, '/dirA');
+
+  // 2. syncPane with mismatched root path calls loadRoot
+  await cvc.syncPane('left', { path: '/dirB', items: [] });
+  assert.equal(cvc.getColumns('left').length, 1);
+  assert.equal(cvc.getColumns('left')[0].path, '/dirB');
+
+  // 3. syncPane where root matches and selected item is refreshed
+  cvc.getColumns('left')[0].selectedItem = { base: 'file2.txt', isDir: false, size: 0, mtime: 0, ext: 'txt' };
+  mockDirs['/dirB'] = [
+    { name: 'file2.txt', isDir: false, size: 100 },
+    { name: 'new.txt', isDir: false },
+  ];
+  await cvc.syncPane('left', { path: '/dirB' });
+  assert.equal(cvc.getColumns('left')[0].items.length, 2);
+  assert.equal(cvc.getColumns('left')[0].selectedItem?.size, 100);
+
+  // 4. syncPane where matching column is at index > 0
+  cvc.paneColumns.left = [
+    { path: '/dirB', items: [{ base: 'file2.txt', isDir: false, size: 100, mtime: 0, ext: 'txt' }], selectedIndex: -1, selectedItem: null },
+    { path: '/dirB/subfolder', items: [], selectedIndex: -1, selectedItem: null },
+  ];
+  mockDirs['/dirB/subfolder'] = [{ name: 'subfile.txt', isDir: false }];
+  await cvc.syncPane('left', { path: '/dirB/subfolder' });
+  assert.equal(cvc.getColumns('left')[1].items.length, 1);
+  assert.equal(cvc.getActiveColumnIndex('left'), 1);
+});
+
+test('ColumnsViewController goForward, goBack, navigate bounds and edge cases', async () => {
+  const mockDirs: Record<string, any[]> = {
+    '/top': [{ name: 'empty_dir', isDir: true }, { name: 'full_dir', isDir: true }],
+    '/top/empty_dir': [],
+    '/top/full_dir': [{ name: 'item.txt', isDir: false }],
+  };
+  const api = () => ({
+    readDir: async (p: string) => mockDirs[p] || [],
+    pathJoin: async (p: string, c: string) => `${p}/${c}`,
+    pathDirname: async (p: string) => (p === '/top' ? '/top' : '/'), // /top is root here
+  });
+
+  let activated = '';
+  const cvc = new ColumnsViewController({
+    api,
+    onActivateSide: (_side, p) => { activated = p || ''; },
+  });
+  await cvc.loadRoot('left', { path: '/top' });
+
+  // 1. goBack on filesystem root (/top -> /top) does not unshift
+  await cvc.goBack('left');
+  assert.equal(cvc.getColumns('left').length, 1);
+
+  // 2. Step into empty_dir
+  await cvc.selectItem(0, 0, 'left');
+  assert.equal(cvc.getColumns('left').length, 2);
+  assert.equal(cvc.getColumns('left')[1].path, '/top/empty_dir');
+
+  // 3. goForward into empty_dir
+  await cvc.goForward('left');
+  assert.equal(cvc.getActiveColumnIndex('left'), 1);
+
+  // 4. Navigate vertically on empty column does nothing
+  await cvc.navigate(0, 1, 'left');
+  assert.equal(cvc.getActiveColumnIndex('left'), 1);
+
+  // 5. Select full_dir in column 0
+  await cvc.selectItem(0, 1, 'left');
+  assert.equal(cvc.getColumns('left').length, 2);
+  // Column 1 is /top/full_dir. goForward auto-selects first item
+  await cvc.goForward('left');
+  assert.equal(cvc.getActiveColumnIndex('left'), 1);
+  assert.equal(cvc.getColumns('left')[1].selectedIndex, 0);
+
+  // 6. Calling goForward when next column already has a selection (selectedIndex !== -1)
+  cvc.activeColIndexes.left = 0;
+  await cvc.goForward('left');
+  assert.equal(cvc.getActiveColumnIndex('left'), 1);
+
+  // 7. Calling goForward when in rightmost column and selected item is a dir: expands subfolder
+  cvc.getColumns('left')[1].items.push({ base: 'nested_dir', isDir: true, size: 0, mtime: 0, ext: '' });
+  cvc.getColumns('left')[1].selectedIndex = 1;
+  cvc.getColumns('left')[1].selectedItem = cvc.getColumns('left')[1].items[1];
+  mockDirs['/top/full_dir/nested_dir'] = [{ name: 'leaf.txt', isDir: false }];
+  await cvc.goForward('left');
+  assert.equal(cvc.getColumns('left').length, 3);
+  assert.equal(cvc.getActiveColumnIndex('left'), 2);
+
+  // 8. Calling goForward again when already in rightmost column and selected item is NOT a dir does nothing
+  await cvc.goForward('left');
+  assert.equal(cvc.getActiveColumnIndex('left'), 2);
+
+  // 9. selectItem with invalid indices
+  await cvc.selectItem(-1, 0, 'left');
+  await cvc.selectItem(0, 999, 'left');
+
+  // 10. navigate bounds checking
+  await cvc.navigate(0, 10, 'left');
+  assert.equal(cvc.getColumns('left')[2].selectedIndex, 0);
+  await cvc.navigate(0, -10, 'left');
+  assert.equal(cvc.getColumns('left')[2].selectedIndex, 0);
+});
+
+test('ColumnsViewController fetchDirectory error handling and joinPath fallback', async () => {
+  // 1. readDir throws error -> returns empty array
+  const failingApi = () => ({
+    readDir: async () => { throw new Error('EACCES'); },
+  });
+  const cvcFail = new ColumnsViewController({ api: failingApi });
+  const items = await cvcFail.fetchDirectory('/protected');
+  assert.deepEqual(items, []);
+
+  // 2. joinPath fallback when pathJoin is not provided
+  const simpleApi = () => ({});
+  const cvcSimple = new ColumnsViewController({ api: simpleApi });
+  const joinedUnix = await cvcSimple.joinPath('/var/log', 'syslog');
+  assert.equal(joinedUnix, '/var/log/syslog');
+  const joinedWin = await cvcSimple.joinPath('C:\\Windows', 'System32');
+  assert.equal(joinedWin, 'C:\\Windows\\System32');
+  const joinedSlash = await cvcSimple.joinPath('/var/log/', 'syslog');
+  assert.equal(joinedSlash, '/var/log/syslog');
+});
+
+test('ColumnsViewController render in columns-mode with inspector, preview and user interactions', async () => {
+  function createMockEl(tag = 'div', className = '', dataset: Record<string, string> = {}) {
+    let _className = className;
+    const classes = new Set(className ? className.split(/\s+/).filter(Boolean) : []);
+    const children: any[] = [];
+    const listeners: Record<string, Function[]> = {};
+    let _textContent = '';
+
+    const el: any = {
+      tagName: tag.toUpperCase(),
+      get className() { return _className; },
+      set className(val: string) {
+        _className = val;
+        classes.clear();
+        val.split(/\s+/).filter(Boolean).forEach((c) => classes.add(c));
+      },
+      dataset: { ...dataset },
+      style: {},
+      classList: {
+        contains: (c: string) => classes.has(c),
+        add: (...items: string[]) => {
+          items.forEach((c) => classes.add(c));
+          _className = Array.from(classes).join(' ');
+        },
+        remove: (...items: string[]) => {
+          items.forEach((c) => classes.delete(c));
+          _className = Array.from(classes).join(' ');
+        },
+      },
+      get textContent() {
+        if (children.length > 0) {
+          return children.map((c: any) => c.textContent).join(' ');
+        }
+        return _textContent;
+      },
+      set textContent(val: string) {
+        _textContent = val;
+      },
+      innerHTML: '',
+      children,
+      draggable: false,
+      scrollTop: 0,
+      scrollWidth: 1000,
+      replaceChildren: (...nodes: any[]) => {
+        children.length = 0;
+        if (nodes) children.push(...nodes);
+      },
+      appendChild: (child: any) => {
+        children.push(child);
+        return child;
+      },
+      addEventListener: (ev: string, fn: Function) => {
+        if (!listeners[ev]) listeners[ev] = [];
+        listeners[ev].push(fn);
+      },
+      dispatchEvent: (evName: string, evPayload: any = {}) => {
+        const e = {
+          target: el,
+          clientX: 100,
+          clientY: 200,
+          preventDefault: () => {},
+          stopPropagation: () => {},
+          ...evPayload,
+        };
+        (listeners[evName] || []).forEach((fn) => fn(e));
+      },
+      closest: (sel: string) => {
+        if (sel.startsWith('.')) {
+          const reqClasses = sel.slice(1).split('.').filter(Boolean);
+          if (reqClasses.every((cls) => classes.has(cls))) return el;
+        }
+        return null;
+      },
+      querySelector: (sel: string) => {
+        if (sel.startsWith('.')) {
+          const reqClasses = sel.slice(1).split('.').filter(Boolean);
+          for (const c of children) {
+            if (reqClasses.every((cls) => c.classList.contains(cls))) return c;
+            const found = c.querySelector(sel);
+            if (found) return found;
+          }
+        }
+        return null;
+      },
+      querySelectorAll: (sel: string) => {
+        const res: any[] = [];
+        if (sel.startsWith('.')) {
+          const reqClasses = sel.slice(1).split('.').filter(Boolean);
+          for (const c of children) {
+            if (reqClasses.every((cls) => c.classList.contains(cls))) res.push(c);
+            res.push(...c.querySelectorAll(sel));
+          }
+        }
+        return res;
+      },
+      scrollIntoView: () => {},
+      scrollTo: () => {},
+      onclick: null,
+      onmousedown: null,
+    };
+    return el;
+  }
+
+  const appEl = createMockEl('div', 'columns-mode');
+  const paneBody = createMockEl('div', 'pane-body');
+  const docMock = {
+    getElementById: (id: string) => (id === 'app' ? appEl : null),
+    querySelector: (sel: string) => (sel.includes('#pane-left .pane-body') ? paneBody : null),
+    createElement: (tag: string) => createMockEl(tag),
+  };
+
+  const origDoc = globalThis.document;
+  (globalThis as any).document = docMock;
+
+  let activatedSide = '';
+  let openedSelectedPath = '';
+  let previewedPath = '';
+  let ctxMenuCalled = false;
+
+  const mockApi = {
+    readDir: async (p: string) => {
+      if (p === '/root') {
+        return [
+          { name: 'sub', isDir: true, gitStatus: 'M' },
+          { name: 'empty_sub', isDir: true },
+        ];
+      }
+      if (p === '/root/sub') {
+        return [
+          { name: 'photo.png', isDir: false, size: 2048, mtime: 1600000000000 },
+          { name: 'notes.txt', isDir: false, size: 500, mtime: 1600000000000 },
+        ];
+      }
+      return [];
+    },
+    gitIsRepo: async () => ({ ok: true, root: '/root' }),
+    gitStatus: async () => ({
+      ok: true,
+      branch: 'main',
+      ahead: 0,
+      behind: 0,
+      files: [{ file: 'sub', index: 'M', worktree: ' ' }],
+    }),
+    pathJoin: async (p: string, c: string) => `${p}/${c}`,
+    assetUrl: (p: string) => `asset://${p}`,
+    readMediaDataUrl: async () => 'data:image/png;base64,123',
+  };
+
+  const iconRegistry = {
+    resolveIconKey: () => 'file',
+    getSvg: () => '<svg></svg>',
+  };
+
+  const cvc = new ColumnsViewController({
+    api: () => mockApi,
+    iconRegistry,
+    onActivateSide: (side) => { activatedSide = side; },
+    onOpenSelected: (fp) => { openedSelectedPath = fp; },
+    onPreviewSelected: (fp) => { previewedPath = fp; },
+    showCtxMenu: () => { ctxMenuCalled = true; },
+  });
+
+  try {
+    // 1. Initial load
+    await cvc.loadRoot('left', { path: '/root' });
+    const container = paneBody.children[0];
+    assert.ok(container);
+
+    // 2. Container onmousedown
+    container.onmousedown();
+    assert.equal(activatedSide, 'left');
+
+    // 3. Select 'sub' (index 1 after sort) in column 0
+    await cvc.selectItem(0, 1, 'left');
+    assert.equal(cvc.getColumns('left').length, 2);
+
+    // 4. Select 'photo.png' (image file, index 1 after sort) in column 1 -> triggers inspector rendering with image
+    await cvc.selectItem(1, 1, 'left');
+    // Wait for async joinPath inside createInspectorElement
+    await new Promise((r) => setTimeout(r, 10));
+    assert.equal(container.children.length, 3);
+    const inspectorEl = container.children[2];
+    assert.ok(inspectorEl.classList.contains('columns-preview-column'));
+
+    // Image onerror fallback
+    const imgEl = inspectorEl.querySelector('.columns-preview-icon').children[0];
+    await imgEl.onerror();
+    assert.equal(imgEl.src, 'data:image/png;base64,123');
+
+    // Quick Look preview button click
+    const previewBtn = inspectorEl.querySelector('.columns-preview-actions').children[0];
+    await previewBtn.onclick();
+    assert.equal(previewedPath, '/root/sub/photo.png');
+
+    // 5. Select 'notes.txt' (non-image file, index 0) in column 1
+    await cvc.selectItem(1, 0, 'left');
+    const textInspector = container.children[2];
+    assert.ok(textInspector.textContent.includes('Kind'));
+    assert.ok(textInspector.textContent.includes('500 B'));
+
+    // 6. User interactions on column 0:
+    const col0 = container.children[0];
+    // Click column background outside row
+    col0.dispatchEvent('click', { target: col0 });
+    // Contextmenu on column background
+    col0.dispatchEvent('contextmenu', { target: col0 });
+    assert.equal(ctxMenuCalled, true);
+
+    // 7. User interactions on row:
+    const row0 = col0.children[0];
+    // Row click
+    row0.dispatchEvent('click', { target: row0 });
+    // Row double click -> triggers onOpenSelected
+    row0.dispatchEvent('dblclick', { target: row0 });
+    await new Promise((r) => setTimeout(r, 10));
+    assert.equal(openedSelectedPath, '/root/empty_sub');
+
+    // Row contextmenu
+    row0.dispatchEvent('contextmenu', { target: row0 });
+    assert.equal(ctxMenuCalled, true);
+
+    // 8. Select 'empty_sub' in column 0 -> renders Empty Folder in column 1
+    await cvc.selectItem(0, 0, 'left');
+    const col1 = container.children[1];
+    assert.ok(col1.children[0].textContent.includes('Empty Folder'));
+
+    // 9. scrollToColumn & scrollToEnd
+    cvc.scrollToColumn('left', 0);
+    cvc.scrollToEnd('left');
+  } finally {
+    globalThis.document = origDoc;
+  }
+});
+
+
 
