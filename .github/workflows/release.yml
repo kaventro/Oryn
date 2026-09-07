@@ -18,6 +18,7 @@ concurrency:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   # 1. Create a single draft release up front so all platforms upload into the
@@ -26,6 +27,7 @@ jobs:
     runs-on: ubuntu-22.04
     permissions:
       contents: write
+      pull-requests: write
     outputs:
       release_id: ${{ steps.create-release.outputs.result }}
       tag_name: ${{ steps.version-step.outputs.tag }}
@@ -125,6 +127,8 @@ jobs:
 
       - name: Commit, push and tag
         if: steps.version-step.outputs.should_commit == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -132,7 +136,11 @@ jobs:
           if ! git diff --staged --quiet; then
             git commit -m "chore(release): ${{ steps.version-step.outputs.tag }}"
             git pull --rebase origin ${{ github.ref_name }} || true
-            git push origin HEAD:${{ github.ref_name }}
+            if ! git push origin HEAD:${{ github.ref_name }}; then
+              echo "::warning::Direct push to ${{ github.ref_name }} was rejected by branch ruleset (PR required). Pushing to release/${{ steps.version-step.outputs.tag }} instead."
+              git push origin HEAD:refs/heads/release/${{ steps.version-step.outputs.tag }} --force || true
+              gh pr create --base "${{ github.ref_name }}" --head "release/${{ steps.version-step.outputs.tag }}" --title "chore(release): ${{ steps.version-step.outputs.tag }}" --body "Automated version bump for release ${{ steps.version-step.outputs.tag }}" || true
+            fi
           fi
           git tag -f ${{ steps.version-step.outputs.tag }}
           git push origin ${{ steps.version-step.outputs.tag }} --force
@@ -147,9 +155,12 @@ jobs:
             // find-or-create so re-running a failed release reuses the draft
             let release;
             try {
-              release = (await github.rest.repos.getReleaseByTag({ owner, repo, tag })).data;
+              const releases = await github.paginate(github.rest.repos.listReleases, { owner, repo, per_page: 50 });
+              release = releases.find(r => r.tag_name === tag);
             } catch (e) {
-              if (e.status !== 404) throw e;
+              core.warning(`Failed to list releases: ${e.message}`);
+            }
+            if (!release) {
               release = (await github.rest.repos.createRelease({
                 owner, repo, tag_name: tag, name: `Oryn ${tag}`,
                 draft: true, prerelease: false,
