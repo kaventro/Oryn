@@ -5,6 +5,12 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (e.g. 0.0.4 or 4). Leave blank for auto +1 (0.0.3 -> 0.0.4)'
+        required: false
+        default: ''
+        type: string
 
 concurrency:
   group: release-${{ github.ref }}
@@ -22,21 +28,114 @@ jobs:
       contents: write
     outputs:
       release_id: ${{ steps.create-release.outputs.result }}
-      tag_name: ${{ steps.get-tag.outputs.tag }}
+      tag_name: ${{ steps.version-step.outputs.tag }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
 
-      - name: Get tag & version
-        id: get-tag
+      - name: Resolve version & bump files
+        id: version-step
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
         run: |
-          VERSION=$(node -p "require('./package.json').version")
-          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            TAG="${GITHUB_REF#refs/tags/}"
-          else
-            TAG="v${VERSION}"
+          node -e '
+            const fs = require("fs");
+
+            const isTag = Boolean(process.env.GITHUB_REF && process.env.GITHUB_REF.startsWith("refs/tags/"));
+            if (isTag) {
+              const tag = process.env.GITHUB_REF.replace(/^refs\/tags\//, "");
+              const version = tag.replace(/^v/, "");
+              console.log(`Triggered by tag push: ${tag} (version ${version})`);
+              fs.appendFileSync(process.env.GITHUB_OUTPUT, `tag=${tag}\nversion=${version}\nshould_commit=false\n`);
+              return;
+            }
+
+            const pkgPath = "./package.json";
+            const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+            const currentVersion = pkg.version || "0.0.1";
+            let input = (process.env.INPUT_VERSION || "").trim().replace(/^v/, "");
+
+            let newVersion = "";
+            if (input) {
+              if (/^\d+$/.test(input)) {
+                const parts = currentVersion.split(".");
+                while (parts.length < 2) parts.push("0");
+                newVersion = `${parts[0]}.${parts[1]}.${input}`;
+              } else if (/^\d+\.\d+(\.\d+)?(-[\w.]+)?$/.test(input)) {
+                const parts = input.split(".");
+                newVersion = parts.length === 2 ? `${input}.0` : input;
+              } else {
+                console.error(`Invalid version format: "${input}"`);
+                process.exit(1);
+              }
+            } else {
+              const parts = currentVersion.split(".");
+              const major = parts[0] || "0";
+              const minor = parts[1] || "0";
+              const patch = parseInt(parts[2] || "0", 10);
+              newVersion = `${major}.${minor}.${patch + 1}`;
+            }
+
+            const tag = `v${newVersion}`;
+            console.log(`Current version: ${currentVersion}`);
+            console.log(`Target release version: ${newVersion} (${tag})`);
+
+            // 1. package.json
+            pkg.version = newVersion;
+            fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + "\n");
+
+            // 2. package-lock.json
+            const lockPath = "./package-lock.json";
+            if (fs.existsSync(lockPath)) {
+              const lock = JSON.parse(fs.readFileSync(lockPath, "utf8"));
+              lock.version = newVersion;
+              if (lock.packages && lock.packages[""]) {
+                lock.packages[""].version = newVersion;
+              }
+              fs.writeFileSync(lockPath, JSON.stringify(lock, null, 2) + "\n");
+            }
+
+            // 3. desktop/tauri.conf.json
+            const tauriPath = "./desktop/tauri.conf.json";
+            if (fs.existsSync(tauriPath)) {
+              const tauri = JSON.parse(fs.readFileSync(tauriPath, "utf8"));
+              tauri.version = newVersion;
+              fs.writeFileSync(tauriPath, JSON.stringify(tauri, null, 2) + "\n");
+            }
+
+            // 4. desktop/Cargo.toml
+            const cargoPath = "./desktop/Cargo.toml";
+            if (fs.existsSync(cargoPath)) {
+              let cargo = fs.readFileSync(cargoPath, "utf8");
+              cargo = cargo.replace(/^version = "[^"]*"/m, `version = "${newVersion}"`);
+              fs.writeFileSync(cargoPath, cargo);
+            }
+
+            // 5. desktop/Cargo.lock
+            const cargoLockPath = "./desktop/Cargo.lock";
+            if (fs.existsSync(cargoLockPath)) {
+              let cargoLock = fs.readFileSync(cargoLockPath, "utf8");
+              cargoLock = cargoLock.replace(/(\[\[package\]\]\r?\nname = "Oryn"\r?\nversion = )"[^"]*"/, `$1"${newVersion}"`);
+              fs.writeFileSync(cargoLockPath, cargoLock);
+            }
+
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `tag=${tag}\nversion=${newVersion}\nshould_commit=true\n`);
+          '
+
+      - name: Commit, push and tag
+        if: steps.version-step.outputs.should_commit == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json desktop/tauri.conf.json desktop/Cargo.toml desktop/Cargo.lock
+          if ! git diff --staged --quiet; then
+            git commit -m "chore(release): ${{ steps.version-step.outputs.tag }}"
+            git pull --rebase origin ${{ github.ref_name }} || true
+            git push origin HEAD:${{ github.ref_name }}
           fi
-          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
-          echo "PACKAGE_VERSION=${VERSION}" >> "$GITHUB_ENV"
+          git tag -f ${{ steps.version-step.outputs.tag }}
+          git push origin ${{ steps.version-step.outputs.tag }} --force
 
       - name: Create draft release
         id: create-release
@@ -44,7 +143,7 @@ jobs:
         with:
           script: |
             const { owner, repo } = context.repo;
-            const tag = '${{ steps.get-tag.outputs.tag }}';
+            const tag = '${{ steps.version-step.outputs.tag }}';
             // find-or-create so re-running a failed release reuses the draft
             let release;
             try {
@@ -80,6 +179,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.create-release.outputs.tag_name }}
 
       - name: Setup Node.js
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
@@ -126,6 +227,7 @@ jobs:
         with:
           releaseId: ${{ needs.create-release.outputs.release_id }}
           args: ${{ matrix.args }}
+          tagName: ${{ needs.create-release.outputs.tag_name }}
 
       # Also ship the raw portable exe (no installer) for Windows.
       - name: Upload portable exe (Windows)
