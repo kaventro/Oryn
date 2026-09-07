@@ -48,7 +48,7 @@ jobs:
               const version = tag.replace(/^v/, "");
               console.log(`Triggered by tag push: ${tag} (version ${version})`);
               fs.appendFileSync(process.env.GITHUB_OUTPUT, `tag=${tag}\nversion=${version}\nshould_commit=false\n`);
-              return;
+              process.exit(0);
             }
 
             const pkgPath = "./package.json";
