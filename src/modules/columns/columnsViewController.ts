@@ -143,20 +143,8 @@ export class ColumnsViewController {
       }
       this.render(side);
       this.scrollToColumn(side, matchingIdx);
-    } else if (cols[0].path !== rootPath) {
-      await this.loadRoot(side, pane);
     } else {
-      for (const col of cols) {
-        col.items = await this.fetchDirectory(col.path);
-        if (col.selectedItem) {
-          const newIdx = col.items.findIndex((it) => it.base === col.selectedItem?.base);
-          if (newIdx >= 0) {
-            col.selectedIndex = newIdx;
-            col.selectedItem = col.items[newIdx];
-          }
-        }
-      }
-      this.render(side);
+      await this.loadRoot(side, pane);
     }
   }
 
