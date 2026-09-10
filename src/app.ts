@@ -124,6 +124,16 @@ async function resolveStartupPaths(home: string): Promise<{ left: string; right:
         const auto = autoSideDrives(mounts, locs?.home || home);
         left = pickDrive(mounts, prefs.left, auto.left);
         right = pickDrive(mounts, prefs.right, auto.right);
+        if (right && right !== left && typeof api()?.readDir === 'function') {
+          try {
+            const probe = await api().readDir(right);
+            if (!probe || !probe.ok) {
+              right = home;
+            }
+          } catch {
+            right = home;
+          }
+        }
       }
     }
   } catch { }
@@ -980,9 +990,15 @@ async function init(): Promise<void> {
     ow.onFsChange((payload: any) => {
       clearTimeout(fsDebounceTimer);
       fsDebounceTimer = setTimeout(() => {
-        const changed = (payload?.path || '').replace(/[/\\]+$/, '');
-        const leftP = (state.left?.path || '').replace(/[/\\]+$/, '');
-        const rightP = (state.right?.path || '').replace(/[/\\]+$/, '');
+        const cleanP = (p?: string) => {
+          if (!p) return '';
+          let s = String(p).trim().replace(/\\/g, '/');
+          if (/^[a-zA-Z]:\/?$/.test(s)) return s.slice(0, 2).toLowerCase() + '/';
+          return s.replace(/\/+$/, '').toLowerCase();
+        };
+        const changed = cleanP(payload?.path);
+        const leftP = cleanP(state.left?.path);
+        const rightP = cleanP(state.right?.path);
         if (leftP && (leftP === changed || !changed)) {
           void panelControllerInst.loadDir('left', { preserveCursor: true });
         }

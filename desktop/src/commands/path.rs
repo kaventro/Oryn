@@ -9,7 +9,15 @@ pub struct PathArg {
 
 #[tauri::command]
 pub fn path_join(a: String, b: String) -> Result<String, String> {
-    Ok(Path::new(&a).join(&b).to_string_lossy().to_string())
+    let a_clean = if a.len() == 2
+        && a.chars().next().map(|c| c.is_ascii_alphabetic()).unwrap_or(false)
+        && a.ends_with(':')
+    {
+        format!("{}\\", a)
+    } else {
+        a
+    };
+    Ok(Path::new(&a_clean).join(&b).to_string_lossy().to_string())
 }
 
 #[tauri::command]
@@ -159,5 +167,12 @@ mod tests {
 
         // app_get_home
         assert!(app_get_home().is_ok());
+    }
+
+    #[test]
+    fn path_join_handles_drive_letters() {
+        let res = path_join("C:".to_string(), "Users".to_string()).unwrap();
+        assert!(res.starts_with(r"C:\") || res.starts_with("C:/"));
+        assert!(res.ends_with("Users"));
     }
 }

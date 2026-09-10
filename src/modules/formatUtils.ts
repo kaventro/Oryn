@@ -208,3 +208,11 @@ export function renderDiffContent(container: HTMLElement, diffText?: string): vo
   });
   container.appendChild(frag);
 }
+
+export function matchQueryVariants(text: string, query: string, startsWith: boolean): boolean {
+  if (!text || !query) return false;
+  const t = text.toLowerCase();
+  const q = query.toLowerCase();
+  return startsWith ? t.startsWith(q) : t.includes(q);
+}
+

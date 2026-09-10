@@ -13,7 +13,21 @@ pub struct ListItem {
 }
 
 pub fn list_dir(path: &Path) -> ServiceResult<Vec<ListItem>> {
-    let entries = fs::read_dir(path)?;
+    let path_buf;
+    let effective_path = {
+        let path_str = path.to_string_lossy();
+        if path_str.len() == 2
+            && path_str.chars().next().map(|c| c.is_ascii_alphabetic()).unwrap_or(false)
+            && path_str.ends_with(':')
+        {
+            path_buf = std::path::PathBuf::from(format!("{}\\", path_str));
+            &path_buf
+        } else {
+            path
+        }
+    };
+
+    let entries = fs::read_dir(effective_path)?;
     let mut dirs: Vec<ListItem> = Vec::new();
     let mut files: Vec<ListItem> = Vec::new();
 
@@ -23,25 +37,25 @@ pub fn list_dir(path: &Path) -> ServiceResult<Vec<ListItem>> {
             continue;
         }
 
-        let meta = entry.metadata().ok();
         let is_symlink = entry.file_type().map(|t| t.is_symlink()).unwrap_or(false);
-        let mtime = meta.as_ref().map(filetime_to_iso).unwrap_or_default();
+        let link_meta = entry.metadata().ok();
+        let target_meta = if is_symlink {
+            fs::metadata(entry.path()).ok()
+        } else {
+            None
+        };
+        let effective_meta = target_meta.as_ref().or(link_meta.as_ref());
+        let mtime = effective_meta.map(filetime_to_iso).unwrap_or_default();
 
-        if is_symlink {
-            files.push(ListItem {
-                name,
-                is_dir: false,
-                size: None,
-                mtime,
-            });
-            continue;
-        }
-
-        let is_dir = meta.as_ref().map(|m| m.is_dir()).unwrap_or(false);
+        let is_dir = target_meta
+            .as_ref()
+            .map(|m| m.is_dir())
+            .or_else(|| link_meta.as_ref().map(|m| m.is_dir()))
+            .unwrap_or(false);
         let size = if is_dir {
             None
         } else {
-            meta.as_ref().map(|m| m.len())
+            effective_meta.and_then(|m| Some(m.len()))
         };
 
         if is_dir {
@@ -140,5 +154,25 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let gone = tmp.path().join("nope");
         assert!(list_dir(&gone).is_err());
+    }
+
+    #[test]
+    fn directory_symlinks_are_listed_as_directories() {
+        let tmp = tempfile::tempdir().unwrap();
+        let target_dir = tmp.path().join("real_folder");
+        fs::create_dir(&target_dir).unwrap();
+        fs::write(target_dir.join("inner.txt"), b"hi").unwrap();
+
+        let link = tmp.path().join("link_folder");
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&target_dir, &link).unwrap();
+        #[cfg(windows)]
+        let _ = std::os::windows::fs::symlink_dir(&target_dir, &link);
+
+        let items = list_dir(tmp.path()).unwrap();
+        let link_item = items.iter().find(|i| i.name == "link_folder");
+        if let Some(item) = link_item {
+            assert!(item.is_dir, "Symlink to a directory must be listed as is_dir: true");
+        }
     }
 }

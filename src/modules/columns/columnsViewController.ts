@@ -1,5 +1,19 @@
 // src/modules/columns/columnsViewController.ts
+import { matchQueryVariants } from '../formatUtils.ts';
 import { applyGitStatusToItems, fetchGitSnapshot } from '../gitStatusMapper.ts';
+
+export function normalizePath(p?: string | null): string {
+  if (!p) return '';
+  let s = String(p).trim().replace(/\\/g, '/');
+  if (/^[a-zA-Z]:\/?$/.test(s)) {
+    return s.slice(0, 2).toLowerCase() + '/';
+  }
+  s = s.replace(/\/+$/, '');
+  if (/^[a-zA-Z]:\//.test(s)) {
+    s = s[0].toLowerCase() + s.slice(1);
+  }
+  return s;
+}
 
 export interface ColumnItem {
   base: string;
@@ -43,6 +57,9 @@ export class ColumnsViewController {
   public side: 'left' | 'right' = 'left';
   public paneColumns: Record<'left' | 'right', ColumnStack[]> = { left: [], right: [] };
   public activeColIndexes: Record<'left' | 'right', number> = { left: 0, right: 0 };
+  private _typeSearchTimer: any = null;
+  private _typeSearchBuf: string = '';
+  private _typeSearchLastChar: string = '';
 
   constructor(deps: ColumnsViewDeps) {
     this.api = deps.api;
@@ -139,8 +156,8 @@ export class ColumnsViewController {
       await this.loadRoot(side, pane);
       return;
     }
-
-    const matchingIdx = cols.findIndex((c) => c.path === rootPath);
+    const normRoot = normalizePath(rootPath);
+    const matchingIdx = cols.findIndex((c) => normalizePath(c.path) === normRoot);
     if (matchingIdx < 0) {
       await this.loadRoot(side, pane);
       return;
@@ -323,7 +340,7 @@ export class ColumnsViewController {
       const curPath = curCol.path;
       const apiObj = typeof this.api === 'function' ? this.api() : this.api;
       const parentPath = await apiObj.pathDirname?.(curPath);
-      if (parentPath && parentPath !== curPath) {
+      if (parentPath && normalizePath(parentPath) !== normalizePath(curPath)) {
         const parentItems = await this.fetchDirectory(parentPath);
         const curBase = curPath.split(/[/|\\]/).filter(Boolean).pop() || '';
         const matchingIdx = parentItems.findIndex((it) => it.base.toLowerCase() === curBase.toLowerCase());
@@ -405,6 +422,60 @@ export class ColumnsViewController {
       await this.goForward(side);
     } else if (deltaX < 0) {
       await this.goBack(side);
+    }
+  }
+
+  /**
+   * Type-to-jump navigation: typing letters jumps to the matching folder/file in active column
+   */
+  async handleTypeToJump(char: string, side: 'left' | 'right' = this.side): Promise<void> {
+    const lowerChar = char.toLowerCase();
+    clearTimeout(this._typeSearchTimer);
+    this._typeSearchTimer = setTimeout(() => {
+      this._typeSearchBuf = '';
+      this._typeSearchLastChar = '';
+    }, 850);
+
+    const activeInfo = this.getActiveColumn(side);
+    if (!activeInfo) return;
+    const colIdx = activeInfo.colIndex;
+    const col = this.paneColumns[side]?.[colIdx];
+    if (!col || !col.items || !col.items.length) return;
+
+    const items = col.items;
+
+    if (lowerChar === this._typeSearchLastChar && this._typeSearchBuf.length <= 1) {
+      this._typeSearchBuf = lowerChar;
+      const currentIdx = col.selectedIndex >= 0 ? col.selectedIndex : -1;
+      for (let i = 1; i <= items.length; i++) {
+        const idx = (currentIdx + i) % items.length;
+        const it = items[idx];
+        if (it.base !== '..' && matchQueryVariants(it.base, lowerChar, true)) {
+          await this.selectItem(colIdx, idx, side);
+          this.scrollToColumn(side, colIdx);
+          this.setStatus?.(`Quick Search: "${lowerChar}" (${idx + 1})`);
+          return;
+        }
+      }
+      this.setStatus?.(`Quick Search: "${lowerChar}" (no more)`);
+      return;
+    }
+
+    this._typeSearchBuf += lowerChar;
+    this._typeSearchLastChar = lowerChar;
+    const query = this._typeSearchBuf;
+
+    let foundIdx = items.findIndex((it: any) => it.base !== '..' && matchQueryVariants(it.base, query, true));
+    if (foundIdx === -1) {
+      foundIdx = items.findIndex((it: any) => it.base !== '..' && matchQueryVariants(it.base, query, false));
+    }
+
+    if (foundIdx !== -1) {
+      await this.selectItem(colIdx, foundIdx, side);
+      this.scrollToColumn(side, colIdx);
+      this.setStatus?.(`Quick Search: "${this._typeSearchBuf}"`);
+    } else {
+      this.setStatus?.(`Quick Search: "${this._typeSearchBuf}" (no match)`);
     }
   }
 
@@ -705,6 +776,11 @@ export class ColumnsViewController {
       }
     } catch (_) {}
     const sep = parent.includes('\\') ? '\\' : '/';
-    return parent.endsWith(sep) ? `${parent}${child}` : `${parent}${sep}${child}`;
+    if (/^[a-zA-Z]:$/.test(parent)) {
+      return `${parent}${sep}${child}`;
+    }
+    return parent.endsWith(sep) || parent.endsWith('/') || parent.endsWith('\\')
+      ? `${parent}${child}`
+      : `${parent}${sep}${child}`;
   }
 }

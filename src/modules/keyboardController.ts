@@ -1,6 +1,6 @@
 // src/modules/keyboardController.ts
 // Handles all global keyboard shortcuts and delegates to the appropriate controllers.
-import { fmtBytes } from './formatUtils.ts';
+import { fmtBytes, matchQueryVariants } from './formatUtils.ts';
 
 export interface KeyboardControllerDeps {
   state: any;
@@ -1036,6 +1036,11 @@ export class KeyboardController {
   }
 
   private _handleTypeToJump(side: 'left' | 'right', char: string): void {
+    if (typeof document !== 'undefined' && document.getElementById('app')?.classList.contains('columns-mode') && this.columnsViewController) {
+      void this.columnsViewController.handleTypeToJump(char, side);
+      return;
+    }
+
     const lowerChar = char.toLowerCase();
     clearTimeout(this._typeSearchTimer);
     this._typeSearchTimer = setTimeout(() => {
@@ -1054,9 +1059,13 @@ export class KeyboardController {
       for (let i = 1; i <= vis.length; i++) {
         const idx = (currentIdx + i) % vis.length;
         const it = vis[idx];
-        if (it.base !== '..' && it.base.toLowerCase().startsWith(lowerChar)) {
+        if (it.base !== '..' && matchQueryVariants(it.base, lowerChar, true)) {
           pane.cursor = idx;
-          this.renderPane(side);
+          if (this.paintVirtualPane) {
+            this.paintVirtualPane(side, true);
+          } else {
+            this.renderPane(side);
+          }
           this.setStatus(`Quick Search: "${lowerChar}" (${idx + 1})`);
           return;
         }
@@ -1069,14 +1078,18 @@ export class KeyboardController {
     this._typeSearchLastChar = lowerChar;
     const query = this._typeSearchBuf;
 
-    let foundIdx = vis.findIndex((it: any) => it.base !== '..' && it.base.toLowerCase().startsWith(query));
+    let foundIdx = vis.findIndex((it: any) => it.base !== '..' && matchQueryVariants(it.base, query, true));
     if (foundIdx === -1) {
-      foundIdx = vis.findIndex((it: any) => it.base !== '..' && it.base.toLowerCase().includes(query));
+      foundIdx = vis.findIndex((it: any) => it.base !== '..' && matchQueryVariants(it.base, query, false));
     }
 
     if (foundIdx !== -1) {
       pane.cursor = foundIdx;
-      this.renderPane(side);
+      if (this.paintVirtualPane) {
+        this.paintVirtualPane(side, true);
+      } else {
+        this.renderPane(side);
+      }
       this.setStatus(`Quick Search: "${this._typeSearchBuf}"`);
     } else {
       this.setStatus(`Quick Search: "${this._typeSearchBuf}" (no match)`);

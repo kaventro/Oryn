@@ -1,7 +1,7 @@
 // src/modules/columns/columnsViewController.test.ts
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ColumnsViewController } from './columnsViewController.ts';
+import { ColumnsViewController, normalizePath } from './columnsViewController.ts';
 import { IconRegistry } from '../icons/iconRegistry.ts';
 
 test('ColumnsViewController initial root load and cascading hierarchy', async () => {
@@ -853,4 +853,105 @@ test('ColumnsViewController syncPane prunes child column and updates selection w
   for (let i = 1; i < cols.length; i++) {
     assert.notEqual(cols[i].path, '/root/folderA');
   }
+});
+
+test('normalizePath standardizes Windows drive roots and path separators', () => {
+  assert.equal(normalizePath('C:\\'), 'c:/');
+  assert.equal(normalizePath('C:'), 'c:/');
+  assert.equal(normalizePath('c:/'), 'c:/');
+  assert.equal(normalizePath('C:\\Users\\Test\\'), 'c:/Users/Test');
+  assert.equal(normalizePath('C:/Users/Test'), 'c:/Users/Test');
+  assert.equal(normalizePath('d:\\data\\sub'), 'd:/data/sub');
+  assert.equal(normalizePath('/var/log/'), '/var/log');
+  assert.equal(normalizePath(''), '');
+  assert.equal(normalizePath(null), '');
+});
+
+test('ColumnsViewController syncPane preserves columns on Windows path variations', async () => {
+  const mockDirs: Record<string, Array<{ name: string; isDir: boolean }>> = {
+    'C:\\Users': [
+      { name: 'Docs', isDir: true },
+    ],
+    'C:\\Users\\Docs': [
+      { name: 'file.txt', isDir: false },
+    ],
+  };
+
+  const api = () => ({
+    readDir: async (p: string) => mockDirs[p] || [],
+    pathJoin: async (p: string, c: string) => `${p}\\${c}`,
+  });
+
+  const cvc = new ColumnsViewController({
+    api,
+  });
+
+  // Load root with Windows backslashes
+  await cvc.loadRoot('left', { path: 'C:\\Users', items: [] });
+  assert.equal(cvc.getColumns('left').length, 1);
+
+  // Expand subfolder
+  await cvc.selectItem(0, 0, 'left');
+  assert.equal(cvc.getColumns('left').length, 2, 'Subfolder column opens to the right');
+
+  // Simulate syncPane with forward-slash path from UI or breadcrumb
+  await cvc.syncPane('left', { path: 'c:/Users/Docs' });
+  assert.equal(cvc.getColumns('left').length, 2, 'Columns must NOT be reset when slashes/case differ');
+  assert.equal(cvc.getActiveColumnIndex('left'), 1, 'Active column matches the second column');
+});
+
+test('ColumnsViewController joinPath handles Windows drive letter roots', async () => {
+  const cvc = new ColumnsViewController({
+    api: () => ({}),
+  });
+
+  const joined = await cvc.joinPath('C:', 'Users');
+  assert.equal(joined.replace(/\\/g, '/'), 'C:/Users');
+});
+
+test('ColumnsViewController handleTypeToJump jumps to item by prefix with keyboard', async () => {
+  const mockDirs: Record<string, Array<{ name: string; isDir: boolean }>> = {
+    '/home': [
+      { name: 'Applications', isDir: true },
+      { name: 'Documents', isDir: true },
+      { name: 'Downloads', isDir: true },
+      { name: 'Music', isDir: true },
+    ],
+    '/home/Documents': [],
+    '/home/Downloads': [],
+  };
+
+  const api = () => ({
+    readDir: async (p: string) => mockDirs[p] || [],
+    pathJoin: async (p: string, c: string) => `${p}/${c}`,
+  });
+
+  const cvc = new ColumnsViewController({ api });
+  await cvc.loadRoot('left', { path: '/home', items: [] });
+
+  // Type 'd' -> jumps to first item starting with 'd' (Documents)
+  await cvc.handleTypeToJump('d', 'left');
+  const activeCol = cvc.getActiveColumn('left');
+  assert.equal(activeCol?.selectedIndex, 1);
+  assert.equal(activeCol?.selectedItem?.base, 'Documents');
+
+  // Type 'o' -> buffer is 'do', stays on Documents
+  await cvc.handleTypeToJump('o', 'left');
+  const activeCol2 = cvc.getActiveColumn('left');
+  assert.equal(activeCol2?.selectedIndex, 1);
+  assert.equal(activeCol2?.selectedItem?.base, 'Documents');
+
+  // Type 'w' -> buffer is 'dow', jumps to Downloads
+  await cvc.handleTypeToJump('w', 'left');
+  const activeCol3 = cvc.getActiveColumn('left');
+  assert.equal(activeCol3?.selectedIndex, 2);
+  assert.equal(activeCol3?.selectedItem?.base, 'Downloads');
+
+  // Clear buffer (simulating 850ms timeout) and type 'm' -> jumps to Music
+  (cvc as any)._typeSearchBuf = '';
+  (cvc as any)._typeSearchLastChar = '';
+  await cvc.handleTypeToJump('m', 'left');
+  const activeCol4 = cvc.getActiveColumn('left');
+  assert.equal(activeCol4?.selectedIndex, 3);
+  assert.equal(activeCol4?.selectedItem?.base, 'Music');
 });
