@@ -30,6 +30,7 @@ commands.allow = [
   "shell_open_path",
   "shell_show_in_folder",
   "shell_open_vscode",
+  "shell_open_editor",
   "shell_open_terminal",
   "clipboard_write",
   "shell_exec",

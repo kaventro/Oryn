@@ -10,7 +10,7 @@ export interface AppSettingsData {
   confirmDelete?: boolean;
   overwritePolicy?: 'prompt' | 'overwrite' | 'skip' | string;
   defaultDiffRef?: 'HEAD' | 'HEAD~1' | string;
-  defaultEditor?: 'vscode' | 'cursor' | 'sublime' | 'custom' | string;
+  defaultEditor?: 'vscode' | 'cursor' | 'sublime' | 'zed' | 'custom' | string;
   customEditorCmd?: string;
   rowDensity?: 'compact' | 'normal' | 'comfortable' | string;
   dateFormat?: 'iso' | 'relative' | string;
@@ -36,7 +36,7 @@ export class AppSettings {
   public confirmDelete: boolean;
   public overwritePolicy: 'prompt' | 'overwrite' | 'skip';
   public defaultDiffRef: 'HEAD' | 'HEAD~1';
-  public defaultEditor: 'vscode' | 'cursor' | 'sublime' | 'custom';
+  public defaultEditor: 'vscode' | 'cursor' | 'sublime' | 'zed' | 'custom';
   public customEditorCmd: string;
   public rowDensity: 'compact' | 'normal' | 'comfortable';
   public dateFormat: 'iso' | 'relative';
@@ -62,8 +62,8 @@ export class AppSettings {
       ? (initial.overwritePolicy as 'prompt' | 'overwrite' | 'skip')
       : 'prompt';
     this.defaultDiffRef = initial.defaultDiffRef === 'HEAD~1' ? 'HEAD~1' : 'HEAD';
-    this.defaultEditor = ['vscode', 'cursor', 'sublime', 'custom'].includes(initial.defaultEditor as string)
-      ? (initial.defaultEditor as 'vscode' | 'cursor' | 'sublime' | 'custom')
+    this.defaultEditor = ['vscode', 'cursor', 'sublime', 'zed', 'custom'].includes(initial.defaultEditor as string)
+      ? (initial.defaultEditor as 'vscode' | 'cursor' | 'sublime' | 'zed' | 'custom')
       : 'vscode';
     this.customEditorCmd = String(initial.customEditorCmd || '');
     this.rowDensity = ['compact', 'normal', 'comfortable'].includes(initial.rowDensity as string)

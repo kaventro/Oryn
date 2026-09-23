@@ -11,6 +11,7 @@ import {
 import { NON_TEXT_PREVIEW_EXTS, looksBinaryText } from './binaryPreview.ts';
 import { isRemotePath } from './remoteController.ts';
 import { highlightCode } from './syntaxHighlighter.ts';
+import { readDefaultEditor } from './preferencesController.ts';
 
 export interface CommandsDeps {
   api: () => any;
@@ -182,6 +183,48 @@ export class CommandsController {
             if (fp) void this.openViewer(fp, item);
           });
         }
+        break;
+      }
+      case 'openEditor':
+      case 'editVSCode': {
+        const resolveTarget = async (): Promise<string | null> => {
+          if (typeof payload === 'string' && payload) return payload;
+          if (payload?.fp) return payload.fp;
+          const activeSide = this.state.active;
+          if (typeof document !== 'undefined' && document.getElementById('app')?.classList.contains('columns-mode') && this.columnsViewController) {
+            const cols = this.columnsViewController.getColumns(activeSide);
+            const activeIdx = this.columnsViewController.getActiveColumnIndex(activeSide);
+            const col = cols[activeIdx];
+            const item = col?.selectedItem;
+            if (item) {
+              return await this.columnsViewController.joinPath(col.path, item.base);
+            }
+          }
+          const pane = this.state[activeSide];
+          const { item } = this.getFilteredSelection ? this.getFilteredSelection(activeSide) : { item: null };
+          if (item && this.fullPath) {
+            return await this.fullPath(pane, item);
+          }
+          return pane?.path || null;
+        };
+
+        void resolveTarget().then(async (fp) => {
+          if (!fp) return;
+          const { editor, customCmd } = readDefaultEditor();
+          try {
+            const apiObj = typeof this.api === 'function' ? this.api() : this.api;
+            if (typeof apiObj?.openEditor === 'function') {
+              const res = await apiObj.openEditor(fp, editor, customCmd);
+              if (res && res.ok === false) {
+                this.setStatus(res.error || `Failed to open in ${editor}`);
+              }
+            } else if (typeof apiObj?.openVSCode === 'function') {
+              await apiObj.openVSCode(fp);
+            }
+          } catch (err: any) {
+            this.setStatus(err?.message || `Failed to open in ${editor}`);
+          }
+        });
         break;
       }
       case 'newFile': {

@@ -75,11 +75,28 @@ pub fn list_dir(path: &Path) -> ServiceResult<Vec<ListItem>> {
         }
     }
 
-    dirs.sort_by_key(|item| item.name.to_lowercase());
-    files.sort_by_key(|item| item.name.to_lowercase());
+    dirs.sort_by(|a, b| cmp_case_insensitive(&a.name, &b.name));
+    files.sort_by(|a, b| cmp_case_insensitive(&a.name, &b.name));
 
     dirs.extend(files);
     Ok(dirs)
+}
+
+/// Zero-allocation Unicode case-insensitive string comparison for high-performance listing
+pub fn cmp_case_insensitive(a: &str, b: &str) -> std::cmp::Ordering {
+    let mut a_chars = a.chars().flat_map(|c| c.to_lowercase());
+    let mut b_chars = b.chars().flat_map(|c| c.to_lowercase());
+    loop {
+        match (a_chars.next(), b_chars.next()) {
+            (Some(x), Some(y)) => match x.cmp(&y) {
+                std::cmp::Ordering::Equal => continue,
+                non_eq => return non_eq,
+            },
+            (Some(_), None) => return std::cmp::Ordering::Greater,
+            (None, Some(_)) => return std::cmp::Ordering::Less,
+            (None, None) => return a.cmp(b),
+        }
+    }
 }
 
 pub fn list_flat_branch(root: &Path, max_items: usize) -> ServiceResult<Vec<ListItem>> {
@@ -112,7 +129,7 @@ pub fn list_flat_branch(root: &Path, max_items: usize) -> ServiceResult<Vec<List
         }
     }
 
-    files.sort_by_key(|item| item.name.to_lowercase());
+    files.sort_by(|a, b| cmp_case_insensitive(&a.name, &b.name));
     Ok(files)
 }
 

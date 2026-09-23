@@ -1,5 +1,5 @@
-// src/modules/commandPaletteController.ts
 import { escHtml } from './formatUtils.ts';
+import { readDefaultEditor } from './preferencesController.ts';
 
 export interface CommandPaletteItem {
   id: string;
@@ -341,18 +341,27 @@ export class CommandPaletteController {
         keywords: ['shell', 'cli', 'bash', 'zsh', 'terminal'],
       },
       {
-        id: 'openVSCode',
-        title: 'Open in VS Code',
+        id: 'openEditor',
+        title: (() => {
+          const { editor } = readDefaultEditor();
+          const map: Record<string, string> = { vscode: 'VS Code', cursor: 'Cursor', sublime: 'Sublime Text', zed: 'Zed', custom: 'Code Editor' };
+          return `Open in ${map[editor] || 'Code Editor'}`;
+        })(),
         category: 'commands',
         categoryLabel: 'Tools',
-        subtitle: `Open ${curPath || 'current directory'} in Visual Studio Code`,
+        subtitle: `Open ${curPath || 'current directory'} in preferred code editor`,
         icon: CP_ICONS.edit,
         shortcut: '⇧F4',
         action: () => {
           const apiObj = typeof this.deps.api === 'function' ? this.deps.api() : this.deps.api;
-          void apiObj?.openVSCode?.(curPath);
+          const { editor, customCmd } = readDefaultEditor();
+          if (typeof apiObj?.openEditor === 'function') {
+            void apiObj.openEditor(curPath, editor, customCmd);
+          } else {
+            void apiObj?.openVSCode?.(curPath);
+          }
         },
-        keywords: ['code', 'editor', 'vscode'],
+        keywords: ['code', 'editor', 'vscode', 'cursor', 'sublime', 'zed'],
       },
       {
         id: 'analyzeDiskSpace',

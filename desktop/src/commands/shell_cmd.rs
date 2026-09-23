@@ -63,31 +63,139 @@ pub fn shell_show_in_folder(input: ShellPath) -> Result<Ack, String> {
     Ok(ack())
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenEditorIn {
+    pub path: String,
+    pub editor: Option<String>,
+    pub custom_cmd: Option<String>,
+}
+
+fn try_launch_editor(path: &str, editor: &str, custom_cmd: Option<&str>) -> Result<(), String> {
+    let ed = editor.trim().to_lowercase();
+    match ed.as_str() {
+        "cursor" => {
+            #[cfg(target_os = "macos")]
+            {
+                if Command::new("open").args(["-a", "Cursor", path]).spawn().is_ok() {
+                    return Ok(());
+                }
+            }
+            #[cfg(target_os = "windows")]
+            {
+                if Command::new("cursor.cmd").arg(path).spawn().is_ok()
+                    || Command::new("cursor").arg(path).spawn().is_ok()
+                {
+                    return Ok(());
+                }
+            }
+            if Command::new("cursor").arg(path).spawn().is_ok() {
+                return Ok(());
+            }
+            Err("Cursor not found. Ensure 'cursor' is installed or Cursor.app is in Applications.".into())
+        }
+        "sublime" => {
+            #[cfg(target_os = "macos")]
+            {
+                if Command::new("open").args(["-a", "Sublime Text", path]).spawn().is_ok() {
+                    return Ok(());
+                }
+            }
+            #[cfg(target_os = "windows")]
+            {
+                if Command::new("subl.exe").arg(path).spawn().is_ok()
+                    || Command::new("sublime_text.exe").arg(path).spawn().is_ok()
+                {
+                    return Ok(());
+                }
+            }
+            if Command::new("subl").arg(path).spawn().is_ok() {
+                return Ok(());
+            }
+            Err("Sublime Text not found. Ensure 'subl' is installed or Sublime Text.app is in Applications.".into())
+        }
+        "zed" => {
+            #[cfg(target_os = "macos")]
+            {
+                if Command::new("open").args(["-a", "Zed", path]).spawn().is_ok() {
+                    return Ok(());
+                }
+            }
+            if Command::new("zed").arg(path).spawn().is_ok() {
+                return Ok(());
+            }
+            Err("Zed not found. Ensure 'zed' is installed or Zed.app is in Applications.".into())
+        }
+        "custom" => {
+            let cmd_str = custom_cmd.unwrap_or("").trim();
+            if cmd_str.is_empty() {
+                return Err("No custom editor command specified in Preferences.".into());
+            }
+            #[cfg(target_os = "windows")]
+            {
+                let full = if cmd_str.contains("{path}") {
+                    cmd_str.replace("{path}", path)
+                } else {
+                    format!("{} \"{}\"", cmd_str, path)
+                };
+                Command::new("cmd")
+                    .args(["/C", &full])
+                    .spawn()
+                    .map_err(|e| format!("Failed to launch custom command '{cmd_str}': {e}"))?;
+                Ok(())
+            }
+            #[cfg(not(target_os = "windows"))]
+            {
+                let full = if cmd_str.contains("{path}") {
+                    cmd_str.replace("{path}", path)
+                } else {
+                    format!("{} \"{}\"", cmd_str, path)
+                };
+                Command::new("/bin/sh")
+                    .args(["-c", &full])
+                    .spawn()
+                    .map_err(|e| format!("Failed to launch custom command '{cmd_str}': {e}"))?;
+                Ok(())
+            }
+        }
+        _ => {
+            // "vscode" or default
+            #[cfg(target_os = "macos")]
+            {
+                if Command::new("open").args(["-a", "Visual Studio Code", path]).spawn().is_ok() {
+                    return Ok(());
+                }
+            }
+            #[cfg(target_os = "windows")]
+            {
+                if Command::new("code.cmd").arg(path).spawn().is_ok()
+                    || Command::new("code").arg(path).spawn().is_ok()
+                {
+                    return Ok(());
+                }
+            }
+            if Command::new("code").arg(path).spawn().is_ok() {
+                return Ok(());
+            }
+            Err("VS Code not found. Ensure 'code' is installed or Visual Studio Code.app is in Applications.".into())
+        }
+    }
+}
+
+#[tauri::command]
+pub fn shell_open_editor(input: OpenEditorIn) -> Result<Ack, String> {
+    let ed = input.editor.as_deref().unwrap_or("vscode");
+    try_launch_editor(&input.path, ed, input.custom_cmd.as_deref())?;
+    Ok(ack())
+}
+
 #[tauri::command]
 pub fn shell_open_vscode(input: ShellPath) -> Result<Ack, String> {
-    #[cfg(target_os = "windows")]
-    {
-        if Command::new("code.cmd").arg(&input.path).spawn().is_ok() {
-            return Ok(ack());
-        }
-        if Command::new("code").arg(&input.path).spawn().is_ok() {
-            return Ok(ack());
-        }
-    }
-    let r = Command::new("code").arg(&input.path).spawn();
-    if r.is_ok() {
-        return Ok(ack());
-    }
-    #[cfg(target_os = "macos")]
-    {
-        let r2 = Command::new("open")
-            .args(["-a", "Visual Studio Code", &input.path])
-            .spawn();
-        if r2.is_ok() {
-            return Ok(ack());
-        }
-    }
-    Err("VS Code (code) not found in PATH".to_string())
+    shell_open_editor(OpenEditorIn {
+        path: input.path,
+        editor: Some("vscode".to_string()),
+        custom_cmd: None,
+    })
 }
 
 #[tauri::command]
@@ -300,5 +408,26 @@ mod tests {
         assert_eq!(res["ok"], true);
         assert!(res["stdout"].as_str().unwrap().contains("test_output_123"));
         assert_eq!(res["code"], 0);
+    }
+
+    #[test]
+    fn test_shell_open_editor_custom_cmd() {
+        let res = shell_open_editor(OpenEditorIn {
+            path: "/tmp/oryn_test_file.txt".into(),
+            editor: Some("custom".into()),
+            custom_cmd: Some("true".into()),
+        });
+        assert!(res.is_ok());
+    }
+
+    #[test]
+    fn test_shell_open_editor_custom_cmd_empty_fails() {
+        let res = shell_open_editor(OpenEditorIn {
+            path: "/tmp/oryn_test_file.txt".into(),
+            editor: Some("custom".into()),
+            custom_cmd: Some("   ".into()),
+        });
+        assert!(res.is_err());
+        assert!(res.unwrap_err().contains("No custom editor command"));
     }
 }

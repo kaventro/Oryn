@@ -1,4 +1,5 @@
 import type { MenuItemDef, MenuContext } from './menuTypes.ts';
+import { readDefaultEditor } from '../preferencesController.ts';
 
 export class MoreOptionsMenuBuilder {
   build(ctx: MenuContext, deps: any, closeMenu: () => void): MenuItemDef[] {
@@ -195,20 +196,35 @@ export class MoreOptionsMenuBuilder {
       },
     });
 
-    // 8. Open in VS Code
+    // 8. Open in Editor
+    const { editor: prefEditor, customCmd: prefCustomCmd } = readDefaultEditor();
+    const editorLabels: Record<string, string> = {
+      vscode: 'VS Code',
+      cursor: 'Cursor',
+      sublime: 'Sublime Text',
+      zed: 'Zed',
+      custom: 'Custom Editor',
+    };
+    const editorDisplay = editorLabels[prefEditor] || 'Editor';
+
     items.push({
-      id: 'vscode',
-      label: 'Open in VS Code',
+      id: 'openEditor',
+      label: `Open in ${editorDisplay}`,
       iconKey: 'vscode',
       action: async () => {
         deps.state.active = side;
         const fp = (await getPath()) || targetDir;
         if (!fp) return;
         try {
-          await deps.api().openVSCode(fp);
-          deps.setStatus('Opened in VS Code');
+          const apiObj = deps.api();
+          if (typeof apiObj?.openEditor === 'function') {
+            await apiObj.openEditor(fp, prefEditor, prefCustomCmd);
+          } else {
+            await apiObj.openVSCode(fp);
+          }
+          deps.setStatus(`Opened in ${editorDisplay}`);
         } catch (e: any) {
-          deps.setStatus(e?.message || 'VS Code failed');
+          deps.setStatus(e?.message || `${editorDisplay} failed`);
         }
       },
     });

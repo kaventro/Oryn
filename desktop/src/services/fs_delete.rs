@@ -21,13 +21,11 @@ pub fn delete_path(full_path: &str, use_trash: bool, log_path: Option<&Path>) ->
 
     let path = Path::new(cleaned);
     if use_trash {
-        // AppKit trash from a Tauri worker thread can report success without
-        // moving the file. Always fall through to unlink if it is still there.
-        if let Err(e) = trash::delete(cleaned) {
-            tracing::warn!("trash::delete failed for {cleaned}: {e}");
+        trash::delete(cleaned).map_err(|e| anyhow::anyhow!("Failed to move to trash: {e}"))?;
+        if path.symlink_metadata().is_ok() {
+            anyhow::bail!("Failed to move to trash: item is still present at original path");
         }
-    }
-    if path.symlink_metadata().is_ok() {
+    } else if path.symlink_metadata().is_ok() {
         unlink(path)?;
     }
 
@@ -155,12 +153,16 @@ mod tests {
     }
 
     #[test]
-    fn deletes_file_even_when_trash_is_requested() {
+    fn trash_request_returns_err_or_trashes_without_silent_unlink() {
         let dir = tempdir().unwrap();
         let file = dir.path().join("gone-trash.txt");
         fs::write(&file, "x").unwrap();
-        delete_path(file.to_str().unwrap(), true, None).unwrap();
-        assert!(!file.exists());
+        let res = delete_path(file.to_str().unwrap(), true, None);
+        if res.is_ok() {
+            assert!(!file.exists());
+        } else {
+            assert!(file.exists(), "File must be preserved if moving to trash fails");
+        }
     }
 
     #[test]
@@ -175,13 +177,17 @@ mod tests {
     }
 
     #[test]
-    fn deletes_directory_with_trash() {
+    fn directory_trash_returns_err_or_trashes_without_silent_unlink() {
         let dir = tempdir().unwrap();
         let nested = dir.path().join("folder_trash");
         fs::create_dir(&nested).unwrap();
         fs::write(nested.join("a.txt"), "x").unwrap();
-        delete_path(nested.to_str().unwrap(), true, None).unwrap();
-        assert!(!nested.exists());
+        let res = delete_path(nested.to_str().unwrap(), true, None);
+        if res.is_ok() {
+            assert!(!nested.exists());
+        } else {
+            assert!(nested.exists(), "Directory must be preserved if moving to trash fails");
+        }
     }
 
     #[test]

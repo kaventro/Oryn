@@ -240,21 +240,39 @@ impl<'a> CopyEngine<'a> {
             .parent()
             .ok_or_else(|| CopyError::Failed("no parent".to_string()))?;
         fs::create_dir_all(parent)?;
-        let name = dst
+        let name = Self::name_of(src);
+        let rel = self.rel_of(src);
+        let total = fs::metadata(src)?.len();
+
+        // 1. Instant APFS Copy-on-Write Clonefile on macOS
+        if try_clone_file(src, dst) {
+            self.sink.emit(json!({
+                "type": "file",
+                "path": name,
+                "bytes": total,
+                "total": total,
+                "file": src.to_string_lossy().to_string(),
+                "rel": rel,
+            }));
+            return Ok(());
+        }
+
+        // 2. Throttled buffered fallback copy
+        let dst_name = dst
             .file_name()
             .ok_or_else(|| CopyError::Failed("no file name".to_string()))?;
 
-        let total = fs::metadata(src)?.len();
         let mut reader = fs::File::open(src)?;
         let root =
             crate::fs_safe::SafeRoot::open(parent).map_err(|e| CopyError::Failed(e.to_string()))?;
         let mut writer = root
-            .create_file(Path::new(name), None)
+            .create_file(Path::new(dst_name), None)
             .map_err(|e| CopyError::Failed(e.to_string()))?;
         let mut buf = vec![0u8; 256 * 1024];
         let mut done = 0u64;
-        let name = Self::name_of(src);
-        let rel = self.rel_of(src);
+
+        let mut last_emit = std::time::Instant::now();
+        const PROGRESS_INTERVAL: std::time::Duration = std::time::Duration::from_millis(60);
 
         loop {
             self.check_abort()?;
@@ -265,18 +283,48 @@ impl<'a> CopyEngine<'a> {
             writer.write_all(&buf[..read])?;
             done += read as u64;
 
-            self.sink.emit(json!({
-                "type": "file",
-                "path": name,
-                "bytes": done,
-                "total": total,
-                "file": src.to_string_lossy().to_string(),
-                "rel": rel,
-            }));
+            let should_emit = done == total || last_emit.elapsed() >= PROGRESS_INTERVAL;
+            if should_emit {
+                last_emit = std::time::Instant::now();
+                self.sink.emit(json!({
+                    "type": "file",
+                    "path": name,
+                    "bytes": done,
+                    "total": total,
+                    "file": src.to_string_lossy().to_string(),
+                    "rel": rel,
+                }));
+            }
         }
 
         Ok(())
     }
+}
+
+#[cfg(target_os = "macos")]
+fn try_clone_file(src: &Path, dst: &Path) -> bool {
+    use std::ffi::CString;
+    use std::os::unix::ffi::OsStrExt;
+
+    if dst.symlink_metadata().is_ok() {
+        let _ = std::fs::remove_file(dst);
+    }
+
+    let Ok(src_c) = CString::new(src.as_os_str().as_bytes()) else {
+        return false;
+    };
+    let Ok(dst_c) = CString::new(dst.as_os_str().as_bytes()) else {
+        return false;
+    };
+
+    unsafe {
+        libc::clonefile(src_c.as_ptr(), dst_c.as_ptr(), 0) == 0
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn try_clone_file(_src: &Path, _dst: &Path) -> bool {
+    false
 }
 
 /// Best effort: failing to copy permissions or mtime must not fail the

@@ -52,6 +52,7 @@ export interface TauriBridge {
   openPath: (p: string) => Promise<any>;
   showItemInFolder: (p: string) => Promise<any>;
   openVSCode: (p: string) => Promise<any>;
+  openEditor: (p: string, editor?: string, customCmd?: string) => Promise<any>;
   openTerminal: (p: string) => Promise<any>;
   clipboardWrite: (t: string) => Promise<any>;
   shellExec: (cmd: string, cwd?: string) => Promise<any>;
@@ -146,6 +147,8 @@ export const bridge: TauriBridge = {
   openPath: (p: string) => ipcInvoke('shell_open_path', { input: { path: p } }),
   showItemInFolder: (p: string) => ipcInvoke('shell_show_in_folder', { input: { path: p } }),
   openVSCode: (p: string) => ipcInvoke('shell_open_vscode', { input: { path: p } }),
+  openEditor: (p: string, editor?: string, customCmd?: string) =>
+    ipcInvoke('shell_open_editor', { input: { path: p, editor, customCmd } }),
   openTerminal: (p: string) => ipcInvoke('shell_open_terminal', { input: { path: p } }),
   clipboardWrite: (t: string) => ipcInvoke('clipboard_write', { input: { text: t } }),
   shellExec: (cmd: string, cwd?: string) => ipcInvoke('shell_exec', { input: { cmd, cwd } }),
@@ -276,7 +279,7 @@ export const bridge: TauriBridge = {
     ipcInvoke('remote_upload', { profileId, localSrc, remoteDst }),
 };
 
-(window as any).ow = bridge;
+(window as any).ow = (window as any).ow || bridge;
 
 // Dynamic import so this module assigns `window.ow` before `app.ts` runs `init()`.
 import('./app.ts');

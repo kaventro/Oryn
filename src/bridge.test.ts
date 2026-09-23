@@ -219,6 +219,9 @@ test('bridge filesystem and path methods invoke correct backend commands', async
   await bridge.openVSCode('/workspace');
   assert.equal(lastInvokeCmd, 'shell_open_vscode');
 
+  await bridge.openEditor('/workspace', 'cursor');
+  assert.equal(lastInvokeCmd, 'shell_open_editor');
+
   await bridge.openTerminal('/workspace');
   assert.equal(lastInvokeCmd, 'shell_open_terminal');
 

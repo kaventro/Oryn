@@ -879,6 +879,19 @@ export class FileOpsController {
     return choice === 'ok';
   }
 
+  private async askPermanentFallback(summary: string): Promise<boolean> {
+    const choice = await showChoiceDialog({
+      title: 'Move to Trash Failed',
+      message: `Could not move ${summary} to Trash. Permanently delete instead? This cannot be undone.`,
+      allowBackdropDismiss: false,
+      choices: [
+        { label: 'Cancel', value: 'cancel' },
+        { label: 'Permanently Delete', value: 'permanent', primary: true, danger: true },
+      ],
+    });
+    return choice === 'permanent';
+  }
+
   public async beginDelete(opts: any = {}): Promise<void> {
     if (this._deleteBusy) return;
     this._deleteBusy = true;
@@ -901,8 +914,16 @@ export class FileOpsController {
       if (!(await this.confirmDelete(`"${base}"`, permanent))) return;
       this.setStatus(`Deleting ${base}…`);
       let deleted = false;
+      const cleanTarget = String(opts.targetPath).replace(/[/\\]+$/, '');
+      const isTrashErr = (errStr: string) => errStr.toLowerCase().includes('trash');
+
       try {
-        const res = await apiObj.deletePath(String(opts.targetPath).replace(/[/\\]+$/, ''), trash);
+        let res = await apiObj.deletePath(cleanTarget, trash);
+        if (res && res.ok === false && trash && isTrashErr(res.error || '')) {
+          if (await this.askPermanentFallback(`"${base}"`)) {
+            res = await apiObj.deletePath(cleanTarget, false);
+          }
+        }
         if (res && res.ok === false) {
           this.setStatus(res.error || `Delete failed: ${base}`);
         } else {
@@ -910,7 +931,26 @@ export class FileOpsController {
           deleted = true;
         }
       } catch (err: any) {
-        this.setStatus(`Delete failed: ${err?.message || err}`);
+        const msg = String(err?.message || err);
+        if (trash && isTrashErr(msg)) {
+          if (await this.askPermanentFallback(`"${base}"`)) {
+            try {
+              const res2 = await apiObj.deletePath(cleanTarget, false);
+              if (res2 && res2.ok === false) {
+                this.setStatus(res2.error || `Delete failed: ${base}`);
+              } else {
+                this.setStatus(`Deleted ${base}.`);
+                deleted = true;
+              }
+            } catch (err2: any) {
+              this.setStatus(`Delete failed: ${err2?.message || err2}`);
+            }
+          } else {
+            this.setStatus(`Cancelled: ${base} not deleted.`);
+          }
+        } else {
+          this.setStatus(`Delete failed: ${msg}`);
+        }
       }
       if (deleted) {
         const targetClean = String(opts.targetPath).replace(/[/\\]+$/, '');
@@ -937,6 +977,8 @@ export class FileOpsController {
     const errors: string[] = [];
     const visItems = this.getFilteredSelection(side).vis || [];
     const remote = isRemotePath(dirPath || this.state[side].path);
+    const isTrashErr = (errStr: string) => errStr.toLowerCase().includes('trash');
+    let fallbackPermConfirmed: boolean | null = null;
 
     for (const base of bases) {
       const itemQuery = visItems.find((v: any) => v.base === base);
@@ -947,7 +989,20 @@ export class FileOpsController {
           deleted++;
         } else {
           const src = await apiObj.pathJoin(dirPath, base);
-          const res = await apiObj.deletePath(String(src).replace(/[/\\]+$/, ''), trash);
+          const cleanSrc = String(src).replace(/[/\\]+$/, '');
+          let effectiveTrash = trash;
+          if (fallbackPermConfirmed === true) {
+            effectiveTrash = false;
+          }
+          let res = await apiObj.deletePath(cleanSrc, effectiveTrash);
+          if (res && res.ok === false && effectiveTrash && isTrashErr(res.error || '')) {
+            if (fallbackPermConfirmed === null) {
+              fallbackPermConfirmed = await this.askPermanentFallback(summary);
+            }
+            if (fallbackPermConfirmed) {
+              res = await apiObj.deletePath(cleanSrc, false);
+            }
+          }
           if (res && res.ok === false) {
             errors.push(res.error || `Delete failed: ${base}`);
           } else {
@@ -955,7 +1010,30 @@ export class FileOpsController {
           }
         }
       } catch (err: any) {
-        errors.push(err?.message || String(err));
+        const msg = String(err?.message || err);
+        if (trash && isTrashErr(msg)) {
+          if (fallbackPermConfirmed === null) {
+            fallbackPermConfirmed = await this.askPermanentFallback(summary);
+          }
+          if (fallbackPermConfirmed) {
+            try {
+              const src = await apiObj.pathJoin(dirPath, base);
+              const cleanSrc = String(src).replace(/[/\\]+$/, '');
+              const res2 = await apiObj.deletePath(cleanSrc, false);
+              if (res2 && res2.ok === false) {
+                errors.push(res2.error || `Delete failed: ${base}`);
+              } else {
+                deleted++;
+              }
+            } catch (err2: any) {
+              errors.push(err2?.message || String(err2));
+            }
+          } else {
+            errors.push(`Trash failed: ${base} kept safe`);
+          }
+        } else {
+          errors.push(msg);
+        }
       }
     }
     if (errors.length > 0) {

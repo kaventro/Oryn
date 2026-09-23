@@ -27,6 +27,14 @@ export function savePaneMode(mode: 'single' | 'dual'): void {
   storageService.save(s);
 }
 
+export function readDefaultEditor(): { editor: string; customCmd: string } {
+  const s = storageService.load();
+  return {
+    editor: s.defaultEditor || 'vscode',
+    customCmd: s.customEditorCmd || '',
+  };
+}
+
 /**
  * Per-side default drives for Dual Pane startup.
  */

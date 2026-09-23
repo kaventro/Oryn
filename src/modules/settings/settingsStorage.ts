@@ -81,22 +81,28 @@ export class SettingsStorageService {
   }
 
   public applyTheme(themeId: string): void {
+    if (typeof document === 'undefined') return;
     const valid = AVAILABLE_THEMES.some((t) => t.id === themeId);
     const theme = valid ? themeId : 'balanced';
     const root = document.documentElement;
-    if (theme === 'balanced') {
-      root.removeAttribute('data-tray');
-    } else {
-      root.setAttribute('data-tray', theme);
+    if (root && typeof root.removeAttribute === 'function' && typeof root.setAttribute === 'function') {
+      if (theme === 'balanced') {
+        root.removeAttribute('data-tray');
+      } else {
+        root.setAttribute('data-tray', theme);
+      }
     }
   }
 
   public async applyDockIcon(iconId: string): Promise<void> {
     const validId = String(iconId || '1').replace(/\.png$/, '');
-    const api = (window as any).ow;
+    const api = typeof window !== 'undefined' ? (window as any).ow : null;
     if (typeof api?.setDockIcon === 'function') {
-      await api.setDockIcon(validId);
+      try {
+        await api.setDockIcon(validId);
+      } catch {}
     }
+    if (typeof document === 'undefined') return;
     try {
       const link = document.querySelector("link[rel~='icon']") as HTMLLinkElement | null;
       if (link) {

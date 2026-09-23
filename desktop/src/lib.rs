@@ -124,6 +124,7 @@ pub fn run() {
             commands::shell_cmd::shell_open_path,
             commands::shell_cmd::shell_show_in_folder,
             commands::shell_cmd::shell_open_vscode,
+            commands::shell_cmd::shell_open_editor,
             commands::shell_cmd::shell_open_terminal,
             commands::shell_cmd::clipboard_write,
             commands::shell_cmd::shell_exec,
