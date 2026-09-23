@@ -55,7 +55,7 @@ pub fn list_dir(path: &Path) -> ServiceResult<Vec<ListItem>> {
         let size = if is_dir {
             None
         } else {
-            effective_meta.and_then(|m| Some(m.len()))
+            effective_meta.map(|m| m.len())
         };
 
         if is_dir {
@@ -75,28 +75,11 @@ pub fn list_dir(path: &Path) -> ServiceResult<Vec<ListItem>> {
         }
     }
 
-    dirs.sort_by(|a, b| cmp_case_insensitive(&a.name, &b.name));
-    files.sort_by(|a, b| cmp_case_insensitive(&a.name, &b.name));
+    dirs.sort_by_cached_key(|item| item.name.to_lowercase());
+    files.sort_by_cached_key(|item| item.name.to_lowercase());
 
     dirs.extend(files);
     Ok(dirs)
-}
-
-/// Zero-allocation Unicode case-insensitive string comparison for high-performance listing
-pub fn cmp_case_insensitive(a: &str, b: &str) -> std::cmp::Ordering {
-    let mut a_chars = a.chars().flat_map(|c| c.to_lowercase());
-    let mut b_chars = b.chars().flat_map(|c| c.to_lowercase());
-    loop {
-        match (a_chars.next(), b_chars.next()) {
-            (Some(x), Some(y)) => match x.cmp(&y) {
-                std::cmp::Ordering::Equal => continue,
-                non_eq => return non_eq,
-            },
-            (Some(_), None) => return std::cmp::Ordering::Greater,
-            (None, Some(_)) => return std::cmp::Ordering::Less,
-            (None, None) => return a.cmp(b),
-        }
-    }
 }
 
 pub fn list_flat_branch(root: &Path, max_items: usize) -> ServiceResult<Vec<ListItem>> {
@@ -129,7 +112,7 @@ pub fn list_flat_branch(root: &Path, max_items: usize) -> ServiceResult<Vec<List
         }
     }
 
-    files.sort_by(|a, b| cmp_case_insensitive(&a.name, &b.name));
+    files.sort_by_cached_key(|item| item.name.to_lowercase());
     Ok(files)
 }
 
@@ -191,5 +174,19 @@ mod tests {
         if let Some(item) = link_item {
             assert!(item.is_dir, "Symlink to a directory must be listed as is_dir: true");
         }
+    }
+
+    #[test]
+    fn test_sort_by_cached_key_speed() {
+        let mut sample: Vec<String> = (0..10_000)
+            .map(|i| if i % 2 == 0 { format!("Item_{:05}.TXT", i) } else { format!("item_{:05}.txt", i) })
+            .collect();
+
+        let start = std::time::Instant::now();
+        sample.sort_by_cached_key(|item| item.to_lowercase());
+        let duration = start.elapsed();
+        println!("Sorted 10,000 items with sort_by_cached_key in {:?}", duration);
+        assert!(duration.as_millis() < 200, "Sorting 10k items must be fast (< 200ms)");
+        assert_eq!(sample.len(), 10_000);
     }
 }

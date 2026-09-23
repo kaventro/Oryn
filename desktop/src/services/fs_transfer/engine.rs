@@ -257,7 +257,19 @@ impl<'a> CopyEngine<'a> {
             return Ok(());
         }
 
-        // 2. Throttled buffered fallback copy
+        // 2. Throttled buffered fallback copy (used on Windows, Linux, non-APFS volumes)
+        self.copy_file_buffered(src, dst, parent, &name, &rel, total)
+    }
+
+    pub(crate) fn copy_file_buffered(
+        &self,
+        src: &Path,
+        dst: &Path,
+        parent: &Path,
+        name: &str,
+        rel: &str,
+        total: u64,
+    ) -> Result<(), CopyError> {
         let dst_name = dst
             .file_name()
             .ok_or_else(|| CopyError::Failed("no file name".to_string()))?;
@@ -505,5 +517,67 @@ mod tests {
             .run(&src, &tmp.path().join("dst"))
             .unwrap_err();
         assert!(matches!(err, CopyError::Aborted));
+    }
+
+    #[test]
+    fn test_throttled_copy_and_clonefile_behavior() {
+        let tmp = tempfile::tempdir().unwrap();
+        let src = tmp.path().join("src_large.bin");
+        let dst = tmp.path().join("dst_large.bin");
+
+        let data = vec![0xABu8; 2 * 1024 * 1024];
+        fs::write(&src, &data).unwrap();
+
+        let sink = TestSink::default();
+        let stats = CopyEngine::new(&sink, OverwritePolicy::Overwrite, tmp.path())
+            .run(&src, &dst)
+            .unwrap();
+
+        assert_eq!(stats.copied, 1);
+        assert_eq!(fs::read(&dst).unwrap(), data);
+
+        let events = sink.events.lock().unwrap();
+        assert!(!events.is_empty(), "Must emit progress events");
+        let last_file_event = events.iter().filter(|e| e.get("type").and_then(|t| t.as_str()) == Some("file")).next_back();
+        if let Some(ev) = last_file_event {
+            assert_eq!(ev.get("bytes").and_then(|b| b.as_u64()), Some(2 * 1024 * 1024));
+        }
+    }
+
+    #[test]
+    fn test_streaming_copy_cross_platform_fallback() {
+        // Explicitly tests the streaming path executed on Windows, Linux, and non-APFS volumes
+        let tmp = tempfile::tempdir().unwrap();
+        let src = tmp.path().join("src_stream.bin");
+        let dst = tmp.path().join("dst_stream.bin");
+
+        let data = vec![0x3Cu8; 1024 * 1024 + 128]; // >1MB to verify multi-chunk buffer loop
+        fs::write(&src, &data).unwrap();
+
+        let sink = TestSink::default();
+        let engine = CopyEngine::new(&sink, OverwritePolicy::Overwrite, tmp.path());
+        engine
+            .copy_file_buffered(
+                &src,
+                &dst,
+                tmp.path(),
+                "src_stream.bin",
+                "src_stream.bin",
+                data.len() as u64,
+            )
+            .unwrap();
+
+        assert_eq!(fs::read(&dst).unwrap(), data);
+        let events = sink.events.lock().unwrap();
+        assert!(!events.is_empty(), "Must emit progress events during streaming");
+        let last_event = events
+            .iter()
+            .filter(|e| e.get("type").and_then(|t| t.as_str()) == Some("file"))
+            .next_back();
+        assert!(last_event.is_some());
+        assert_eq!(
+            last_event.unwrap().get("bytes").and_then(|b| b.as_u64()),
+            Some(data.len() as u64)
+        );
     }
 }

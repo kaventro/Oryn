@@ -2,7 +2,7 @@
 
 mod commands;
 mod fs_safe;
-mod services;
+pub mod services;
 pub mod vfs;
 
 use std::sync::Arc;

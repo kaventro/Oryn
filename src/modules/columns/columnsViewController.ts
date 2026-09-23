@@ -533,7 +533,7 @@ export class ColumnsViewController {
       (el) => (el as HTMLElement).scrollTop || 0,
     );
 
-    container.replaceChildren();
+    const builtNodes: HTMLElement[] = [];
 
     cols.forEach((col, colIdx) => {
       const colEl = document.createElement('div');
@@ -631,18 +631,20 @@ export class ColumnsViewController {
         colEl.appendChild(emptyEl);
       }
 
-      container!.appendChild(colEl);
-
       if (savedScrollTops[colIdx] != null) {
         colEl.scrollTop = savedScrollTops[colIdx];
       }
+
+      builtNodes.push(colEl);
     });
 
     const lastCol = cols[cols.length - 1];
     if (lastCol && lastCol.selectedItem && !lastCol.selectedItem.isDir) {
       const inspector = this.createInspectorElement(lastCol.selectedItem, lastCol.path);
-      container.appendChild(inspector);
+      builtNodes.push(inspector);
     }
+
+    container.replaceChildren(...builtNodes);
   }
 
   createInspectorElement(item: ColumnItem, dirPath: string): HTMLElement {
