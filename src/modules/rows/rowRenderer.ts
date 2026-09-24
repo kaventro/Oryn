@@ -1,6 +1,7 @@
 // src/modules/rows/rowRenderer.ts
 import { fmtSizeExact } from '../formatUtils.ts';
 import type { IconRegistry } from '../icons/iconRegistry.ts';
+import { thumbnailCache } from '../thumbnail/thumbnailCache.ts';
 
 export interface PaneItem {
   base: string;
@@ -70,8 +71,15 @@ export class RowRenderer {
     const icon = document.createElement('span');
     icon.className = 'row-icon';
     const iconKey = this.iconRegistry.resolveIconKey(item);
-    icon.innerHTML = this.iconRegistry.getSvg(iconKey);
+    const svg = this.iconRegistry.getSvg(iconKey);
     row._iconKey = iconKey;
+
+    const fullPath = item.fullPath || (pane.activeTab?.path ? `${pane.activeTab.path}/${item.base}` : '');
+    if (!isDir && thumbnailCache.isImageFile(item.base) && fullPath) {
+      thumbnailCache.mountThumbnail(icon, fullPath, svg);
+    } else {
+      icon.innerHTML = svg;
+    }
 
     const nameText = document.createElement('span');
     nameText.className = 'row-name-text';
@@ -143,8 +151,14 @@ export class RowRenderer {
 
     const iconKey = this.iconRegistry.resolveIconKey(item);
     if (row._iconKey !== iconKey) {
-      icon.innerHTML = this.iconRegistry.getSvg(iconKey);
+      const svg = this.iconRegistry.getSvg(iconKey);
       row._iconKey = iconKey;
+      const fullPath = item.fullPath || (pane.activeTab?.path ? `${pane.activeTab.path}/${item.base}` : '');
+      if (!isDir && thumbnailCache.isImageFile(item.base) && fullPath) {
+        thumbnailCache.mountThumbnail(icon, fullPath, svg);
+      } else {
+        icon.innerHTML = svg;
+      }
     }
 
     const display = item.display || item.base;

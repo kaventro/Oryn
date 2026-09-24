@@ -99,16 +99,56 @@ jobs:
           flags: backend
           fail_ci_if_error: false
 
+  e2e:
+    name: End-to-End Tests (Playwright Chromium)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Playwright & Chromium
+        run: |
+          pip install playwright
+          python -m playwright install --with-deps chromium
+
+      - name: Run E2E Playwright Suite
+        env:
+          ARTIFACT_DIR: ./screenshots
+          PORT: 5179
+        run: python scripts/e2e_playwright_runner.py
+
+      - name: Upload E2E Screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-screenshots
+          path: ./screenshots/*.png
+          if-no-files-found: ignore
+
   ci-status:
     name: CI Status
-    needs: [frontend, backend]
+    needs: [frontend, backend, e2e]
     runs-on: ubuntu-latest
     if: always()
     steps:
       - name: Verify all checks passed
         run: |
-          if [ "${{ needs.frontend.result }}" != "success" ] || [ "${{ needs.backend.result }}" != "success" ]; then
-            echo "CI pipeline failed: frontend=${{ needs.frontend.result }}, backend=${{ needs.backend.result }}"
+          if [ "${{ needs.frontend.result }}" != "success" ] || [ "${{ needs.backend.result }}" != "success" ] || [ "${{ needs.e2e.result }}" != "success" ]; then
+            echo "CI pipeline failed: frontend=${{ needs.frontend.result }}, backend=${{ needs.backend.result }}, e2e=${{ needs.e2e.result }}"
             exit 1
           fi
-          echo "All frontend and backend checks passed successfully."
+          echo "All frontend, backend, and E2E checks passed successfully."

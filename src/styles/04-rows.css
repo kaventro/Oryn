@@ -352,6 +352,21 @@
   height: 36px;
 }
 
+.row-thumbnail {
+  width: 16px;
+  height: 16px;
+  object-fit: cover;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.grid-mode .row-thumbnail {
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+
 .grid-mode .row-name-text {
   font-size: 11px;
   text-align: center;

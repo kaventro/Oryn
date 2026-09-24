@@ -55,7 +55,7 @@ export class AppSettings {
     this.showExtensions = initial.showExtensions !== false;
     this.showStatusBarTerminal = initial.showStatusBarTerminal !== false;
     this.confirmDelete = initial.confirmDelete !== false;
-    this.enableSftp = Boolean(initial.enableSftp);
+    this.enableSftp = initial.enableSftp !== false;
     this.enableTags = initial.enableTags !== false;
     this.enableAutoUpdate = initial.enableAutoUpdate !== false;
     this.overwritePolicy = ['prompt', 'overwrite', 'skip'].includes(initial.overwritePolicy as string)

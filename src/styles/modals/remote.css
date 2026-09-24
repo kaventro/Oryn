@@ -14,6 +14,34 @@
   overflow: hidden;
 }
 
+.remote-modal-dialog .modal-header {
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border-color, rgba(255, 255, 255, 0.08));
+}
+
+.remote-modal-dialog .modal-header-title-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.remote-modal-dialog .modal-title-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  color: #0a84ff;
+}
+
+.remote-modal-dialog .modal-header h2 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--text-color, #ffffff);
+}
+
 .remote-dialog-body {
   display: flex;
   flex: 1;

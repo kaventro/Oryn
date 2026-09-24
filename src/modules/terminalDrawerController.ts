@@ -10,6 +10,25 @@ export interface TerminalDrawerDeps {
   navigateTo?: (side: string, path: string) => Promise<void>;
 }
 
+export function ansiToHtml(raw: string): string {
+  const safe = raw
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+
+  return safe
+    .replace(/\x1b\[0m/g, '</span>')
+    .replace(/\x1b\[1m/g, '<span style="font-weight:bold;">')
+    .replace(/\x1b\[31m/g, '<span style="color:#ff453a;">')
+    .replace(/\x1b\[32m/g, '<span style="color:#30d158;">')
+    .replace(/\x1b\[33m/g, '<span style="color:#ffd60a;">')
+    .replace(/\x1b\[34m/g, '<span style="color:#0a84ff;">')
+    .replace(/\x1b\[35m/g, '<span style="color:#bf5af2;">')
+    .replace(/\x1b\[36m/g, '<span style="color:#64d2ff;">')
+    .replace(/\x1b\[90m/g, '<span style="color:#8e8e93;">')
+    .replace(/\x1b\[[0-9;]*m/g, '');
+}
+
 export class TerminalDrawerController {
   public state: AppState;
   public api: () => any;
@@ -107,7 +126,11 @@ export class TerminalDrawerController {
 
     const line = document.createElement('div');
     line.className = `terminal-line${isErr ? ' terminal-line--err' : ''}${isCmd ? ' terminal-line--cmd' : ''}`;
-    line.textContent = text;
+    if (text.includes('\x1b[')) {
+      line.innerHTML = ansiToHtml(text);
+    } else {
+      line.textContent = text;
+    }
 
     outputEl.appendChild(line);
     outputEl.scrollTop = outputEl.scrollHeight;
