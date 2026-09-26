@@ -1,5 +1,15 @@
+use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
 use serde::Deserialize;
-use std::process::Command;
+use std::{
+    collections::HashMap,
+    io::{Read, Write},
+    process::Command,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc, Mutex,
+    },
+};
+use tauri::Emitter;
 
 use crate::commands::response::{ack, Ack};
 
@@ -77,7 +87,11 @@ fn try_launch_editor(path: &str, editor: &str, custom_cmd: Option<&str>) -> Resu
         "cursor" => {
             #[cfg(target_os = "macos")]
             {
-                if Command::new("open").args(["-a", "Cursor", path]).spawn().is_ok() {
+                if Command::new("open")
+                    .args(["-a", "Cursor", path])
+                    .spawn()
+                    .is_ok()
+                {
                     return Ok(());
                 }
             }
@@ -92,12 +106,19 @@ fn try_launch_editor(path: &str, editor: &str, custom_cmd: Option<&str>) -> Resu
             if Command::new("cursor").arg(path).spawn().is_ok() {
                 return Ok(());
             }
-            Err("Cursor not found. Ensure 'cursor' is installed or Cursor.app is in Applications.".into())
+            Err(
+                "Cursor not found. Ensure 'cursor' is installed or Cursor.app is in Applications."
+                    .into(),
+            )
         }
         "sublime" => {
             #[cfg(target_os = "macos")]
             {
-                if Command::new("open").args(["-a", "Sublime Text", path]).spawn().is_ok() {
+                if Command::new("open")
+                    .args(["-a", "Sublime Text", path])
+                    .spawn()
+                    .is_ok()
+                {
                     return Ok(());
                 }
             }
@@ -117,7 +138,11 @@ fn try_launch_editor(path: &str, editor: &str, custom_cmd: Option<&str>) -> Resu
         "zed" => {
             #[cfg(target_os = "macos")]
             {
-                if Command::new("open").args(["-a", "Zed", path]).spawn().is_ok() {
+                if Command::new("open")
+                    .args(["-a", "Zed", path])
+                    .spawn()
+                    .is_ok()
+                {
                     return Ok(());
                 }
             }
@@ -162,7 +187,11 @@ fn try_launch_editor(path: &str, editor: &str, custom_cmd: Option<&str>) -> Resu
             // "vscode" or default
             #[cfg(target_os = "macos")]
             {
-                if Command::new("open").args(["-a", "Visual Studio Code", path]).spawn().is_ok() {
+                if Command::new("open")
+                    .args(["-a", "Visual Studio Code", path])
+                    .spawn()
+                    .is_ok()
+                {
                     return Ok(());
                 }
             }
@@ -264,6 +293,204 @@ pub fn shell_open_terminal(input: ShellPath) -> Result<Ack, String> {
 pub struct ShellExecIn {
     pub cmd: String,
     pub cwd: Option<String>,
+}
+
+struct PtySession {
+    writer: Mutex<Box<dyn Write + Send>>,
+    master: Mutex<Box<dyn MasterPty + Send>>,
+    child: Mutex<Box<dyn Child + Send + Sync>>,
+}
+
+#[derive(Default)]
+pub struct TerminalSessions(Arc<Mutex<HashMap<String, Arc<PtySession>>>>);
+
+impl Drop for TerminalSessions {
+    fn drop(&mut self) {
+        if let Ok(sessions) = self.0.lock() {
+            for session in sessions.values() {
+                if let Ok(mut child) = session.child.lock() {
+                    let _ = child.kill();
+                }
+            }
+        }
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalStartIn {
+    pub cwd: Option<String>,
+    pub cols: u16,
+    pub rows: u16,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalSessionIn {
+    pub session_id: String,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalWriteIn {
+    pub session_id: String,
+    pub data: String,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TerminalResizeIn {
+    pub session_id: String,
+    pub cols: u16,
+    pub rows: u16,
+}
+
+static NEXT_TERMINAL_ID: AtomicU64 = AtomicU64::new(1);
+
+#[tauri::command]
+pub fn shell_terminal_start(
+    app: tauri::AppHandle,
+    sessions: tauri::State<'_, TerminalSessions>,
+    input: TerminalStartIn,
+) -> Result<String, String> {
+    let pair = native_pty_system()
+        .openpty(PtySize {
+            rows: input.rows.clamp(2, 300),
+            cols: input.cols.clamp(2, 500),
+            pixel_width: 0,
+            pixel_height: 0,
+        })
+        .map_err(|e| e.to_string())?;
+    #[cfg(not(target_os = "windows"))]
+    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".into());
+    #[cfg(target_os = "windows")]
+    let shell = std::env::var("COMSPEC").unwrap_or_else(|_| "powershell.exe".into());
+    let mut command = CommandBuilder::new(shell);
+    #[cfg(not(target_os = "windows"))]
+    command.arg("-l");
+    #[cfg(target_os = "windows")]
+    command.arg("-NoLogo");
+    if let Some(cwd) = input.cwd.filter(|p| !p.trim().is_empty()) {
+        command.cwd(cwd);
+    }
+    command.env("TERM", "xterm-256color");
+    command.env("COLORTERM", "truecolor");
+
+    let mut reader = pair.master.try_clone_reader().map_err(|e| e.to_string())?;
+    let writer = pair.master.take_writer().map_err(|e| e.to_string())?;
+    let child = pair
+        .slave
+        .spawn_command(command)
+        .map_err(|e| e.to_string())?;
+    drop(pair.slave);
+    let id = format!(
+        "{}-{}",
+        std::process::id(),
+        NEXT_TERMINAL_ID.fetch_add(1, Ordering::Relaxed)
+    );
+    sessions.0.lock().map_err(|e| e.to_string())?.insert(
+        id.clone(),
+        Arc::new(PtySession {
+            writer: Mutex::new(writer),
+            master: Mutex::new(pair.master),
+            child: Mutex::new(child),
+        }),
+    );
+    let output_id = id.clone();
+    let sessions = Arc::clone(&sessions.0);
+    std::thread::spawn(move || {
+        let mut buf = [0u8; 8192];
+        loop {
+            match reader.read(&mut buf) {
+                Ok(0) => break,
+                Ok(n) => {
+                    let data = String::from_utf8_lossy(&buf[..n]).into_owned();
+                    if app
+                        .emit(
+                            "terminal-output",
+                            serde_json::json!({"sessionId": output_id, "data": data}),
+                        )
+                        .is_err()
+                    {
+                        break;
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+        if let Ok(mut sessions) = sessions.lock() {
+            if let Some(session) = sessions.remove(&output_id) {
+                if let Ok(mut child) = session.child.lock() {
+                    let _ = child.wait();
+                }
+            }
+        }
+        let _ = app.emit("terminal-exit", serde_json::json!({"sessionId": output_id}));
+    });
+    Ok(id)
+}
+
+#[tauri::command]
+pub fn shell_terminal_write(
+    sessions: tauri::State<'_, TerminalSessions>,
+    input: TerminalWriteIn,
+) -> Result<(), String> {
+    let session = sessions
+        .0
+        .lock()
+        .map_err(|e| e.to_string())?
+        .get(&input.session_id)
+        .cloned()
+        .ok_or("Terminal session not found")?;
+    let mut writer = session.writer.lock().map_err(|e| e.to_string())?;
+    writer
+        .write_all(input.data.as_bytes())
+        .and_then(|_| writer.flush())
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn shell_terminal_resize(
+    sessions: tauri::State<'_, TerminalSessions>,
+    input: TerminalResizeIn,
+) -> Result<(), String> {
+    let session = sessions
+        .0
+        .lock()
+        .map_err(|e| e.to_string())?
+        .get(&input.session_id)
+        .cloned()
+        .ok_or("Terminal session not found")?;
+    let result = session
+        .master
+        .lock()
+        .map_err(|e| e.to_string())?
+        .resize(PtySize {
+            rows: input.rows.clamp(2, 300),
+            cols: input.cols.clamp(2, 500),
+            pixel_width: 0,
+            pixel_height: 0,
+        })
+        .map_err(|e| e.to_string());
+    result
+}
+
+#[tauri::command]
+pub fn shell_terminal_stop(
+    sessions: tauri::State<'_, TerminalSessions>,
+    input: TerminalSessionIn,
+) -> Result<(), String> {
+    let session = sessions
+        .0
+        .lock()
+        .map_err(|e| e.to_string())?
+        .remove(&input.session_id);
+    if let Some(session) = session {
+        session
+            .child
+            .lock()
+            .map_err(|e| e.to_string())?
+            .kill()
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -403,7 +630,9 @@ mod tests {
         let res = shell_exec(ShellExecIn {
             cmd: "echo test_output_123".into(),
             cwd: None,
-        }).await.unwrap();
+        })
+        .await
+        .unwrap();
 
         assert_eq!(res["ok"], true);
         assert!(res["stdout"].as_str().unwrap().contains("test_output_123"));

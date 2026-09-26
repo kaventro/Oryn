@@ -29,6 +29,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .manage(services::fs_transfer::TransferControl::default())
+        .manage(commands::shell_cmd::TerminalSessions::default())
         .manage(commands::system_cmd::SystemStatsState::default())
         .manage(Arc::new(commands::search_cmd::SearchService::default()))
         .manage(services::remote::SessionPool::default())
@@ -128,6 +129,10 @@ pub fn run() {
             commands::shell_cmd::shell_open_terminal,
             commands::shell_cmd::clipboard_write,
             commands::shell_cmd::shell_exec,
+            commands::shell_cmd::shell_terminal_start,
+            commands::shell_cmd::shell_terminal_write,
+            commands::shell_cmd::shell_terminal_resize,
+            commands::shell_cmd::shell_terminal_stop,
             commands::dialog_cmd::dialog_confirm,
             commands::dialog_cmd::dialog_info,
             commands::dialog_cmd::dialog_pick_folder,

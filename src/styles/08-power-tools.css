@@ -590,49 +590,18 @@
 
 .terminal-output {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
-  padding: 10px 14px;
-  font-size: 12px;
-  line-height: 1.5;
-  color: #e0e0e0;
-  white-space: pre-wrap;
-  word-break: break-all;
-  user-select: text;
+  padding: 8px 10px;
+  background: #111214;
 }
 
-.terminal-line--cmd {
-  color: #79c0ff;
-  font-weight: 600;
-  margin-top: 4px;
+.terminal-output .xterm {
+  height: 100%;
 }
 
-.terminal-line--err {
-  color: #ff7b72;
-}
-
-.terminal-input-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 14px;
-  background: var(--surface-container-low);
-  border-top: 1px solid var(--outline);
-}
-
-.terminal-prompt {
-  font-family: var(--font-mono);
-  font-weight: 800;
-  color: #7ee787;
-}
-
-.terminal-input {
-  flex: 1;
-  background: transparent;
-  border: none;
-  color: var(--on-surface);
-  font: inherit;
-  font-size: 12px;
-  outline: none;
+.terminal-output .xterm-viewport {
+  overflow-y: auto !important;
 }
 
 /* Tags System */
@@ -770,5 +739,4 @@
   border-color: #0a84ff;
   color: #ffffff;
 }
-
 

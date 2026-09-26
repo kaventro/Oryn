@@ -56,6 +56,11 @@ export interface TauriBridge {
   openTerminal: (p: string) => Promise<any>;
   clipboardWrite: (t: string) => Promise<any>;
   shellExec: (cmd: string, cwd?: string) => Promise<any>;
+  terminalStart: (cwd: string | null, cols: number, rows: number) => Promise<string>;
+  terminalWrite: (sessionId: string, data: string) => Promise<void>;
+  terminalResize: (sessionId: string, cols: number, rows: number) => Promise<void>;
+  terminalStop: (sessionId: string) => Promise<void>;
+  terminalListen: (onOutput: (sessionId: string, data: string) => void, onExit: (sessionId: string) => void) => Promise<() => void>;
   statProps: (p: string) => Promise<any>;
   readFileText: (p: string, maxBytes?: number) => Promise<any>;
   writeFileText: (p: string, content: string) => Promise<any>;
@@ -152,6 +157,29 @@ export const bridge: TauriBridge = {
   openTerminal: (p: string) => ipcInvoke('shell_open_terminal', { input: { path: p } }),
   clipboardWrite: (t: string) => ipcInvoke('clipboard_write', { input: { text: t } }),
   shellExec: (cmd: string, cwd?: string) => ipcInvoke('shell_exec', { input: { cmd, cwd } }),
+  terminalStart: (cwd: string | null, cols: number, rows: number) =>
+    ipcInvoke('shell_terminal_start', { input: { cwd, cols, rows } }),
+  terminalWrite: (sessionId: string, data: string) =>
+    ipcInvoke('shell_terminal_write', { input: { sessionId, data } }),
+  terminalResize: (sessionId: string, cols: number, rows: number) =>
+    ipcInvoke('shell_terminal_resize', { input: { sessionId, cols, rows } }),
+  terminalStop: (sessionId: string) => ipcInvoke('shell_terminal_stop', { input: { sessionId } }),
+  terminalListen: async (onOutput, onExit) => {
+    const unlistenOutput = await listen('terminal-output', (e: any) => {
+      const { sessionId, data } = e.payload || {};
+      if (sessionId && typeof data === 'string') onOutput(sessionId, data);
+    });
+    try {
+      const unlistenExit = await listen('terminal-exit', (e: any) => {
+        const { sessionId } = e.payload || {};
+        if (sessionId) onExit(sessionId);
+      });
+      return () => { unlistenOutput(); unlistenExit(); };
+    } catch (error) {
+      unlistenOutput();
+      throw error;
+    }
+  },
   statProps: (p: string) => ipcInvoke('fs_stat_props', { input: { path: p } }),
   readFileText: (p: string, maxBytes?: number) => ipcInvoke('fs_read_file_text', { input: { path: p, maxBytes } }),
   writeFileText: (p: string, content: string) => ipcInvoke('fs_write_file_text', { input: { path: p, content } }),
