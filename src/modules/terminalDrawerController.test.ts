@@ -512,9 +512,10 @@ test('TerminalDrawerController setupResizeHandle, setup DOM listeners and keyboa
   assert.ok(handleEl.classList._c.has('resizing'));
   windowListeners['mousemove']({ clientY: 450 }); // delta = 50 -> height 250
   assert.equal(drawerEl.style.height, '250px');
+  drawerEl.offsetHeight = 250;
   windowListeners['mouseup']();
   assert.equal(handleEl.classList._c.has('resizing'), false);
-  assert.equal(localStorage.getItem('Oryn.terminalHeight'), '200');
+  assert.equal(localStorage.getItem('Oryn.terminalHeight'), '250');
 
   // 2. Buttons click events
   controller.isOpen = true;

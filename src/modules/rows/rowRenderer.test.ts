@@ -26,7 +26,7 @@ function createMockElement(tag = 'div'): any {
     },
     removeAttribute(k: string) { delete attrs[k]; delete el[k]; },
     setAttribute(k: string, v: string) { attrs[k] = v; },
-    getAttribute(k: string) { return attrs[k] ?? null; },
+    getAttribute(k: string) { return el[k] ?? attrs[k] ?? null; },
     querySelector(selector: string) {
       if (selector === '.row-tag-dots') {
         return children.find((c) => c.className === 'row-tag-dots') || null;
@@ -232,18 +232,19 @@ test('RowRenderer handles image thumbnails in createRow and syncRow, dateText up
   };
 
   try {
-    // 1. createRow with image file that has explicit fullPath
+    // 1. createRow with image file that has explicit fullPath distinct from fallback
     const imgItem1: PaneItem = {
       base: 'photo.png',
-      fullPath: '/media/photo.png',
+      fullPath: '/custom/path/photo.png',
       isDir: false,
       size: 1024,
     };
     const row1 = renderer.createRow(pane, imgItem1, 0);
     const icon1 = row1.children[0].children[0];
-    // Thumbnail should be mounted (img child appended)
+    // Thumbnail should be mounted (img child appended) using explicit fullPath
     assert.equal(icon1.children.length, 1);
     assert.equal(icon1.children[0].className, 'row-thumbnail');
+    assert.equal((icon1.children[0] as any).src, 'asset://localhost/%2Fcustom%2Fpath%2Fphoto.png');
 
     // 2. createRow with image file using activeTab.path fallback
     const imgItem2: PaneItem = {
@@ -255,6 +256,7 @@ test('RowRenderer handles image thumbnails in createRow and syncRow, dateText up
     const icon2 = row2.children[0].children[0];
     assert.equal(icon2.children.length, 1);
     assert.equal(icon2.children[0].className, 'row-thumbnail');
+    assert.equal((icon2.children[0] as any).src, 'asset://localhost/%2Fmedia%2Fphoto2.jpg');
 
     // 3. syncRow: iconKey changes to image -> mountThumbnail invoked
     const txtItem: PaneItem = {
@@ -277,6 +279,22 @@ test('RowRenderer handles image thumbnails in createRow and syncRow, dateText up
     assert.equal(icon3.children[0].className, 'row-thumbnail');
     assert.ok(row3.className.includes('selected'));
 
+    // Verify title exists on titled item before parent directory transition
+    const sizeCol = row3.children[2] as HTMLElement;
+    assert.notEqual(sizeCol.getAttribute('title'), null);
+
+    // Syncing to parent directory ('..') removes title attribute
+    const parentDirItem: PaneItem = {
+      base: '..',
+      isDir: true,
+      size: null,
+    };
+    renderer.syncRow(row3, parentDirItem, pane, 2);
+    assert.equal(sizeCol.getAttribute('title'), null);
+
+    // Sync back to image before checking transition to directory
+    renderer.syncRow(row3, renamedToImg, pane, 2);
+
     // 4. syncRow: iconKey changes from image to dir -> non-image branch svg
     const changedToDir: PaneItem = {
       base: 'doc.png',
@@ -289,16 +307,6 @@ test('RowRenderer handles image thumbnails in createRow and syncRow, dateText up
     currentDate = '2026-09-26';
     renderer.syncRow(row3, changedToDir, pane, 2);
     assert.equal(row3.children[1].textContent, '2026-09-26');
-
-    // 6. syncRow: size change to null or '..' removes title
-    const parentDirItem: PaneItem = {
-      base: '..',
-      isDir: true,
-      size: null,
-    };
-    renderer.syncRow(row3, parentDirItem, pane, 2);
-    const sizeCol = row3.children[2] as HTMLElement;
-    assert.equal(sizeCol.getAttribute('title'), null);
   } finally {
     cleanup();
   }
