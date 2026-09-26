@@ -74,3 +74,28 @@ test('RemoteController handles profiles and operations', async () => {
   const text = await controller.readFileText('srv1', '/test.txt');
   assert.equal(text, 'hello remote');
 });
+
+test('RemoteController resolves a function API for profiles and connection operations', async () => {
+  const mockProfiles = [{ id: 'srv1', name: 'Server 1', host: 'example.com', username: 'root' }];
+  const calls: string[] = [];
+  const mockApi = {
+    remoteListProfiles: async () => {
+      calls.push('list');
+      return mockProfiles;
+    },
+    remoteSaveProfile: async (profile: any) => {
+      calls.push(`save:${profile.id}`);
+      return [profile];
+    },
+    remoteConnect: async (profile: any) => {
+      calls.push(`connect:${profile.id}`);
+      return { ok: true };
+    },
+  };
+  const controller = new RemoteController({ api: () => mockApi });
+
+  assert.deepEqual(await controller.loadProfiles(), mockProfiles);
+  assert.deepEqual(await controller.connect(mockProfiles[0]), { ok: true });
+  assert.deepEqual(await controller.saveProfile(mockProfiles[0]), mockProfiles);
+  assert.deepEqual(calls, ['list', 'connect:srv1', 'save:srv1']);
+});
