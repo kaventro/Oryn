@@ -277,6 +277,7 @@ test('RowRenderer handles image thumbnails in createRow and syncRow, dateText up
     renderer.syncRow(row3, renamedToImg, pane, 2);
     assert.equal(icon3.children.length, 1);
     assert.equal(icon3.children[0].className, 'row-thumbnail');
+    assert.equal((icon3.children[0] as any).src, 'asset://localhost/%2Fmedia%2Fdoc.png');
     assert.ok(row3.className.includes('selected'));
 
     // Verify title exists on titled item before parent directory transition
