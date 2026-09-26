@@ -24,6 +24,7 @@
 }
 
 .row-icon {
+  position: relative;
   flex-shrink: 0;
   width: 16px;
   height: 16px;
@@ -353,9 +354,13 @@
 }
 
 .row-thumbnail {
+  position: absolute;
+  inset: 0;
   width: 16px;
   height: 16px;
   object-fit: cover;
+  opacity: 0;
+  pointer-events: none;
   border-radius: 3px;
   flex-shrink: 0;
 }

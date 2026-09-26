@@ -60,7 +60,7 @@ def main():
             # Mock Tauri IPC backend in browser
             mock_init_script = r"""
             window.__TAURI_INTERNALS__ = {
-                convertFileSrc: (src, protocol = 'asset') => `${protocol}://localhost/${encodeURIComponent(src)}`,
+                convertFileSrc: () => '/dock-icons/1.png',
                 invoke: async (cmd, args) => {
                     if (cmd === 'app_get_home') return '/workspace/Oryn';
                     if (cmd === 'config_load') return {};
@@ -128,6 +128,10 @@ def main():
             print("🖼 Switching to Grid / Icons Mode...")
             page.click("#btn-view-grid")
             page.wait_for_selector(".grid-mode", timeout=5000)
+            page.wait_for_function("""() => {
+                const thumbnails = [...document.querySelectorAll('.grid-mode img.row-thumbnail')];
+                return thumbnails.length > 0 && thumbnails.every(img => img.complete && img.naturalWidth > 0);
+            }""", timeout=10000)
             time.sleep(0.5)
             shot2 = os.path.join(ARTIFACT_DIR, "oryn_grid_view.png")
             page.screenshot(path=shot2)
