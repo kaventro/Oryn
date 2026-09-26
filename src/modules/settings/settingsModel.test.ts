@@ -37,3 +37,42 @@ test('AppSettings respects enableSftp, enableTags, and enableAutoUpdate paramete
   assert.deepEqual(cloned.toJSON(), custom.toJSON());
 });
 
+test('AppSettings.createDefault returns a fresh default AppSettings instance with complete configuration coverage', () => {
+  const def = AppSettings.createDefault();
+  assert.ok(def instanceof AppSettings);
+  assert.equal(def.enableSftp, true);
+  assert.equal(def.paneMode, 'dual');
+
+  const customFull = new AppSettings({
+    paneMode: 'single',
+    showHiddenFiles: true,
+    showExtensions: false,
+    showStatusBarTerminal: false,
+    confirmDelete: false,
+    overwritePolicy: 'overwrite',
+    defaultDiffRef: 'HEAD~1',
+    defaultEditor: 'custom',
+    customEditorCmd: 'subl',
+    rowDensity: 'comfortable',
+    dateFormat: 'iso',
+    dualPaneDriveDefaults: false,
+    leftDefaultDrive: '/Volumes/Ext1',
+    rightDefaultDrive: '/Volumes/Ext2',
+  });
+
+  assert.equal(customFull.paneMode, 'single');
+  assert.equal(customFull.showHiddenFiles, true);
+  assert.equal(customFull.showExtensions, false);
+  assert.equal(customFull.showStatusBarTerminal, false);
+  assert.equal(customFull.confirmDelete, false);
+  assert.equal(customFull.overwritePolicy, 'overwrite');
+  assert.equal(customFull.defaultDiffRef, 'HEAD~1');
+  assert.equal(customFull.defaultEditor, 'custom');
+  assert.equal(customFull.customEditorCmd, 'subl');
+  assert.equal(customFull.rowDensity, 'comfortable');
+  assert.equal(customFull.dateFormat, 'iso');
+  assert.equal(customFull.dualPaneDriveDefaults, false);
+  assert.equal(customFull.leftDefaultDrive, '/Volumes/Ext1');
+  assert.equal(customFull.rightDefaultDrive, '/Volumes/Ext2');
+});
+
