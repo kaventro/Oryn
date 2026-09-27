@@ -186,3 +186,85 @@ test('ThumbnailCache.mountThumbnail handles missing or failed paths, lazy loads,
     (globalThis as any).window = origWindow;
   }
 });
+
+test('ThumbnailCache mounts thumbnails from a promised asset URL and records failures', async () => {
+  const origDoc = globalThis.document;
+  let createdImg: any = null;
+  (globalThis as any).document = {
+    createElement: (tag: string) => {
+      const el: any = {
+        className: '',
+        alt: '',
+        src: '',
+        loading: '',
+        decoding: '',
+        style: {},
+        children: [],
+        onload: null,
+        onerror: null,
+        appendChild(child: any) {
+          this.children.push(child);
+          return child;
+        },
+        remove() {
+          this._removed = true;
+        },
+        querySelector() {
+          return null;
+        },
+      };
+      if (tag === 'img') createdImg = el;
+      return el;
+    },
+  };
+
+  const icon = () => ({
+    innerHTML: '',
+    children: [] as any[],
+    appendChild(child: any) {
+      this.children.push(child);
+      return child;
+    },
+    querySelector() {
+      return null;
+    },
+  });
+
+  try {
+    const promised = new ThumbnailCache({
+      apiObj: { assetUrl: (p: string) => Promise.resolve(`asset://${p}`) },
+    });
+    const iconEl = icon();
+    promised.mountThumbnail(iconEl as any, '/photo.png', '<svg class="mac-icon"></svg>');
+    await Promise.resolve();
+    assert.equal(createdImg.src, 'asset:///photo.png');
+    createdImg.onload();
+    assert.equal(promised.getCached('/photo.png'), 'asset:///photo.png');
+
+    const emptyGrant = new ThumbnailCache({
+      apiObj: { assetUrl: () => Promise.resolve('') },
+    });
+    const emptyIcon = icon();
+    emptyGrant.mountThumbnail(emptyIcon as any, '/blank.png', '<svg></svg>');
+    await Promise.resolve();
+    assert.equal(emptyGrant.isFailed('/blank.png'), false);
+
+    const denied = new ThumbnailCache({
+      apiObj: { assetUrl: () => Promise.reject(new Error('denied')) },
+    });
+    const deniedIcon = icon();
+    denied.mountThumbnail(deniedIcon as any, '/secret.png', '<svg></svg>');
+    await Promise.resolve();
+    await Promise.resolve();
+    assert.equal(denied.isFailed('/secret.png'), true);
+
+    const noUrl = new ThumbnailCache({
+      apiObj: { assetUrl: () => '' },
+    });
+    const noUrlIcon = icon();
+    noUrl.mountThumbnail(noUrlIcon as any, '/plain.png', '<svg></svg>');
+    assert.equal(createdImg.src === 'asset:///photo.png' || createdImg.src === '', true);
+  } finally {
+    globalThis.document = origDoc;
+  }
+});

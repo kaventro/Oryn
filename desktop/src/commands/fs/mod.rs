@@ -3,7 +3,7 @@ mod transfer;
 mod write;
 
 use serde_json::Value;
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Manager, Runtime};
 
 use crate::commands::response::Ack;
 use crate::services::fs_props::StatPropsOut;
@@ -73,7 +73,7 @@ pub fn fs_read_media_data_url(input: ReadFileIn) -> Result<String, String> {
 /// The static scope stays limited to app-owned directories; renderer-supplied
 /// paths are not readable until this check allows that exact file.
 #[tauri::command]
-pub fn fs_grant_preview_asset(app: AppHandle, input: ReadFileIn) -> Result<String, String> {
+pub fn fs_grant_preview_asset<R: Runtime>(app: AppHandle<R>, input: ReadFileIn) -> Result<String, String> {
     let canonical = crate::services::preview_asset::validate_preview_asset(&input.path)?;
     app.asset_protocol_scope()
         .allow_file(&canonical)
@@ -168,4 +168,49 @@ pub fn fs_watch_dirs(
 ) -> Result<Ack, String> {
     watcher.watch_dirs(input.paths)?;
     Ok(Ack { ok: true })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_app() -> AppHandle<tauri::test::MockRuntime> {
+        tauri::test::mock_builder()
+            .build(tauri::test::mock_context(tauri::test::noop_assets()))
+            .expect("mock app")
+            .handle()
+            .clone()
+    }
+
+    #[test]
+    fn grants_one_preview_file() {
+        let tmp = tempfile::Builder::new().suffix(".png").tempfile().unwrap();
+        std::fs::write(tmp.path(), b"png").unwrap();
+        let path = tmp.path().to_string_lossy().to_string();
+
+        let granted = fs_grant_preview_asset(
+            test_app(),
+            ReadFileIn {
+                path: path.clone(),
+                max_bytes: None,
+            },
+        )
+        .unwrap();
+
+        assert_eq!(granted, path);
+    }
+
+    #[test]
+    fn refuses_a_preview_grant_for_a_non_media_path() {
+        let err = fs_grant_preview_asset(
+            test_app(),
+            ReadFileIn {
+                path: String::new(),
+                max_bytes: None,
+            },
+        )
+        .unwrap_err();
+
+        assert!(err.contains("empty"));
+    }
 }

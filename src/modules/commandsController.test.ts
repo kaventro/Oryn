@@ -1224,4 +1224,45 @@ test('CommandsController openViewer media callbacks, binary detection, and error
   }
 });
 
+test('CommandsController falls back to a data URL when the asset grant fails', async () => {
+  const content = createMockElement('viewer-content');
+  const elements: Record<string, MockElement> = {
+    'viewer-overlay': createMockElement('viewer-overlay'),
+    'viewer-content': content,
+    'viewer-editor': createMockElement('viewer-editor', 'textarea'),
+    'viewer-title': createMockElement('viewer-title'),
+    'viewer-close': createMockElement('viewer-close'),
+    'viewer-mode-btn': createMockElement('viewer-mode-btn'),
+    'viewer-edit-btn': createMockElement('viewer-edit-btn'),
+    'viewer-save-btn': createMockElement('viewer-save-btn'),
+    'viewer-cancel-edit-btn': createMockElement('viewer-cancel-edit-btn'),
+    'viewer-status-hint': createMockElement('viewer-status-hint'),
+  };
+  const { cleanup } = setupDocMock(elements);
+  const controller = new CommandsController({
+    api: () => ({
+      assetUrl: async () => {
+        throw new Error('denied');
+      },
+      readMediaDataUrl: async () => 'data:image/png;base64,granted-fallback',
+    }),
+    state: new AppState(),
+    setStatus: () => {},
+    focusActiveList: () => {},
+  });
+
+  try {
+    await controller.openViewer('/pics/photo.png', { base: 'photo.png', size: 10, isDir: false });
+    assert.equal((content.children[0] as any).src, 'data:image/png;base64,granted-fallback');
+
+    await controller.openViewer('/pics/song.mp3', { base: 'song.mp3', size: 10, isDir: false });
+    assert.equal((content.children[0] as any).src, 'data:image/png;base64,granted-fallback');
+
+    await controller.openViewer('/pics/clip.mp4', { base: 'clip.mp4', size: 10, isDir: false });
+    assert.equal((content.children[0] as any).src, 'data:image/png;base64,granted-fallback');
+  } finally {
+    cleanup();
+  }
+});
+
 

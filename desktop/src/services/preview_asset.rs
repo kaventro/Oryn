@@ -103,4 +103,34 @@ mod tests {
         let via_parent = tmp.path().join("other").join("..").join(".ssh").join("id_rsa.png");
         assert!(validate_preview_asset(via_parent.to_str().unwrap()).is_err());
     }
+
+    #[test]
+    fn rejects_a_file_without_a_preview_extension() {
+        let tmp = tempfile::tempdir().unwrap();
+        let file = tmp.path().join("noext");
+        std::fs::write(&file, b"bytes").unwrap();
+        assert!(validate_preview_asset(file.to_str().unwrap()).is_err());
+    }
+
+    #[test]
+    fn rejects_a_link_whose_canonical_path_is_sensitive() {
+        let tmp = tempfile::tempdir().unwrap();
+        let ssh = tmp.path().join(".ssh");
+        std::fs::create_dir(&ssh).unwrap();
+        let secret = ssh.join("key.png");
+        std::fs::write(&secret, b"png").unwrap();
+
+        let alias = tmp.path().join("photo.png");
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&secret, &alias).unwrap();
+        #[cfg(windows)]
+        {
+            if std::os::windows::fs::symlink_file(&secret, &alias).is_err() {
+                return;
+            }
+        }
+
+        let err = validate_preview_asset(alias.to_str().unwrap()).unwrap_err();
+        assert!(err.contains("not allowed"));
+    }
 }
