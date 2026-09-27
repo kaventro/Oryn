@@ -75,7 +75,7 @@ pub fn fs_grant_preview_asset<R: Runtime>(app: AppHandle<R>, input: ReadFileIn) 
     app.asset_protocol_scope()
         .allow_file(&canonical)
         .map_err(|e| e.to_string())?;
-    Ok(input.path)
+    Ok(canonical.to_string_lossy().into_owned())
 }
 
 #[tauri::command]
@@ -194,7 +194,11 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(granted, path);
+        let expected = std::fs::canonicalize(&path)
+            .unwrap()
+            .to_string_lossy()
+            .into_owned();
+        assert_eq!(granted, expected);
     }
 
     #[test]

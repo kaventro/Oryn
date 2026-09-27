@@ -132,12 +132,13 @@ test('QuickViewController previews media and falls back when the asset grant fai
     assert.equal(await denied.render('left'), true);
     const deniedImg = bodyOf(dom.hosts['list-left']).children[0].children[0];
     assert.equal(deniedImg.src, 'data:application/octet-stream;base64,/pics/denied.png');
-    deniedImg.onerror();
+    await deniedImg.onerror();
     assert.ok(String(bodyOf(dom.hosts['list-left']).innerHTML).includes('Cannot preview image'));
 
     const broken = controllerFor(api, { base: 'broken.png', size: 20 });
     assert.equal(await broken.render('left'), true);
     const brokenImg = bodyOf(dom.hosts['list-left']).children[0].children[0];
+    assert.equal(brokenImg.src, 'asset:///pics/broken.png');
     await brokenImg.onerror();
     assert.ok(String(bodyOf(dom.hosts['list-left']).innerHTML).includes('Cannot preview image'));
 
@@ -152,6 +153,36 @@ test('QuickViewController previews media and falls back when the asset grant fai
     const videoEl = bodyOf(dom.hosts['list-left']).children[0].children[0];
     assert.equal(videoEl.tagName, 'VIDEO');
     assert.equal(videoEl.src, 'data:application/octet-stream;base64,/pics/clip.mp4');
+
+    const audioFail = controllerFor(
+      {
+        assetUrl: async () => 'asset:///pics/bad.mp3',
+        readMediaDataUrl: async () => {
+          throw new Error('audio decode failed');
+        },
+      },
+      { base: 'bad.mp3', size: 8 },
+    );
+    assert.equal(await audioFail.render('left'), true);
+    const badAudio = bodyOf(dom.hosts['list-left']).children[0].children[0];
+    assert.equal(badAudio.src, 'asset:///pics/bad.mp3');
+    await badAudio.onerror();
+    assert.equal(badAudio.src, 'asset:///pics/bad.mp3');
+
+    const videoFail = controllerFor(
+      {
+        assetUrl: async () => 'asset:///pics/bad.mp4',
+        readMediaDataUrl: async () => {
+          throw new Error('video decode failed');
+        },
+      },
+      { base: 'bad.mp4', size: 8 },
+    );
+    assert.equal(await videoFail.render('left'), true);
+    const badVideo = bodyOf(dom.hosts['list-left']).children[0].children[0];
+    assert.equal(badVideo.src, 'asset:///pics/bad.mp4');
+    await badVideo.onerror();
+    assert.equal(badVideo.src, 'asset:///pics/bad.mp4');
 
     const noData = controllerFor({ assetUrl: async () => '' }, { base: 'quiet.mp3', size: 8 });
     assert.equal(await noData.render('left'), true);

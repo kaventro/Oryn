@@ -122,6 +122,10 @@ const eventHandlers: Record<string, Function[]> = {};
     if (cmd === 'system_get_path_space') return { ok: true, free: 1000, total: 2000 };
     if (cmd === 'fs_watch_dirs') return { ok: true };
     if (cmd === 'set_dock_icon') return { ok: true };
+    if (cmd === 'fs_grant_preview_asset') {
+      const path = args?.input?.path;
+      return typeof path === 'string' ? path.replace(/\\/g, '/') : path;
+    }
     if (invokeThrows) throw invokeThrows;
     return { ok: true, cmd, args };
   },
@@ -147,6 +151,7 @@ test('bridge assetUrl grants one preview file before converting it', async () =>
   assert.ok(!url.includes('\\'));
   assert.equal(lastInvokeCmd, 'fs_grant_preview_asset');
   assert.equal(lastInvokeArgs.input.path, 'C:\\Users\\admin\\photo.png');
+  assert.ok(url.includes(encodeURIComponent('C:/Users/admin/photo.png')));
 });
 
 test('bridge error sanitization in ipcInvoke', async () => {

@@ -159,9 +159,9 @@ export const bridge: TauriBridge = {
   readOffice: (p: string) => ipcInvoke('fs_read_office', { input: { path: p } }),
   assetUrl: async (p: string) => {
     if (!p) return '';
-    await ipcInvoke('fs_grant_preview_asset', { input: { path: p } });
-    const norm = p.replace(/\\/g, '/');
-    return convertFileSrc(norm);
+    const granted = await ipcInvoke<string>('fs_grant_preview_asset', { input: { path: p } });
+    if (!granted) return '';
+    return convertFileSrc(granted.replace(/\\/g, '/'));
   },
   readMediaDataUrl: (p: string) => ipcInvoke('fs_read_media_data_url', { input: { path: p } }),
   rename: (src: string, dst: string) => ipcInvoke('fs_rename', { input: { src, dst } }),
