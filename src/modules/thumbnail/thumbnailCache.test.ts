@@ -27,8 +27,7 @@ test('ThumbnailCache resolves assetUrl via apiObj or fallback', () => {
   assert.equal(cacheWithMock.resolveAssetUrl('/path/to/img.png'), 'mock-asset:///path/to/img.png');
 
   const cacheWithFallback = new ThumbnailCache();
-  const fallbackUrl = cacheWithFallback.resolveAssetUrl('/Users/test/img.png');
-  assert.match(fallbackUrl, /^asset:\/\/localhost\//);
+  assert.equal(cacheWithFallback.resolveAssetUrl('/Users/test/img.png'), '');
 });
 
 test('ThumbnailCache caching, eviction and error marking lifecycle', () => {
@@ -176,10 +175,9 @@ test('ThumbnailCache.mountThumbnail handles missing or failed paths, lazy loads,
     };
     assert.equal(fallbackCache.resolveAssetUrl('/test.png'), 'window-asset:///test.png');
 
-    // Without window.ow, Tauri asset fallback replaces backslashes
+    // Without a bridge, no unscoped asset URL is produced
     (globalThis as any).window = {};
-    const winUrl = fallbackCache.resolveAssetUrl('C:\\Users\\test\\img.png');
-    assert.equal(winUrl, 'asset://localhost/C%3A%2FUsers%2Ftest%2Fimg.png');
+    assert.equal(fallbackCache.resolveAssetUrl('C:\\Users\\test\\img.png'), '');
 
     // 7. Verify exported thumbnailCache singleton
     assert.ok(thumbnailCache instanceof ThumbnailCache);

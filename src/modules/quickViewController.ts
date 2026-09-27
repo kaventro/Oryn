@@ -61,15 +61,15 @@ export class QuickViewController {
     void this.render(side);
   }
 
-  getFileSrc(fullPath: string): string {
+  async getFileSrc(fullPath: string): Promise<string> {
     if (!fullPath) return '';
     try {
       const apiObj = typeof this.api === 'function' ? this.api() : this.api;
       if (apiObj?.assetUrl) {
-        return apiObj.assetUrl(fullPath);
+        return await apiObj.assetUrl(fullPath);
       }
     } catch (_) {}
-    return fullPath;
+    return '';
   }
 
   async render(side: 'left' | 'right'): Promise<boolean> {
@@ -200,7 +200,6 @@ export class QuickViewController {
 
           const img = document.createElement('img');
           img.className = 'quick-view-img';
-          img.src = this.getFileSrc(fp);
           img.alt = item.base;
 
           const meta = document.createElement('div');
@@ -210,7 +209,7 @@ export class QuickViewController {
           img.onload = () => {
             meta.textContent = `${ext.toUpperCase()} Image • ${img.naturalWidth} × ${img.naturalHeight} px • ${fmtBytes(item.size || 0)}`;
           };
-          img.onerror = async () => {
+          const onImageError = async () => {
             try {
               const apiObj = typeof this.api === 'function' ? this.api() : this.api;
               if (apiObj?.readMediaDataUrl) {
@@ -224,6 +223,10 @@ export class QuickViewController {
             } catch (_) {}
             body.innerHTML = `<div class="quick-view-error">Cannot preview image ${escHtml(item.base)}</div>`;
           };
+          img.onerror = () => onImageError();
+          const imageSrc = await this.getFileSrc(fp);
+          if (imageSrc) img.src = imageSrc;
+          else await onImageError();
 
           wrap.append(img, meta);
           body.appendChild(wrap);
@@ -233,8 +236,7 @@ export class QuickViewController {
           wrap.className = 'quick-view-media-wrap';
           const audio = document.createElement('audio');
           audio.controls = true;
-          audio.src = this.getFileSrc(fp);
-          audio.onerror = async () => {
+          const onAudioError = async () => {
             try {
               const apiObj = typeof this.api === 'function' ? this.api() : this.api;
               if (apiObj?.readMediaDataUrl) {
@@ -244,6 +246,10 @@ export class QuickViewController {
               }
             } catch (_) {}
           };
+          audio.onerror = () => onAudioError();
+          const audioSrc = await this.getFileSrc(fp);
+          if (audioSrc) audio.src = audioSrc;
+          else await onAudioError();
           const meta = document.createElement('div');
           meta.className = 'quick-view-meta';
           meta.textContent = `Audio (${ext.toUpperCase()}) • ${fmtBytes(item.size || 0)}`;
@@ -257,8 +263,7 @@ export class QuickViewController {
           video.controls = true;
           video.style.maxWidth = '100%';
           video.style.maxHeight = '70%';
-          video.src = this.getFileSrc(fp);
-          video.onerror = async () => {
+          const onVideoError = async () => {
             try {
               const apiObj = typeof this.api === 'function' ? this.api() : this.api;
               if (apiObj?.readMediaDataUrl) {
@@ -268,6 +273,10 @@ export class QuickViewController {
               }
             } catch (_) {}
           };
+          video.onerror = () => onVideoError();
+          const videoSrc = await this.getFileSrc(fp);
+          if (videoSrc) video.src = videoSrc;
+          else await onVideoError();
           wrap.append(video);
           body.appendChild(wrap);
         } else if (isMarkdownName(item.base)) {

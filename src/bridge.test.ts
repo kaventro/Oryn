@@ -140,11 +140,13 @@ test('bridge window.ow assignment', () => {
   assert.equal((globalThis as any).ow, bridge);
 });
 
-test('bridge assetUrl formats path or handles empty', () => {
-  assert.equal(bridge.assetUrl(''), '');
-  const url = bridge.assetUrl('C:\\Users\\admin\\photo.png');
+test('bridge assetUrl grants one preview file before converting it', async () => {
+  assert.equal(await bridge.assetUrl(''), '');
+  const url = await bridge.assetUrl('C:\\Users\\admin\\photo.png');
   assert.ok(url.includes('photo.png'));
   assert.ok(!url.includes('\\'));
+  assert.equal(lastInvokeCmd, 'fs_grant_preview_asset');
+  assert.equal(lastInvokeArgs.input.path, 'C:\\Users\\admin\\photo.png');
 });
 
 test('bridge error sanitization in ipcInvoke', async () => {

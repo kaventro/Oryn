@@ -94,6 +94,7 @@ pub fn run() {
             commands::fs::fs_probe_text,
             commands::fs::fs_read_office,
             commands::fs::fs_read_media_data_url,
+            commands::fs::fs_grant_preview_asset,
             commands::fs::fs_mkdir,
             commands::fs::fs_create_file,
             commands::fs::fs_write_file_text,

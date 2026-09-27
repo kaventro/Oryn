@@ -664,11 +664,11 @@ export class ColumnsViewController {
       img.style.objectFit = 'contain';
       img.style.borderRadius = '6px';
       img.alt = item.base;
-      void this.joinPath(dirPath, item.base).then((fp) => {
+      void this.joinPath(dirPath, item.base).then(async (fp) => {
         try {
           const apiObj = typeof this.api === 'function' ? this.api() : this.api;
           if (apiObj?.assetUrl) {
-            img.onerror = async () => {
+            const onImageError = async () => {
               try {
                 if (apiObj?.readMediaDataUrl) {
                   const dataUrl = await apiObj.readMediaDataUrl(fp);
@@ -677,7 +677,13 @@ export class ColumnsViewController {
                 }
               } catch (_) {}
             };
-            img.src = apiObj.assetUrl(fp);
+            img.onerror = () => onImageError();
+            let src = '';
+            try {
+              src = await apiObj.assetUrl(fp);
+            } catch (_) {}
+            if (src) img.src = src;
+            else await onImageError();
           }
         } catch (_) {}
       });

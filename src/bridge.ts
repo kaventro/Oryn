@@ -61,7 +61,7 @@ export interface TauriBridge {
   writeFileText: (p: string, content: string) => Promise<any>;
   probeText: (p: string) => Promise<any>;
   readOffice: (p: string) => Promise<any>;
-  assetUrl: (p: string) => string;
+  assetUrl: (p: string) => Promise<string>;
   readMediaDataUrl: (p: string) => Promise<string>;
   rename: (src: string, dst: string) => Promise<any>;
   deletePath: (fullPath: string, useTrash?: boolean) => Promise<any>;
@@ -157,9 +157,12 @@ export const bridge: TauriBridge = {
   writeFileText: (p: string, content: string) => ipcInvoke('fs_write_file_text', { input: { path: p, content } }),
   probeText: (p: string) => ipcInvoke('fs_probe_text', { input: { path: p } }),
   readOffice: (p: string) => ipcInvoke('fs_read_office', { input: { path: p } }),
-  assetUrl: (p: string) => {
+  assetUrl: async (p: string) => {
     if (!p) return '';
-    const norm = typeof p === 'string' ? p.replace(/\\/g, '/') : p;
+    // Grant this one file on the Rust side before the webview can load it.
+    // convertFileSrc alone does not check the path.
+    await ipcInvoke('fs_grant_preview_asset', { input: { path: p } });
+    const norm = p.replace(/\\/g, '/');
     return convertFileSrc(norm);
   },
   readMediaDataUrl: (p: string) => ipcInvoke('fs_read_media_data_url', { input: { path: p } }),

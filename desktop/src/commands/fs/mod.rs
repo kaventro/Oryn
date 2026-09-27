@@ -3,7 +3,7 @@ mod transfer;
 mod write;
 
 use serde_json::Value;
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 
 use crate::commands::response::Ack;
 use crate::services::fs_props::StatPropsOut;
@@ -67,6 +67,18 @@ pub fn fs_read_office(input: ReadFileIn) -> Result<crate::services::fs_office::O
 #[tauri::command]
 pub fn fs_read_media_data_url(input: ReadFileIn) -> Result<String, String> {
     read::fs_read_media_data_url(input)
+}
+
+/// Grants the asset protocol access to one preview file the UI is about to show.
+/// The static scope stays limited to app-owned directories; renderer-supplied
+/// paths are not readable until this check allows that exact file.
+#[tauri::command]
+pub fn fs_grant_preview_asset(app: AppHandle, input: ReadFileIn) -> Result<String, String> {
+    let canonical = crate::services::preview_asset::validate_preview_asset(&input.path)?;
+    app.asset_protocol_scope()
+        .allow_file(&canonical)
+        .map_err(|e| e.to_string())?;
+    Ok(input.path)
 }
 
 #[tauri::command]
