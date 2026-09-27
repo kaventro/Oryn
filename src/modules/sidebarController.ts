@@ -35,6 +35,9 @@ export function favoriteIconKey(path: string, locations?: any): keyof typeof SVG
   if (base === 'developer' || base === 'applications') {
     return base === 'developer' ? 'developer' : 'applications';
   }
+  if (/^[a-z]:$/i.test(n) || locations?.drives?.some((d: any) => normalizePathStr(d?.mountPoint).toLowerCase() === n)) {
+    return 'drive';
+  }
   return 'folder';
 }
 
@@ -287,8 +290,18 @@ export class SidebarController {
     this.favNav.replaceChildren();
 
     const osFavorites: Array<{ name?: string; path?: string }> = Array.isArray(this.locations?.favorites)
-      ? this.locations.favorites
+      ? [...this.locations.favorites]
       : [];
+
+    if (osFavorites.length === 0 && this.locations) {
+      const keys = ['desktop', 'downloads', 'documents', 'pictures', 'music', 'videos'] as const;
+      for (const k of keys) {
+        const p = this.locations[k];
+        if (p && typeof p === 'string') {
+          osFavorites.push({ name: pathBasename(p), path: p });
+        }
+      }
+    }
     const seen = new Set<string>();
 
     const appendItem = (path: string, label: string, iconHtml: string, extra?: { pinId?: string }) => {
