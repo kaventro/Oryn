@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Oryn — Презентация и обзор возможностей</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #090a0f;
+      --bg-card: rgba(18, 20, 29, 0.75);
+      --bg-card-hover: rgba(26, 30, 44, 0.9);
+      --border: rgba(255, 255, 255, 0.08);
+      --border-accent: rgba(79, 136, 255, 0.35);
+      --accent: #4f88ff;
+      --accent-glow: rgba(79, 136, 255, 0.25);
+      --accent-purple: #a855f7;
+      --accent-cyan: #06b6d4;
+      --text-main: #f1f5f9;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      --radius-lg: 20px;
+      --radius-md: 14px;
+      --radius-sm: 8px;
+      --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg);
+      background-image: 
+        radial-gradient(ellipse 80% 50% at 50% -20%, rgba(79, 136, 255, 0.15), transparent),
+        radial-gradient(circle 600px at 85% 20%, rgba(168, 85, 247, 0.08), transparent),
+        radial-gradient(circle 500px at 15% 60%, rgba(6, 182, 212, 0.06), transparent);
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      line-height: 1.6;
+      min-height: 100vh;
+      overflow-x: hidden;
+      padding-bottom: 80px;
+    }
+
+    header {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 60px 24px 40px;
+      text-align: center;
+    }
+
+    .badge-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 16px;
+      background: rgba(79, 136, 255, 0.1);
+      border: 1px solid var(--border-accent);
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--accent);
+      margin-bottom: 20px;
+      backdrop-filter: blur(8px);
+    }
+
+    .badge-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 10px var(--accent);
+    }
+
+    h1 {
+      font-size: clamp(38px, 6vw, 64px);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1.1;
+      margin-bottom: 16px;
+      background: linear-gradient(135deg, #ffffff 30%, #94a3b8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .tagline {
+      font-size: clamp(18px, 2.5vw, 22px);
+      color: var(--text-muted);
+      max-width: 680px;
+      margin: 0 auto 36px;
+      font-weight: 400;
+    }
+
+    .highlight-purple {
+      color: var(--accent-purple);
+      font-weight: 600;
+    }
+
+    .highlight-cyan {
+      color: var(--accent-cyan);
+      font-weight: 600;
+    }
+
+    .container {
+      max-width: 1240px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* Video Player Section */
+    .video-hero {
+      position: relative;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5), 0 0 40px var(--accent-glow);
+      margin-bottom: 70px;
+      backdrop-filter: blur(16px);
+      max-width: 880px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .video-hero-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 20px;
+      background: rgba(0, 0, 0, 0.35);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .window-dots {
+      display: flex;
+      gap: 8px;
+    }
+
+    .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+
+    .dot-red { background: #ff5f56; }
+    .dot-yellow { background: #ffbd2e; }
+    .dot-green { background: #27c93f; }
+
+    .video-title {
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: var(--text-dim);
+    }
+
+    .video-wrapper {
+      position: relative;
+      width: 100%;
+      background: #000;
+      aspect-ratio: 1 / 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .video-wrapper video {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+
+    /* Section Titles */
+    .section-header {
+      margin-bottom: 36px;
+      text-align: center;
+    }
+
+    .section-title {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 8px;
+    }
+
+    .section-desc {
+      color: var(--text-muted);
+      font-size: 16px;
+    }
+
+    /* Showcase Cards Grid */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+      gap: 28px;
+      margin-bottom: 80px;
+    }
+
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      display: flex;
+      flex-direction: column;
+      backdrop-filter: blur(12px);
+    }
+
+    .card:hover {
+      transform: translateY(-5px);
+      border-color: var(--border-accent);
+      background: var(--bg-card-hover);
+      box-shadow: 0 16px 36px rgba(0, 0, 0, 0.4), 0 0 24px var(--accent-glow);
+    }
+
+    .card-img-wrap {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      background: #000;
+      overflow: hidden;
+      cursor: zoom-in;
+    }
+
+    .card-img-wrap img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transition: transform 0.35s ease;
+    }
+
+    .card:hover .card-img-wrap img {
+      transform: scale(1.03);
+    }
+
+    .card-timestamp {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(8px);
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 600;
+      color: #fff;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    .card-body {
+      padding: 22px;
+      display: flex;
+      flex-direction: column;
+      flex-grow: 1;
+    }
+
+    .card-tags {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+
+    .tag {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 3px 8px;
+      border-radius: var(--radius-sm);
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-dim);
+    }
+
+    .tag.blue { background: rgba(79, 136, 255, 0.15); color: #70a1ff; }
+    .tag.purple { background: rgba(168, 85, 247, 0.15); color: #c084fc; }
+    .tag.green { background: rgba(34, 197, 94, 0.15); color: #4ade80; }
+    .tag.cyan { background: rgba(6, 182, 212, 0.15); color: #22d3ee; }
+    .tag.orange { background: rgba(249, 115, 22, 0.15); color: #fb923c; }
+
+    .card-title {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 10px;
+      color: #fff;
+    }
+
+    .card-text {
+      color: var(--text-muted);
+      font-size: 14px;
+      line-height: 1.55;
+      flex-grow: 1;
+    }
+
+    /* Platform Showcase Banner */
+    .platform-banner {
+      background: linear-gradient(135deg, rgba(79, 136, 255, 0.08), rgba(168, 85, 247, 0.08));
+      border: 1px solid var(--border-accent);
+      border-radius: var(--radius-lg);
+      padding: 40px;
+      text-align: center;
+      margin-bottom: 80px;
+      backdrop-filter: blur(16px);
+    }
+
+    .platform-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 20px;
+      margin-top: 28px;
+    }
+
+    .platform-item {
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: 20px;
+      text-align: left;
+    }
+
+    .platform-item h3 {
+      font-size: 16px;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .platform-item p {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    /* Modal Lightbox */
+    .lightbox {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.88);
+      backdrop-filter: blur(12px);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .lightbox.active {
+      display: flex;
+    }
+
+    .lightbox-content {
+      max-width: 90vw;
+      max-height: 90vh;
+      position: relative;
+    }
+
+    .lightbox-content img {
+      max-width: 100%;
+      max-height: 85vh;
+      border-radius: var(--radius-md);
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
+      display: block;
+    }
+
+    .lightbox-close {
+      position: absolute;
+      top: -44px;
+      right: 0;
+      color: #fff;
+      font-size: 32px;
+      cursor: pointer;
+      background: none;
+      border: none;
+      line-height: 1;
+    }
+
+    footer {
+      text-align: center;
+      color: var(--text-dim);
+      font-size: 13px;
+      border-top: 1px solid var(--border);
+      padding-top: 40px;
+      margin-top: 40px;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="badge-pill">
+      <span class="badge-dot"></span>
+      Oryn Showcase • 2026 Edition
+    </div>
+    <h1>Визуальный тур по Oryn</h1>
+    <p class="tagline">
+      Современный двухпанельный файловый менеджер нового поколения. Быстрый, удобный и созданный для максимальной продуктивности на <span class="highlight-cyan">Windows</span>, <span class="highlight-purple">macOS</span> и <span class="highlight-cyan">Linux</span>.
+    </p>
+  </header>
+
+  <main class="container">
+
+    <!-- Promo Video Section -->
+    <section class="video-hero">
+      <div class="video-hero-header">
+        <div class="window-dots">
+          <span class="dot dot-red"></span>
+          <span class="dot dot-yellow"></span>
+          <span class="dot dot-green"></span>
+        </div>
+        <div class="video-title">oryn_promo.mp4 (60 FPS • 1080x1080)</div>
+        <div style="width: 52px;"></div>
+      </div>
+      <div class="video-wrapper">
+        <video controls autoplay loop muted playsinline>
+          <source src="oryn_promo.mp4" type="video/mp4">
+          Ваш браузер не поддерживает воспроизведение MP4 видео.
+        </video>
+      </div>
+    </section>
+
+    <!-- Key Screenshots Section -->
+    <section>
+      <div class="section-header">
+        <h2 class="section-title">Кадры и функции из видео</h2>
+        <p class="section-desc">Подробный разбор каждого экрана, интерфейсных решений и ключевых возможностей приложения</p>
+      </div>
+
+      <div class="grid">
+
+        <!-- Card 1 -->
+        <article class="card">
+          <div class="card-img-wrap" onclick="openLightbox('01_hero_brand.png')">
+            <img src="01_hero_brand.png" alt="Oryn Brand Logo" loading="lazy">
+            <span class="card-timestamp">00:01</span>
+          </div>
+          <div class="card-body">
+            <div class="card-tags">
+              <span class="tag purple">Брендинг</span>
+              <span class="tag">Интро</span>
+            </div>
+            <h3 class="card-title">Фирменная айдентика Oryn</h3>
+            <p class="card-text">
+              Минималистичный логотип и яркий градиентный знак, символизирующий непрерывный поток данных и гармонию двух панелей («In flow»).
+            </p>
+          </div>
+        </article>
+
+        <!-- Card 2 -->
+        <article class="card">
+          <div class="card-img-wrap" onclick="openLightbox('02_single_pane_macbook.png')">
+            <img src="02_single_pane_macbook.png" alt="Single Pane View on MacBook" loading="lazy">
+            <span class="card-timestamp">00:05</span>
+          </div>
+          <div class="card-body">
+            <div class="card-tags">
+              <span class="tag blue">Интерфейс</span>
+              <span class="tag">Single Pane</span>
+            </div>
+            <h3 class="card-title">Классический однопанельный режим</h3>
+            <p class="card-text">
+              Чистое рабочее пространство с боковой панелью: Избранное (Favorites), Диски (Locations), Удаленные SFTP-серверы и цветные Теги (Tags).
+            </p>
+          </div>
+        </article>
+
+        <!-- Card 3 -->
+        <article class="card">
+          <div class="card-img-wrap" onclick="openLightbox('03_dual_pane_transfer.png')">
+            <img src="03_dual_pane_transfer.png" alt="Dual Pane Mode with Copy HUD" loading="lazy">
+            <span class="card-timestamp">00:15</span>
+          </div>
+          <div class="card-body">
+            <div class="card-tags">
+              <span class="tag cyan">Dual Pane</span>
+              <span class="tag green">Фоновое копирование</span>
+            </div>
+            <h3 class="card-title">Двухпанельный режим и HUD передачи</h3>
+            <p class="card-text">
+              Синхронная работа с двумя каталогами одновременно. В правом нижнем углу — нативный асинхронный оверлей с прогресс-баром, паузой и статусом передачи файлов.
+            </p>
+          </div>
+        </article>
+
+        <!-- Card 4 -->
+        <article class="card">
+          <div class="card-img-wrap" onclick="openLightbox('04_grid_view_thumbnails.png')">
+            <img src="04_grid_view_thumbnails.png" alt="Grid View Thumbnails" loading="lazy">
+            <span class="card-timestamp">00:18</span>
+          </div>
+          <div class="card-body">
+            <div class="card-tags">
+              <span class="tag orange">Вид сеткой</span>
+              <span class="tag">Thumbnails</span>
+            </div>
+            <h3 class="card-title">Режим сетки с крупными иконками</h3>
+            <p class="card-text">
+              Удобный просмотр медиафайлов и изображений в виде адаптивной сетки с контрастным курсором активного элемента и именами файлов.
+            </p>
+          </div>
+        </article>
+
+        <!-- Card 5 -->
+        <article class="card">
+          <div class="card-img-wrap" onclick="openLightbox('05_instant_search_filter.png')">
+            <img src="05_instant_search_filter.png" alt="Instant Filter" loading="lazy">
+            <span class="card-timestamp">00:25</span>
+          </div>
+          <div class="card-body">
+            <div class="card-tags">
+              <span class="tag blue">Поиск</span>
+              <span class="tag">Быстрый фильтр</span>
+            </div>
+            <h3 class="card-title">Мгновенный поиск и живая фильтрация</h3>
+            <p class="card-text">
+              Поле поиска в правом верхнем углу панели фильтрует тысячи элементов на лету без лагов и задержек прямо во время набора текста.
+            </p>
+          </div>
+        </article>
+
+        <!-- Card 6 -->
+        <article class="card">
+          <div class="card-img-wrap" onclick="openLightbox('06_multi_rename_tool.png')">
+            <img src="06_multi_rename_tool.png" alt="Multi-Rename Tool" loading="lazy">
+            <span class="card-timestamp">00:28</span>
+          </div>
+          <div class="card-body">
+            <div class="card-tags">
+              <span class="tag purple">Пакетные операции</span>
+              <span class="tag">RegEx</span>
+            </div>
+            <h3 class="card-title">Инструмент пакетного переименования</h3>
+            <p class="card-text">
+              Мощный диалог Multi-Rename Tool: поиск и замена по регулярным выражениям (RegEx), префиксы, суффиксы, автонумерация и интерактивный предварительный просмотр.
+            </p>
+          </div>
+        </article>
+
+        <!-- Card 7 -->
+        <article class="card">
+          <div class="card-img-wrap" onclick="openLightbox('07_git_status_badges.png')">
+            <img src="07_git_status_badges.png" alt="Git Badges" loading="lazy">
+            <span class="card-timestamp">00:35</span>
+          </div>
+          <div class="card-body">
+            <div class="card-tags">
+              <span class="tag orange">Git Интеграция</span>
+              <span class="tag">Бейджи</span>
+            </div>
+            <h3 class="card-title">Отображение статуса Git в реальном времени</h3>
+            <p class="card-text">
+              Цветные индикаторы прямо в списке файлов: бейдж [M] (Modified) информирует об изменениях в репозитории для папок и исходных файлов.
+            </p>
+          </div>
+        </article>
+
+        <!-- Card 8 -->
+        <article class="card">
+          <div class="card-img-wrap" onclick="openLightbox('08_git_diff_viewer.png')">
+            <img src="08_git_diff_viewer.png" alt="Git Diff Viewer Modal" loading="lazy">
+            <span class="card-timestamp">00:38</span>
+          </div>
+          <div class="card-body">
+            <div class="card-tags">
+              <span class="tag cyan">Git Diff</span>
+              <span class="tag">Подсветка кода</span>
+            </div>
+            <h3 class="card-title">Встроенный просмотр диффов (Git Diff)</h3>
+            <p class="card-text">
+              Полноценное окно с вкладками Status, Log, Diff, Blame, Branches. Цветная подсветка добавленных и удаленных строк, управление Stash, Push и Pull.
+            </p>
+          </div>
+        </article>
+
+        <!-- Card 9 -->
+        <article class="card">
+          <div class="card-img-wrap" onclick="openLightbox('09_integrated_terminal.png')">
+            <img src="09_integrated_terminal.png" alt="Integrated Terminal Drawer" loading="lazy">
+            <span class="card-timestamp">00:42</span>
+          </div>
+          <div class="card-body">
+            <div class="card-tags">
+              <span class="tag green">Терминал</span>
+              <span class="tag">CLI</span>
+            </div>
+            <h3 class="card-title">Интегрированный терминал (Drawer)</h3>
+            <p class="card-text">
+              Выдвижной терминал в нижней части окна мгновенно открывается в текущей активной директории для выполнения shell-команд, сборки и git-операций.
+            </p>
+          </div>
+        </article>
+
+        <!-- Card 10 -->
+        <article class="card">
+          <div class="card-img-wrap" onclick="openLightbox('10_code_navigation.png')">
+            <img src="10_code_navigation.png" alt="Code Navigation and Rust Services" loading="lazy">
+            <span class="card-timestamp">00:45</span>
+          </div>
+          <div class="card-body">
+            <div class="card-tags">
+              <span class="tag blue">Rust Backend</span>
+              <span class="tag">Ветка Git</span>
+            </div>
+            <h3 class="card-title">Быстрая навигация по кодовой базе</h3>
+            <p class="card-text">
+              Поддержка иконок типов файлов (Rust, Markdown, PDF, Images) и бейдж активной ветки Git (например, main) прямо в строке пути.
+            </p>
+          </div>
+        </article>
+
+        <!-- Card 11 -->
+        <article class="card">
+          <div class="card-img-wrap" onclick="openLightbox('11_multi_selection.png')">
+            <img src="11_multi_selection.png" alt="Multi-file selection" loading="lazy">
+            <span class="card-timestamp">00:50</span>
+          </div>
+          <div class="card-body">
+            <div class="card-tags">
+              <span class="tag cyan">Множественный выбор</span>
+            </div>
+            <h3 class="card-title">Умное выделение групп файлов</h3>
+            <p class="card-text">
+              Быстрое выделение диапазонов файлов через клавиатуру и мышь с мгновенным подсчетом суммарного размера и количества элементов в строке статуса.
+            </p>
+          </div>
+        </article>
+
+        <!-- Card 12 -->
+        <article class="card">
+          <div class="card-img-wrap" onclick="openLightbox('12_windows_11_edition.png')">
+            <img src="12_windows_11_edition.png" alt="Oryn on Windows 11" loading="lazy">
+            <span class="card-timestamp">00:55</span>
+          </div>
+          <div class="card-body">
+            <div class="card-tags">
+              <span class="tag purple">Windows 11</span>
+              <span class="tag">Taskbar Icon</span>
+            </div>
+            <h3 class="card-title">Нативная версия для Windows 11</h3>
+            <p class="card-text">
+              Полная интеграция с операционной системой: нативная панель задач Windows с динамической иконкой, кнопки управления окном, поддержка дисков (C:, D:).
+            </p>
+          </div>
+        </article>
+
+        <!-- Card 13 -->
+        <article class="card">
+          <div class="card-img-wrap" onclick="openLightbox('13_cross_platform_trio.png')">
+            <img src="13_cross_platform_trio.png" alt="Cross-Platform Trio" loading="lazy">
+            <span class="card-timestamp">01:00</span>
+          </div>
+          <div class="card-body">
+            <div class="card-tags">
+              <span class="tag green">Кроссплатформенность</span>
+            </div>
+            <h3 class="card-title">Единый опыт на трех платформах</h3>
+            <p class="card-text">
+              Одинаково плавный, быстрый и отзывчивый интерфейс на macOS, Windows и Linux без компромиссов в функциональности.
+            </p>
+          </div>
+        </article>
+
+        <!-- Card 14 -->
+        <article class="card">
+          <div class="card-img-wrap" onclick="openLightbox('14_brand_tagline.png')">
+            <img src="14_brand_tagline.png" alt="Oryn Tagline" loading="lazy">
+            <span class="card-timestamp">01:07</span>
+          </div>
+          <div class="card-body">
+            <div class="card-tags">
+              <span class="tag blue">Слоган</span>
+            </div>
+            <h3 class="card-title">Your files. In flow.</h3>
+            <p class="card-text">
+              Философия Oryn: файлы всегда под рукой, перемещение мгновенно, интерфейс не отвлекает от работы.
+            </p>
+          </div>
+        </article>
+
+      </div>
+    </section>
+
+    <!-- Platform Highlights -->
+    <section class="platform-banner">
+      <h2 style="font-size: 26px; font-weight: 800; margin-bottom: 10px;">Кроссплатформенная мощь ядра Rust + Tauri</h2>
+      <p style="color: var(--text-muted); max-width: 650px; margin: 0 auto;">
+        Максимальная скорость отклика, минимальное потребление оперативной памяти и нативная интеграция с каждой операционной системой.
+      </p>
+
+      <div class="platform-grid">
+        <div class="platform-item">
+          <h3>🍎 macOS</h3>
+          <p>Интеграция с Dock, поддержка Apple Silicon ARM64, нативные диалоги и сочетания клавиш Command.</p>
+        </div>
+        <div class="platform-item">
+          <h3>🪟 Windows 11 / 10</h3>
+          <p>Динамическая смена иконки в панели задач, быстрое определение всех дисков, поддержка Quick Access.</p>
+        </div>
+        <div class="platform-item">
+          <h3>🐧 Linux</h3>
+          <p>Поддержка Wayland и X11, интеграция с системным треем, сверхлегкий бинарник.</p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Lightbox Modal -->
+  <div id="lightbox" class="lightbox" onclick="closeLightbox()">
+    <div class="lightbox-content" onclick="event.stopPropagation()">
+      <button class="lightbox-close" onclick="closeLightbox()">&times;</button>
+      <img id="lightbox-img" src="" alt="Enlarged view">
+    </div>
+  </div>
+
+  <footer>
+    <p>© 2026 Oryn • Modern Dual-Pane File Manager • All rights reserved</p>
+  </footer>
+
+  <script>
+    function openLightbox(src) {
+      const lb = document.getElementById('lightbox');
+      const img = document.getElementById('lightbox-img');
+      img.src = src;
+      lb.classList.add('active');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeLightbox() {
+      const lb = document.getElementById('lightbox');
+      lb.classList.remove('active');
+      document.body.style.overflow = 'auto';
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeLightbox();
+    });
+  </script>
+</body>
+</html>
