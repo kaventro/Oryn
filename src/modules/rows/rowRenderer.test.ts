@@ -210,6 +210,12 @@ test('RowRenderer syncRow efficiently updates row properties', () => {
 
 test('RowRenderer handles image thumbnails in createRow and syncRow, dateText updates, and size title changes', () => {
   const cleanup = setupDom();
+  const origWindow = (globalThis as any).window;
+  (globalThis as any).window = {
+    ow: {
+      assetUrl: (p: string) => `asset://localhost/${encodeURIComponent(p.replace(/\\/g, '/'))}`,
+    },
+  };
   const iconRegistry = {
     resolveIconKey: (item: PaneItem) => {
       if (item.isDir) return 'folder';
@@ -308,6 +314,7 @@ test('RowRenderer handles image thumbnails in createRow and syncRow, dateText up
     renderer.syncRow(row3, changedToDir, pane, 2);
     assert.equal(row3.children[1].textContent, '2026-09-26');
   } finally {
+    (globalThis as any).window = origWindow;
     cleanup();
   }
 });

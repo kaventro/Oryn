@@ -107,7 +107,7 @@ pub fn fs_read_office(input: ReadFileIn) -> Result<crate::services::fs_office::O
 
 pub fn fs_read_media_data_url(input: ReadFileIn) -> Result<String, String> {
     use std::io::Read;
-    let path = std::path::Path::new(&input.path);
+    let path = crate::services::preview_asset::validate_preview_asset(&input.path)?;
     let ext = path
         .extension()
         .and_then(|s| s.to_str())
@@ -134,8 +134,8 @@ pub fn fs_read_media_data_url(input: ReadFileIn) -> Result<String, String> {
         _ => "application/octet-stream",
     };
 
-    let f = fs::File::open(path).map_err(|e| e.to_string())?;
-    const MAX_ALLOWED_MEDIA_BYTES: usize = 20_000_000; // 20 MB ceiling
+    let f = fs::File::open(&path).map_err(|e| e.to_string())?;
+    const MAX_ALLOWED_MEDIA_BYTES: usize = 20_000_000;
     let max = input
         .max_bytes
         .unwrap_or(MAX_ALLOWED_MEDIA_BYTES)
@@ -317,6 +317,23 @@ mod tests {
         .unwrap();
 
         assert!(data_url.starts_with("data:image/png;base64,"));
+    }
+
+    #[test]
+    fn refuses_media_under_a_sensitive_directory() {
+        let tmp = tempfile::tempdir().unwrap();
+        let ssh = tmp.path().join(".ssh");
+        std::fs::create_dir(&ssh).unwrap();
+        let key = ssh.join("id_rsa.png");
+        std::fs::write(&key, b"\x89PNG\r\n\x1a\nfake").unwrap();
+
+        let err = fs_read_media_data_url(ReadFileIn {
+            path: key.to_string_lossy().into_owned(),
+            max_bytes: None,
+        })
+        .unwrap_err();
+
+        assert!(err.contains("not allowed"));
     }
 
     #[tokio::test]

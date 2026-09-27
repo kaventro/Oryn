@@ -14,14 +14,14 @@ export const SUPPORTED_IMAGE_EXTENSIONS = new Set([
 
 export interface ThumbnailCacheOptions {
   maxEntries?: number;
-  apiObj?: { assetUrl?: (path: string) => string };
+  apiObj?: { assetUrl?: (path: string) => string | Promise<string> };
 }
 
 export class ThumbnailCache {
   private cache: Map<string, string>;
   private failedSet: Set<string>;
   private maxEntries: number;
-  private apiObj?: { assetUrl?: (path: string) => string };
+  private apiObj?: { assetUrl?: (path: string) => string | Promise<string> };
 
   constructor(options: ThumbnailCacheOptions = {}) {
     this.maxEntries = options.maxEntries ?? 500;
@@ -38,15 +38,13 @@ export class ThumbnailCache {
     return SUPPORTED_IMAGE_EXTENSIONS.has(ext);
   }
 
-  public resolveAssetUrl(filePath: string): string {
+  public resolveAssetUrl(filePath: string): string | Promise<string> {
     if (!filePath) return '';
     const api = this.apiObj || (typeof window !== 'undefined' ? (window as any).ow : null);
     if (api && typeof api.assetUrl === 'function') {
       return api.assetUrl(filePath);
     }
-    // Fallback standard Tauri asset protocol URL
-    const clean = filePath.replace(/\\/g, '/');
-    return `asset://localhost/${encodeURIComponent(clean)}`;
+    return '';
   }
 
   public getCached(filePath: string): string | null {
@@ -91,7 +89,7 @@ export class ThumbnailCache {
     }
 
     const cached = this.getCached(filePath);
-    const url = cached || this.resolveAssetUrl(filePath);
+    const resolved = cached || this.resolveAssetUrl(filePath);
 
     // Create thumbnail image element with lazy loading
     const img = document.createElement('img');
@@ -101,25 +99,41 @@ export class ThumbnailCache {
     img.alt = '';
     img.style.display = cached ? 'block' : 'none';
 
-    img.onload = () => {
-      this.setCached(filePath, url);
-      img.style.display = 'block';
-      const fallback = iconEl.querySelector('.mac-icon');
-      if (fallback) {
-        (fallback as HTMLElement).style.display = 'none';
-      }
+    const bind = (url: string) => {
+      img.onload = () => {
+        if (iconEl.querySelector('.row-thumbnail') !== img) return;
+        this.setCached(filePath, url);
+        img.style.display = 'block';
+        const fallback = iconEl.querySelector('.mac-icon');
+        if (fallback) {
+          (fallback as HTMLElement).style.display = 'none';
+        }
+      };
+
+      img.onerror = () => {
+        if (iconEl.querySelector('.row-thumbnail') !== img) return;
+        this.markFailed(filePath);
+        img.remove();
+        const fallback = iconEl.querySelector('.mac-icon');
+        if (fallback) {
+          (fallback as HTMLElement).style.display = '';
+        }
+      };
+
+      img.src = url;
     };
 
-    img.onerror = () => {
-      this.markFailed(filePath);
-      img.remove();
-      const fallback = iconEl.querySelector('.mac-icon');
-      if (fallback) {
-        (fallback as HTMLElement).style.display = '';
-      }
-    };
-
-    img.src = url;
+    if (typeof resolved === 'string') {
+      if (resolved) bind(resolved);
+    } else {
+      void resolved.then((url) => {
+        if (url && iconEl.querySelector('.row-thumbnail') === img) bind(url);
+      }).catch(() => {
+        if (iconEl.querySelector('.row-thumbnail') === img) {
+          this.markFailed(filePath);
+        }
+      });
+    }
 
     iconEl.innerHTML = fallbackSvg;
     iconEl.appendChild(img);

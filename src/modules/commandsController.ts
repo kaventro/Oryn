@@ -751,7 +751,7 @@ export class CommandsController {
         img.onload = () => {
           meta.textContent = `${extensionOf(item.base).toUpperCase()} • ${img.naturalWidth} × ${img.naturalHeight} px • ${fmtBytes(item.size || 0)}`;
         };
-        img.onerror = async () => {
+        const onImageError = async () => {
           try {
             const apiObj = typeof this.api === 'function' ? this.api() : this.api;
             if (apiObj?.readMediaDataUrl) {
@@ -763,7 +763,13 @@ export class CommandsController {
           } catch (_) { }
           fail(`Cannot decode ${item.base} as an image.`);
         };
-        img.src = this.api().assetUrl(fp);
+        img.onerror = () => onImageError();
+        let imageSrc = '';
+        try {
+          imageSrc = await this.api().assetUrl(fp);
+        } catch (_) {}
+        if (imageSrc) img.src = imageSrc;
+        else await onImageError();
         content.append(img, meta);
         // Note: No edit button for images
       } else if (isAudio) {
@@ -771,8 +777,7 @@ export class CommandsController {
         content.replaceChildren();
         const audio = document.createElement('audio');
         audio.controls = true;
-        audio.src = this.api().assetUrl(fp);
-        audio.onerror = async () => {
+        const onAudioError = async () => {
           try {
             const apiObj = typeof this.api === 'function' ? this.api() : this.api;
             if (apiObj?.readMediaDataUrl) {
@@ -782,6 +787,13 @@ export class CommandsController {
             }
           } catch (_) { }
         };
+        audio.onerror = () => onAudioError();
+        let audioSrc = '';
+        try {
+          audioSrc = await this.api().assetUrl(fp);
+        } catch (_) {}
+        if (audioSrc) audio.src = audioSrc;
+        else await onAudioError();
         const meta = document.createElement('div');
         meta.className = 'viewer-media-meta';
         meta.textContent = `${extensionOf(item.base).toUpperCase()} • ${fmtBytes(item.size || 0)}`;
@@ -793,8 +805,7 @@ export class CommandsController {
         video.controls = true;
         video.style.maxWidth = '100%';
         video.style.maxHeight = '70vh';
-        video.src = this.api().assetUrl(fp);
-        video.onerror = async () => {
+        const onVideoError = async () => {
           try {
             const apiObj = typeof this.api === 'function' ? this.api() : this.api;
             if (apiObj?.readMediaDataUrl) {
@@ -804,6 +815,13 @@ export class CommandsController {
             }
           } catch (_) { }
         };
+        video.onerror = () => onVideoError();
+        let videoSrc = '';
+        try {
+          videoSrc = await this.api().assetUrl(fp);
+        } catch (_) {}
+        if (videoSrc) video.src = videoSrc;
+        else await onVideoError();
         content.append(video);
       } else if (isOffice) {
         const doc = await this.api().readOffice(fp);

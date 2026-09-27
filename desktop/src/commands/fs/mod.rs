@@ -3,7 +3,7 @@ mod transfer;
 mod write;
 
 use serde_json::Value;
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager, Runtime};
 
 use crate::commands::response::Ack;
 use crate::services::fs_props::StatPropsOut;
@@ -67,6 +67,23 @@ pub fn fs_read_office(input: ReadFileIn) -> Result<crate::services::fs_office::O
 #[tauri::command]
 pub fn fs_read_media_data_url(input: ReadFileIn) -> Result<String, String> {
     read::fs_read_media_data_url(input)
+}
+
+#[tauri::command]
+pub async fn fs_grant_preview_asset<R: Runtime>(
+    app: AppHandle<R>,
+    input: ReadFileIn,
+) -> Result<String, String> {
+    let path = input.path;
+    let canonical = tokio::task::spawn_blocking(move || {
+        crate::services::preview_asset::validate_preview_asset(&path)
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+    app.asset_protocol_scope()
+        .allow_file(&canonical)
+        .map_err(|e| e.to_string())?;
+    Ok(canonical.to_string_lossy().into_owned())
 }
 
 #[tauri::command]
@@ -156,4 +173,55 @@ pub fn fs_watch_dirs(
 ) -> Result<Ack, String> {
     watcher.watch_dirs(input.paths)?;
     Ok(Ack { ok: true })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_app() -> AppHandle<tauri::test::MockRuntime> {
+        tauri::test::mock_builder()
+            .build(tauri::test::mock_context(tauri::test::noop_assets()))
+            .expect("mock app")
+            .handle()
+            .clone()
+    }
+
+    #[tokio::test]
+    async fn grants_one_preview_file() {
+        let tmp = tempfile::Builder::new().suffix(".png").tempfile().unwrap();
+        std::fs::write(tmp.path(), b"png").unwrap();
+        let path = tmp.path().to_string_lossy().to_string();
+
+        let granted = fs_grant_preview_asset(
+            test_app(),
+            ReadFileIn {
+                path: path.clone(),
+                max_bytes: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        let expected = std::fs::canonicalize(&path)
+            .unwrap()
+            .to_string_lossy()
+            .into_owned();
+        assert_eq!(granted, expected);
+    }
+
+    #[tokio::test]
+    async fn refuses_a_preview_grant_for_a_non_media_path() {
+        let err = fs_grant_preview_asset(
+            test_app(),
+            ReadFileIn {
+                path: String::new(),
+                max_bytes: None,
+            },
+        )
+        .await
+        .unwrap_err();
+
+        assert!(err.contains("empty"));
+    }
 }

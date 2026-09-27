@@ -74,6 +74,7 @@ commands.allow = [
   "fs_probe_text",
   "fs_read_office",
   "fs_read_media_data_url",
+  "fs_grant_preview_asset",
   "remote_list_profiles",
   "remote_save_profile",
   "remote_delete_profile",

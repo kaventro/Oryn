@@ -955,3 +955,83 @@ test('ColumnsViewController handleTypeToJump jumps to item by prefix with keyboa
   assert.equal(activeCol4?.selectedIndex, 3);
   assert.equal(activeCol4?.selectedItem?.base, 'Music');
 });
+
+test('ColumnsViewController uses a data URL when the asset grant is refused', async () => {
+  const origDoc = globalThis.document;
+  const images: any[] = [];
+  (globalThis as any).document = {
+    createElement: (tag: string) => {
+      const node: any = {
+        tagName: tag,
+        className: '',
+        style: {},
+        alt: '',
+        src: '',
+        textContent: '',
+        innerHTML: '',
+        children: [],
+        onerror: null,
+        append(...parts: any[]) {
+          this.children.push(...parts);
+        },
+        appendChild(child: any) {
+          this.children.push(child);
+          return child;
+        },
+        querySelector(selector: string) {
+          const name = selector.replace('.', '');
+          const walk = (current: any): any => {
+            if (String(current.className || '').includes(name)) return current;
+            for (const child of current.children || []) {
+              const found = walk(child);
+              if (found) return found;
+            }
+            return null;
+          };
+          return walk(node);
+        },
+        addEventListener() {},
+      };
+      if (tag === 'img') images.push(node);
+      return node;
+    },
+  };
+
+  const controller = new ColumnsViewController({
+    api: () => ({
+      pathJoin: async (parent: string, child: string) => `${parent}/${child}`,
+      assetUrl: async () => {
+        throw new Error('denied');
+      },
+      readMediaDataUrl: async () => 'data:image/png;base64,column-fallback',
+    }),
+  });
+
+  try {
+    controller.createInspectorElement(
+      { base: 'photo.png', isDir: false, size: 12, mtime: 0, ext: 'png' },
+      '/pics',
+    );
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(images[0].src, 'data:image/png;base64,column-fallback');
+
+    images.length = 0;
+    const refused = new ColumnsViewController({
+      api: () => ({
+        pathJoin: async (parent: string, child: string) => `${parent}/${child}`,
+        assetUrl: async () => '',
+        readMediaDataUrl: async () => {
+          throw new Error('decode failed');
+        },
+      }),
+    });
+    refused.createInspectorElement(
+      { base: 'clip.png', isDir: false, size: 12, mtime: 0, ext: 'png' },
+      '/pics',
+    );
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(images[0].src, '');
+  } finally {
+    globalThis.document = origDoc;
+  }
+});
