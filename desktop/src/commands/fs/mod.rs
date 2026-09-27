@@ -70,8 +70,16 @@ pub fn fs_read_media_data_url(input: ReadFileIn) -> Result<String, String> {
 }
 
 #[tauri::command]
-pub fn fs_grant_preview_asset<R: Runtime>(app: AppHandle<R>, input: ReadFileIn) -> Result<String, String> {
-    let canonical = crate::services::preview_asset::validate_preview_asset(&input.path)?;
+pub async fn fs_grant_preview_asset<R: Runtime>(
+    app: AppHandle<R>,
+    input: ReadFileIn,
+) -> Result<String, String> {
+    let path = input.path;
+    let canonical = tokio::task::spawn_blocking(move || {
+        crate::services::preview_asset::validate_preview_asset(&path)
+    })
+    .await
+    .map_err(|e| e.to_string())??;
     app.asset_protocol_scope()
         .allow_file(&canonical)
         .map_err(|e| e.to_string())?;
@@ -179,8 +187,8 @@ mod tests {
             .clone()
     }
 
-    #[test]
-    fn grants_one_preview_file() {
+    #[tokio::test]
+    async fn grants_one_preview_file() {
         let tmp = tempfile::Builder::new().suffix(".png").tempfile().unwrap();
         std::fs::write(tmp.path(), b"png").unwrap();
         let path = tmp.path().to_string_lossy().to_string();
@@ -192,6 +200,7 @@ mod tests {
                 max_bytes: None,
             },
         )
+        .await
         .unwrap();
 
         let expected = std::fs::canonicalize(&path)
@@ -201,8 +210,8 @@ mod tests {
         assert_eq!(granted, expected);
     }
 
-    #[test]
-    fn refuses_a_preview_grant_for_a_non_media_path() {
+    #[tokio::test]
+    async fn refuses_a_preview_grant_for_a_non_media_path() {
         let err = fs_grant_preview_asset(
             test_app(),
             ReadFileIn {
@@ -210,6 +219,7 @@ mod tests {
                 max_bytes: None,
             },
         )
+        .await
         .unwrap_err();
 
         assert!(err.contains("empty"));

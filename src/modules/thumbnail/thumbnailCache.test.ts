@@ -109,6 +109,9 @@ test('ThumbnailCache.mountThumbnail handles missing or failed paths, lazy loads,
           return child;
         },
         querySelector(sel: string) {
+          if (sel === '.row-thumbnail') {
+            return this.children.find((child: any) => child.className === 'row-thumbnail') || null;
+          }
           if (sel === '.mac-icon') return mockMacIcon;
           return null;
         },
@@ -225,7 +228,11 @@ test('ThumbnailCache mounts thumbnails from a promised asset URL and records fai
       this.children.push(child);
       return child;
     },
-    querySelector() {
+    querySelector(sel: string) {
+      if (sel === '.row-thumbnail') {
+        return this.children.find((child) => child.className === 'row-thumbnail') || null;
+      }
+      if (sel === '.mac-icon') return null;
       return null;
     },
   });
@@ -257,6 +264,26 @@ test('ThumbnailCache mounts thumbnails from a promised asset URL and records fai
     await Promise.resolve();
     await Promise.resolve();
     assert.equal(denied.isFailed('/secret.png'), true);
+
+    let resolveLate: (url: string) => void = () => {};
+    const late = new ThumbnailCache({
+      apiObj: {
+        assetUrl: () =>
+          new Promise<string>((resolve) => {
+            resolveLate = resolve;
+          }),
+      },
+    });
+    const staleIcon = icon();
+    late.mountThumbnail(staleIcon as any, '/stale.png', '<svg class="mac-icon"></svg>');
+    const firstImg = createdImg;
+    staleIcon.children.length = 0;
+    const replacement = { className: 'row-thumbnail' };
+    staleIcon.children.push(replacement);
+    resolveLate('asset:///stale.png');
+    await Promise.resolve();
+    assert.equal(firstImg.src, '');
+    assert.equal(late.getCached('/stale.png'), null);
 
     const noUrl = new ThumbnailCache({
       apiObj: { assetUrl: () => '' },

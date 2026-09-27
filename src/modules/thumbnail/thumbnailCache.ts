@@ -101,6 +101,7 @@ export class ThumbnailCache {
 
     const bind = (url: string) => {
       img.onload = () => {
+        if (iconEl.querySelector('.row-thumbnail') !== img) return;
         this.setCached(filePath, url);
         img.style.display = 'block';
         const fallback = iconEl.querySelector('.mac-icon');
@@ -110,6 +111,7 @@ export class ThumbnailCache {
       };
 
       img.onerror = () => {
+        if (iconEl.querySelector('.row-thumbnail') !== img) return;
         this.markFailed(filePath);
         img.remove();
         const fallback = iconEl.querySelector('.mac-icon');
@@ -125,9 +127,11 @@ export class ThumbnailCache {
       if (resolved) bind(resolved);
     } else {
       void resolved.then((url) => {
-        if (url) bind(url);
+        if (url && iconEl.querySelector('.row-thumbnail') === img) bind(url);
       }).catch(() => {
-        this.markFailed(filePath);
+        if (iconEl.querySelector('.row-thumbnail') === img) {
+          this.markFailed(filePath);
+        }
       });
     }
 
