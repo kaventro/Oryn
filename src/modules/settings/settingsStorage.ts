@@ -1,4 +1,3 @@
-// src/modules/settings/settingsStorage.ts
 import { AppSettings, type AppSettingsData } from './settingsModel.ts';
 
 const SETTINGS_KEY = 'Oryn.settings';
@@ -34,10 +33,6 @@ export const AVAILABLE_DOCK_ICONS = [
   { id: '10', name: 'Deep Teal Glow', src: '/dock-icons/thumb_10.png' },
 ];
 
-/**
- * Storage & Persistence service for AppSettings.
- * Implements Dependency Inversion & Single Responsibility for I/O operations.
- */
 export class SettingsStorageService {
   private _listeners: Set<(settings: AppSettings) => void>;
 
@@ -53,7 +48,6 @@ export class SettingsStorageService {
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) data = parsed;
     } catch { }
 
-    // Legacy sync
     try {
       const theme = localStorage.getItem(THEME_KEY);
       if (theme) data.trayTheme = theme;
@@ -100,7 +94,9 @@ export class SettingsStorageService {
     if (typeof api?.setDockIcon === 'function') {
       try {
         await api.setDockIcon(validId);
-      } catch {}
+      } catch (err) {
+        console.error('Failed to set dock icon:', err);
+      }
     }
     if (typeof document === 'undefined') return;
     try {
@@ -108,7 +104,7 @@ export class SettingsStorageService {
       if (link) {
         link.href = `/dock-icons/${validId}.png`;
       }
-    } catch {}
+    } catch { }
   }
 
   public subscribe(callback: (settings: AppSettings) => void): () => boolean {

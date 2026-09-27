@@ -49,6 +49,23 @@ mod win32_icon {
     static PREV_ICONS: parking_lot::Mutex<(Option<usize>, Option<usize>)> =
         parking_lot::Mutex::new((None, None));
 
+    pub unsafe fn create_hicon_from_png(bytes: &[u8], size: i32) -> Result<HICON, String> {
+        let hicon = CreateIconFromResourceEx(
+            bytes.as_ptr(),
+            bytes.len() as u32,
+            1,
+            0x00030000,
+            size,
+            size,
+            LR_DEFAULTCOLOR,
+        );
+        if !hicon.is_null() {
+            return Ok(hicon);
+        }
+        let (rgba, width, height) = super::png_to_square_rgba(bytes, size as u32)?;
+        create_hicon_from_rgba(&rgba, width, height)
+    }
+
     pub unsafe fn create_hicon_from_rgba(
         rgba: &[u8],
         width: u32,
@@ -59,13 +76,12 @@ mod win32_icon {
             return Err("Invalid RGBA buffer length".into());
         }
 
-        // Win32 32-bit bitmaps expect BGRA byte order (little-endian 0xAARRGGBB)
         let mut bgra = Vec::with_capacity(pixel_count * 4);
         for chunk in rgba.chunks_exact(4) {
-            bgra.push(chunk[2]); // B
-            bgra.push(chunk[1]); // G
-            bgra.push(chunk[0]); // R
-            bgra.push(chunk[3]); // A
+            bgra.push(chunk[2]);
+            bgra.push(chunk[1]);
+            bgra.push(chunk[0]);
+            bgra.push(chunk[3]);
         }
 
         let hbm_color = CreateBitmap(
@@ -79,7 +95,6 @@ mod win32_icon {
             return Err("CreateBitmap for color failed".into());
         }
 
-        // 1bpp monochrome mask; row length must be a multiple of 2 bytes (WORD aligned)
         let row_bytes = ((width + 15) / 16) * 2;
         let mask_data = vec![0u8; (row_bytes * height) as usize];
         let hbm_mask = CreateBitmap(
@@ -114,43 +129,44 @@ mod win32_icon {
     }
 
     pub unsafe fn set_window_icons(hwnd: HWND, hicon_big: HICON, hicon_small: HICON) {
-        // Send WM_SETICON for big icon (Taskbar and Alt+Tab)
-        SendMessageW(
-            hwnd,
-            WM_SETICON,
-            ICON_BIG as usize,
-            hicon_big as isize,
-        );
-        // Send WM_SETICON for small icon (Titlebar/Tray)
-        SendMessageW(
-            hwnd,
-            WM_SETICON,
-            ICON_SMALL as usize,
-            hicon_small as isize,
-        );
+        let root = GetAncestor(hwnd, GA_ROOTOWNER);
+        let top = GetAncestor(hwnd, GA_ROOT);
+        let handles = [hwnd, root, top];
 
-        // Update Class icons so Windows system caches and child windows inherit them
-        #[cfg(target_pointer_width = "64")]
-        {
-            SetClassLongPtrW(hwnd, GCLP_HICON, hicon_big as isize);
-            SetClassLongPtrW(hwnd, GCLP_HICONSM, hicon_small as isize);
-        }
-        #[cfg(target_pointer_width = "32")]
-        {
-            SetClassLongW(hwnd, GCL_HICON, hicon_big as i32);
-            SetClassLongW(hwnd, GCL_HICONSM, hicon_small as i32);
-        }
+        for &target in &handles {
+            if target.is_null() {
+                continue;
+            }
+            SendMessageW(target, WM_SETICON, ICON_BIG as usize, hicon_big as isize);
+            SendMessageW(target, WM_SETICON, ICON_SMALL as usize, hicon_small as isize);
 
-        // Force Windows DWM to redraw the window frame and refresh taskbar button
-        SetWindowPos(
-            hwnd,
-            std::ptr::null_mut(),
-            0,
-            0,
-            0,
-            0,
-            SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED,
-        );
+            #[cfg(target_pointer_width = "64")]
+            {
+                SetClassLongPtrW(target, GCLP_HICON, hicon_big as isize);
+                SetClassLongPtrW(target, GCLP_HICONSM, hicon_small as isize);
+            }
+            #[cfg(target_pointer_width = "32")]
+            {
+                SetClassLongW(target, GCL_HICON, hicon_big as i32);
+                SetClassLongW(target, GCL_HICONSM, hicon_small as i32);
+            }
+
+            SetWindowPos(
+                target,
+                std::ptr::null_mut(),
+                0,
+                0,
+                0,
+                0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED,
+            );
+            RedrawWindow(
+                target,
+                std::ptr::null(),
+                std::ptr::null_mut(),
+                RDW_INVALIDATE | RDW_FRAME | RDW_ALLCHILDREN | RDW_UPDATENOW,
+            );
+        }
     }
 
     pub unsafe fn record_and_cleanup_old_icons(hicon_big: HICON, hicon_small: HICON) {
@@ -203,13 +219,21 @@ pub fn set_dock_icon(app: tauri::AppHandle, icon_id: String) -> Result<(), Strin
         }
     }
 
+    let tauri_img = window_icon_from_png(bytes)?;
+    let mut applied = 0usize;
+    let mut last_err: Option<String> = None;
+    for win in app.webview_windows().values() {
+        match win.set_icon(tauri_img.clone()) {
+            Ok(()) => applied += 1,
+            Err(e) => last_err = Some(e.to_string()),
+        }
+    }
+
     #[cfg(target_os = "windows")]
     {
-        let (rgba_big, w_big, h_big) = png_to_square_rgba(bytes, 256)?;
-        let (rgba_small, w_small, h_small) = png_to_square_rgba(bytes, 32)?;
         unsafe {
-            let hicon_big = win32_icon::create_hicon_from_rgba(&rgba_big, w_big, h_big)?;
-            let hicon_small = win32_icon::create_hicon_from_rgba(&rgba_small, w_small, h_small)?;
+            let hicon_big = win32_icon::create_hicon_from_png(bytes, 256)?;
+            let hicon_small = win32_icon::create_hicon_from_png(bytes, 32)?;
 
             for win in app.webview_windows().values() {
                 if let Ok(hwnd) = win.hwnd() {
@@ -219,16 +243,6 @@ pub fn set_dock_icon(app: tauri::AppHandle, icon_id: String) -> Result<(), Strin
             }
 
             win32_icon::record_and_cleanup_old_icons(hicon_big, hicon_small);
-        }
-    }
-
-    let tauri_img = window_icon_from_png(bytes)?;
-    let mut applied = 0usize;
-    let mut last_err: Option<String> = None;
-    for win in app.webview_windows().values() {
-        match win.set_icon(tauri_img.clone()) {
-            Ok(()) => applied += 1,
-            Err(e) => last_err = Some(e.to_string()),
         }
     }
 
@@ -266,4 +280,26 @@ mod tests {
             DestroyIcon(hicon);
         }
     }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn creates_valid_win32_hicon_from_png() {
+        use windows_sys::Win32::UI::WindowsAndMessaging::{CreateIconFromResourceEx, DestroyIcon};
+
+        let bytes = include_bytes!("../../dock-icons/1.png");
+        unsafe {
+            let hicon = CreateIconFromResourceEx(
+                bytes.as_ptr(),
+                bytes.len() as u32,
+                1,
+                0x00030000,
+                256,
+                256,
+                0,
+            );
+            assert!(!hicon.is_null());
+            DestroyIcon(hicon);
+        }
+    }
+
 }
