@@ -49,6 +49,7 @@ mod win32_icon {
     static PREV_ICONS: parking_lot::Mutex<(Option<usize>, Option<usize>)> =
         parking_lot::Mutex::new((None, None));
 
+    /// Creates a 32-bit ARGB HICON from raw PNG bytes with fallback to decoded RGBA bitmap.
     pub unsafe fn create_hicon_from_png(bytes: &[u8], size: i32) -> Result<HICON, String> {
         let hicon = CreateIconFromResourceEx(
             bytes.as_ptr(),
@@ -66,6 +67,7 @@ mod win32_icon {
         create_hicon_from_rgba(&rgba, width, height)
     }
 
+    /// Creates a Win32 HICON from a raw 32-bit RGBA buffer using GDI bitmaps.
     pub unsafe fn create_hicon_from_rgba(
         rgba: &[u8],
         width: u32,
@@ -128,6 +130,7 @@ mod win32_icon {
         }
     }
 
+    /// Applies large and small HICON handles across the window hierarchy and notifies DWM.
     pub unsafe fn set_window_icons(hwnd: HWND, hicon_big: HICON, hicon_small: HICON) {
         let root = GetAncestor(hwnd, GA_ROOTOWNER);
         let top = GetAncestor(hwnd, GA_ROOT);
@@ -169,6 +172,7 @@ mod win32_icon {
         }
     }
 
+    /// Tracks previously applied HICON handles and destroys prior icon resources safely.
     pub unsafe fn record_and_cleanup_old_icons(hicon_big: HICON, hicon_small: HICON) {
         let old = {
             let mut lock = PREV_ICONS.lock();
@@ -185,6 +189,7 @@ mod win32_icon {
     }
 }
 
+/// Sets the application dock and window icon across supported platforms.
 #[tauri::command]
 pub fn set_dock_icon(app: tauri::AppHandle, icon_id: String) -> Result<(), String> {
     let raw_id = icon_id.trim_end_matches(".png");
@@ -221,6 +226,8 @@ pub fn set_dock_icon(app: tauri::AppHandle, icon_id: String) -> Result<(), Strin
 
     let tauri_img = window_icon_from_png(bytes)?;
     let mut applied = 0usize;
+    #[cfg(target_os = "windows")]
+    let mut native_applied = false;
     let mut last_err: Option<String> = None;
     for win in app.webview_windows().values() {
         match win.set_icon(tauri_img.clone()) {
@@ -228,6 +235,7 @@ pub fn set_dock_icon(app: tauri::AppHandle, icon_id: String) -> Result<(), Strin
             Err(e) => last_err = Some(e.to_string()),
         }
     }
+    let _ = applied;
 
     #[cfg(target_os = "windows")]
     {
@@ -238,7 +246,10 @@ pub fn set_dock_icon(app: tauri::AppHandle, icon_id: String) -> Result<(), Strin
             for win in app.webview_windows().values() {
                 if let Ok(hwnd) = win.hwnd() {
                     let hwnd_sys = hwnd.0 as windows_sys::Win32::Foundation::HWND;
-                    win32_icon::set_window_icons(hwnd_sys, hicon_big, hicon_small);
+                    if !hwnd_sys.is_null() {
+                        win32_icon::set_window_icons(hwnd_sys, hicon_big, hicon_small);
+                        native_applied = true;
+                    }
                 }
             }
 
@@ -246,9 +257,16 @@ pub fn set_dock_icon(app: tauri::AppHandle, icon_id: String) -> Result<(), Strin
         }
     }
 
+    #[cfg(target_os = "windows")]
+    if !native_applied {
+        return Err(last_err.unwrap_or_else(|| "no window to apply icon".into()));
+    }
+
+    #[cfg(not(target_os = "windows"))]
     if applied == 0 {
         return Err(last_err.unwrap_or_else(|| "no window to apply icon".into()));
     }
+
     Ok(())
 }
 
@@ -302,4 +320,34 @@ mod tests {
         }
     }
 
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn creates_valid_win32_hicon_from_png_helper() {
+        use windows_sys::Win32::UI::WindowsAndMessaging::DestroyIcon;
+
+        let bytes = include_bytes!("../../dock-icons/1.png");
+        unsafe {
+            let hicon = win32_icon::create_hicon_from_png(bytes, 256).unwrap();
+            assert!(!hicon.is_null());
+            DestroyIcon(hicon);
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn records_and_cleans_up_icons() {
+        use windows_sys::Win32::UI::WindowsAndMessaging::DestroyIcon;
+
+        let bytes = include_bytes!("../../dock-icons/1.png");
+        unsafe {
+            let h1 = win32_icon::create_hicon_from_png(bytes, 32).unwrap();
+            let h2 = win32_icon::create_hicon_from_png(bytes, 32).unwrap();
+            let h3 = win32_icon::create_hicon_from_png(bytes, 32).unwrap();
+            let h4 = win32_icon::create_hicon_from_png(bytes, 32).unwrap();
+            win32_icon::record_and_cleanup_old_icons(h1, h2);
+            win32_icon::record_and_cleanup_old_icons(h3, h4);
+            DestroyIcon(h3);
+            DestroyIcon(h4);
+        }
+    }
 }

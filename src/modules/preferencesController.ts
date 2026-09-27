@@ -10,7 +10,7 @@ const hotkeyRegistry = new HotkeyRegistry();
 export function applyTrayThemeFromStorage(): void {
   const settings = storageService.load();
   storageService.applyTheme(settings.trayTheme);
-  storageService.applyDockIcon(settings.dockIcon);
+  void storageService.applyDockIcon(settings.dockIcon).catch(() => undefined);
 }
 
 export function readTrayTheme(): string {
