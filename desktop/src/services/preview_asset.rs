@@ -1,23 +1,16 @@
 use std::ffi::OsStr;
 use std::path::{Component, Path, PathBuf};
 
-/// Extensions the UI previews through the asset protocol (images, audio, video).
 const PREVIEW_EXTENSIONS: &[&str] = &[
     "png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "ico", "avif", "mp3", "wav", "ogg", "m4a",
     "aac", "flac", "mp4", "m4v", "webm", "mov",
 ];
 
-/// Directory names that must never be exposed through the asset protocol,
-/// even when a file inside them has a preview extension.
 const SENSITIVE_DIRECTORIES: &[&str] = &[
     ".ssh", ".gnupg", ".gpg", ".aws", ".azure", ".kube", ".docker", ".npm", ".cargo", ".git",
     ".svn", ".hg",
 ];
 
-/// Canonical path of a single preview file that may be granted on the asset protocol.
-///
-/// Rejects directories, non-preview extensions, and anything that resolves through a
-/// credential or VCS metadata directory. The caller grants this exact file only.
 pub fn validate_preview_asset(path: &str) -> Result<PathBuf, String> {
     if path.trim().is_empty() {
         return Err("preview path is empty".into());

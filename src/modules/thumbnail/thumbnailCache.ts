@@ -44,7 +44,6 @@ export class ThumbnailCache {
     if (api && typeof api.assetUrl === 'function') {
       return api.assetUrl(filePath);
     }
-    // No unscoped asset URL. The protocol only serves files the backend has granted.
     return '';
   }
 

@@ -159,8 +159,6 @@ export const bridge: TauriBridge = {
   readOffice: (p: string) => ipcInvoke('fs_read_office', { input: { path: p } }),
   assetUrl: async (p: string) => {
     if (!p) return '';
-    // Grant this one file on the Rust side before the webview can load it.
-    // convertFileSrc alone does not check the path.
     await ipcInvoke('fs_grant_preview_asset', { input: { path: p } });
     const norm = p.replace(/\\/g, '/');
     return convertFileSrc(norm);

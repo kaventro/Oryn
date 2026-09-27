@@ -69,9 +69,6 @@ pub fn fs_read_media_data_url(input: ReadFileIn) -> Result<String, String> {
     read::fs_read_media_data_url(input)
 }
 
-/// Grants the asset protocol access to one preview file the UI is about to show.
-/// The static scope stays limited to app-owned directories; renderer-supplied
-/// paths are not readable until this check allows that exact file.
 #[tauri::command]
 pub fn fs_grant_preview_asset<R: Runtime>(app: AppHandle<R>, input: ReadFileIn) -> Result<String, String> {
     let canonical = crate::services::preview_asset::validate_preview_asset(&input.path)?;
