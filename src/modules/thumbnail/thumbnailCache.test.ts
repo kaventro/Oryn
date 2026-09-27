@@ -139,20 +139,21 @@ test('ThumbnailCache.mountThumbnail handles missing or failed paths, lazy loads,
     assert.equal(createdImg.className, 'row-thumbnail');
     assert.equal(createdImg.loading, 'lazy');
     assert.equal(createdImg.decoding, 'async');
-    assert.equal(createdImg.style.display, 'none');
+    assert.equal(createdImg.style.display, '');
+    assert.equal(createdImg.style.opacity, '0');
     assert.equal(createdImg.src, 'asset:///photo.png');
 
     // Trigger onload
     createdImg.onload();
     assert.equal(cache.getCached('/photo.png'), 'asset:///photo.png');
-    assert.equal(createdImg.style.display, 'block');
+    assert.equal(createdImg.style.opacity, '1');
     assert.equal(mockMacIcon.style.display, 'none');
 
     // 4. Cached hit flow
     const icon2 = createIconEl();
     mockMacIcon.style.display = 'block';
     cache.mountThumbnail(icon2, '/photo.png', '<svg class="mac-icon"></svg>');
-    assert.equal(createdImg.style.display, 'block');
+    assert.equal(createdImg.style.opacity, '1');
     assert.equal(mockMacIcon.style.display, 'none');
 
     // 5. Error flow

@@ -77,7 +77,7 @@ export class ThumbnailCache {
   }
 
   /**
-   * Mounts a lazy-loaded thumbnail image into the icon element.
+   * Mounts a lazy-loaded thumbnail image over the fallback icon.
    * If the image loads, it shows the thumbnail; if it fails, the fallback SVG stays visible.
    */
   public mountThumbnail(
@@ -93,17 +93,17 @@ export class ThumbnailCache {
     const cached = this.getCached(filePath);
     const url = cached || this.resolveAssetUrl(filePath);
 
-    // Create thumbnail image element with lazy loading
+    // Keep lazy images rendered so browsers can start loading them.
     const img = document.createElement('img');
     img.className = 'row-thumbnail';
     img.loading = 'lazy';
     img.decoding = 'async';
     img.alt = '';
-    img.style.display = cached ? 'block' : 'none';
+    img.style.opacity = cached ? '1' : '0';
 
     img.onload = () => {
       this.setCached(filePath, url);
-      img.style.display = 'block';
+      img.style.opacity = '1';
       const fallback = iconEl.querySelector('.mac-icon');
       if (fallback) {
         (fallback as HTMLElement).style.display = 'none';
