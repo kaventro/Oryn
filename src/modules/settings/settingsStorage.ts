@@ -1,4 +1,3 @@
-// src/modules/settings/settingsStorage.ts
 import { AppSettings, type AppSettingsData } from './settingsModel.ts';
 
 const SETTINGS_KEY = 'Oryn.settings';
@@ -34,10 +33,6 @@ export const AVAILABLE_DOCK_ICONS = [
   { id: '10', name: 'Deep Teal Glow', src: '/dock-icons/thumb_10.png' },
 ];
 
-/**
- * Storage & Persistence service for AppSettings.
- * Implements Dependency Inversion & Single Responsibility for I/O operations.
- */
 export class SettingsStorageService {
   private _listeners: Set<(settings: AppSettings) => void>;
 
@@ -45,6 +40,9 @@ export class SettingsStorageService {
     this._listeners = new Set();
   }
 
+  /**
+   * Loads application settings from local storage with fallback to default values.
+   */
   public load(): AppSettings {
     let data: AppSettingsData = {};
     try {
@@ -53,7 +51,6 @@ export class SettingsStorageService {
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) data = parsed;
     } catch { }
 
-    // Legacy sync
     try {
       const theme = localStorage.getItem(THEME_KEY);
       if (theme) data.trayTheme = theme;
@@ -66,6 +63,9 @@ export class SettingsStorageService {
     return new AppSettings(data);
   }
 
+  /**
+   * Persists application settings to local storage and updates current theme and dock icon.
+   */
   public save(settings: AppSettings | AppSettingsData): void {
     const s = settings instanceof AppSettings ? settings : new AppSettings(settings);
     try {
@@ -76,10 +76,13 @@ export class SettingsStorageService {
     } catch { }
 
     this.applyTheme(s.trayTheme);
-    void this.applyDockIcon(s.dockIcon);
+    void this.applyDockIcon(s.dockIcon).catch(() => undefined);
     this._notify(s);
   }
 
+  /**
+   * Applies the selected tray theme to the root HTML document element.
+   */
   public applyTheme(themeId: string): void {
     if (typeof document === 'undefined') return;
     const valid = AVAILABLE_THEMES.some((t) => t.id === themeId);
@@ -94,23 +97,42 @@ export class SettingsStorageService {
     }
   }
 
+  /**
+   * Applies the chosen application dock icon via native IPC bridge and document link.
+   */
   public async applyDockIcon(iconId: string): Promise<void> {
     const validId = String(iconId || '1').replace(/\.png$/, '');
     const api = typeof window !== 'undefined' ? (window as any).ow : null;
+    let nativeIconError: unknown;
+    let nativeIconUpdateFailed = false;
+
     if (typeof api?.setDockIcon === 'function') {
       try {
         await api.setDockIcon(validId);
-      } catch {}
-    }
-    if (typeof document === 'undefined') return;
-    try {
-      const link = document.querySelector("link[rel~='icon']") as HTMLLinkElement | null;
-      if (link) {
-        link.href = `/dock-icons/${validId}.png`;
+      } catch (err) {
+        console.error('Failed to set dock icon:', err);
+        nativeIconError = err;
+        nativeIconUpdateFailed = true;
       }
-    } catch {}
+    }
+
+    if (typeof document !== 'undefined') {
+      try {
+        const link = document.querySelector("link[rel~='icon']") as HTMLLinkElement | null;
+        if (link) {
+          link.href = `/dock-icons/${validId}.png`;
+        }
+      } catch { }
+    }
+
+    if (nativeIconUpdateFailed) {
+      throw nativeIconError;
+    }
   }
 
+  /**
+   * Subscribes a listener callback to settings update notifications.
+   */
   public subscribe(callback: (settings: AppSettings) => void): () => boolean {
     this._listeners.add(callback);
     return () => this._listeners.delete(callback);
