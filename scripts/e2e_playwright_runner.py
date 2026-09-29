@@ -59,9 +59,11 @@ def main():
 
             # Mock Tauri IPC backend in browser
             mock_init_script = r"""
+            window.__IPC_CALLS__ = window.__IPC_CALLS__ || [];
             window.__TAURI_INTERNALS__ = {
                 convertFileSrc: (src, protocol = 'asset') => `${protocol}://localhost/${encodeURIComponent(src)}`,
                 invoke: async (cmd, args) => {
+                    window.__IPC_CALLS__.push({ cmd, args: JSON.parse(JSON.stringify(args || {})) });
                     if (cmd === 'app_get_home') return '/workspace/Oryn';
                     if (cmd === 'config_load') return {};
                     if (cmd === 'system_get_stats') return { cpuPct: 14, ramUsed: 8589934592, ramTotal: 17179869184, ramPct: 50, uptimeSec: 72000 };
@@ -179,6 +181,26 @@ def main():
             page.wait_for_selector("#terminal-drawer:not(.hidden)", timeout=5000)
             page.wait_for_selector("#terminal-output .xterm", timeout=5000)
             time.sleep(0.5)
+
+            # Focus the terminal and type input to verify PTY input forwarding
+            page.click("#terminal-output")
+            page.keyboard.type("pwd\n")
+            time.sleep(0.5)
+
+            # Assert shell_terminal_start and shell_terminal_write IPC invocations
+            calls = page.evaluate("() => window.__IPC_CALLS__ || []")
+            start_calls = [c for c in calls if c.get("cmd") == "shell_terminal_start"]
+            write_calls = [c for c in calls if c.get("cmd") == "shell_terminal_write"]
+            assert len(start_calls) > 0, "Expected at least one shell_terminal_start IPC invocation"
+            assert len(write_calls) > 0, "Expected at least one shell_terminal_write IPC invocation"
+            assert any(w.get("args", {}).get("sessionId") == "session-1" for w in write_calls), (
+                f"Expected shell_terminal_write with sessionId 'session-1', got: {write_calls}"
+            )
+            assert any("pwd" in w.get("args", {}).get("data", "") for w in write_calls), (
+                f"Expected shell_terminal_write with data containing 'pwd', got: {write_calls}"
+            )
+            print(f"  ✔ Verified terminal PTY input forwarding: {len(start_calls)} start call(s), {len(write_calls)} write call(s)")
+
             shot5 = os.path.join(ARTIFACT_DIR, "oryn_terminal_drawer.png")
             page.screenshot(path=shot5)
             print(f"  📸 Saved screenshot 5 (Integrated Terminal Drawer): {shot5}")

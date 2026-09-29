@@ -1,11 +1,11 @@
-use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
+use portable_pty::{native_pty_system, Child, ChildKiller, CommandBuilder, MasterPty, PtySize};
 use serde::Deserialize;
 use std::{
     collections::HashMap,
     io::{Read, Write},
     process::Command,
     sync::{
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         Arc, Mutex,
     },
 };
@@ -298,7 +298,15 @@ pub struct ShellExecIn {
 pub(crate) struct PtySession {
     pub(crate) writer: Mutex<Box<dyn Write + Send>>,
     pub(crate) master: Mutex<Box<dyn MasterPty + Send>>,
-    pub(crate) child: Mutex<Box<dyn Child + Send + Sync>>,
+    pub(crate) killer: Mutex<Box<dyn ChildKiller + Send + Sync>>,
+}
+
+impl Drop for PtySession {
+    fn drop(&mut self) {
+        if let Ok(mut killer) = self.killer.lock() {
+            let _ = killer.kill();
+        }
+    }
 }
 
 #[derive(Default, Clone)]
@@ -306,12 +314,8 @@ pub struct TerminalSessions(pub(crate) Arc<Mutex<HashMap<String, Arc<PtySession>
 
 impl Drop for TerminalSessions {
     fn drop(&mut self) {
-        if let Ok(sessions) = self.0.lock() {
-            for session in sessions.values() {
-                if let Ok(mut child) = session.child.lock() {
-                    let _ = child.kill();
-                }
-            }
+        if let Ok(mut sessions) = self.0.lock() {
+            sessions.clear();
         }
     }
 }
@@ -322,7 +326,7 @@ impl TerminalSessions {
         cwd: Option<&str>,
         cols: u16,
         rows: u16,
-    ) -> Result<(String, Box<dyn Read + Send>), String> {
+    ) -> Result<(String, Box<dyn Read + Send>, Box<dyn Child + Send + Sync>), String> {
         let pair = native_pty_system()
             .openpty(PtySize {
                 rows: rows.clamp(2, 300),
@@ -358,16 +362,17 @@ impl TerminalSessions {
             std::process::id(),
             NEXT_TERMINAL_ID.fetch_add(1, Ordering::Relaxed)
         );
+        let killer = child.clone_killer();
         let session = Arc::new(PtySession {
             writer: Mutex::new(writer),
             master: Mutex::new(pair.master),
-            child: Mutex::new(child),
+            killer: Mutex::new(killer),
         });
         self.0
             .lock()
             .map_err(|e| e.to_string())?
             .insert(id.clone(), session);
-        Ok((id, reader))
+        Ok((id, reader, child))
     }
 
     pub fn write(&self, session_id: &str, data: &str) -> Result<(), String> {
@@ -416,12 +421,9 @@ impl TerminalSessions {
             .map_err(|e| e.to_string())?
             .remove(session_id);
         if let Some(session) = session {
-            session
-                .child
-                .lock()
-                .map_err(|e| e.to_string())?
-                .kill()
-                .map_err(|e| e.to_string())?;
+            if let Ok(mut killer) = session.killer.lock() {
+                let _ = killer.kill();
+            }
         }
         Ok(())
     }
@@ -457,14 +459,37 @@ static NEXT_TERMINAL_ID: AtomicU64 = AtomicU64::new(1);
 
 pub(crate) fn decode_utf8_chunk(carry: &mut Vec<u8>, chunk: &[u8]) -> String {
     carry.extend_from_slice(chunk);
-    let valid = match std::str::from_utf8(carry) {
-        Ok(_) => carry.len(),
-        Err(e) if e.error_len().is_none() => e.valid_up_to(),
-        Err(_) => carry.len(),
-    };
-    let data = String::from_utf8_lossy(&carry[..valid]).into_owned();
-    carry.drain(..valid);
-    data
+    let mut out = String::new();
+    let mut offset = 0;
+    while offset < carry.len() {
+        match std::str::from_utf8(&carry[offset..]) {
+            Ok(valid_str) => {
+                out.push_str(valid_str);
+                offset = carry.len();
+                break;
+            }
+            Err(e) => {
+                let valid_up_to = e.valid_up_to();
+                if valid_up_to > 0 {
+                    if let Ok(valid_str) =
+                        std::str::from_utf8(&carry[offset..offset + valid_up_to])
+                    {
+                        out.push_str(valid_str);
+                    }
+                    offset += valid_up_to;
+                }
+                match e.error_len() {
+                    Some(invalid_len) => {
+                        out.push('\u{FFFD}');
+                        offset += invalid_len;
+                    }
+                    None => break,
+                }
+            }
+        }
+    }
+    carry.drain(..offset);
+    out
 }
 
 #[tauri::command(async)]
@@ -473,22 +498,54 @@ pub fn shell_terminal_start(
     sessions: tauri::State<'_, TerminalSessions>,
     input: TerminalStartIn,
 ) -> Result<String, String> {
-    let (id, mut reader) = sessions.start(input.cwd.as_deref(), input.cols, input.rows)?;
+    let (id, mut reader, mut child) =
+        sessions.start(input.cwd.as_deref(), input.cols, input.rows)?;
     let output_id = id.clone();
     let sessions_map = Arc::clone(&sessions.0);
+    let exit_done = Arc::new(AtomicBool::new(false));
+
+    let emit_exit = {
+        let exit_done = Arc::clone(&exit_done);
+        let app = app.clone();
+        let sessions_map = Arc::clone(&sessions_map);
+        let output_id = output_id.clone();
+        Arc::new(move || {
+            if !exit_done.swap(true, Ordering::SeqCst) {
+                let _ = sessions_map.lock().ok().and_then(|mut s| s.remove(&output_id));
+                let _ = app.emit("terminal-exit", serde_json::json!({"sessionId": output_id}));
+            }
+        })
+    };
+
+    // Monitor child process independently of reader.read()
+    let child_exit = Arc::clone(&emit_exit);
+    std::thread::spawn(move || {
+        let _ = child.wait();
+        // Give reader thread a brief window to flush remaining buffered output
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        child_exit();
+    });
+
+    // Reader thread
+    let reader_exit = Arc::clone(&emit_exit);
+    let reader_app = app.clone();
+    let reader_id = output_id.clone();
     std::thread::spawn(move || {
         let mut buf = [0u8; 8192];
         let mut carry: Vec<u8> = Vec::new();
         loop {
+            if exit_done.load(Ordering::Relaxed) {
+                break;
+            }
             match reader.read(&mut buf) {
                 Ok(0) => break,
                 Ok(n) => {
                     let data = decode_utf8_chunk(&mut carry, &buf[..n]);
                     if !data.is_empty()
-                        && app
+                        && reader_app
                             .emit(
                                 "terminal-output",
-                                serde_json::json!({"sessionId": output_id, "data": data}),
+                                serde_json::json!({"sessionId": reader_id, "data": data}),
                             )
                             .is_err()
                     {
@@ -500,18 +557,12 @@ pub fn shell_terminal_start(
         }
         if !carry.is_empty() {
             let data = String::from_utf8_lossy(&carry).into_owned();
-            let _ = app.emit(
+            let _ = reader_app.emit(
                 "terminal-output",
-                serde_json::json!({"sessionId": output_id, "data": data}),
+                serde_json::json!({"sessionId": reader_id, "data": data}),
             );
         }
-        let removed = sessions_map.lock().ok().and_then(|mut s| s.remove(&output_id));
-        if let Some(session) = removed {
-            if let Ok(mut child) = session.child.lock() {
-                let _ = child.wait();
-            }
-        }
-        let _ = app.emit("terminal-exit", serde_json::json!({"sessionId": output_id}));
+        reader_exit();
     });
     Ok(id)
 }
@@ -749,6 +800,20 @@ mod tests {
     }
 
     #[test]
+    fn test_decode_utf8_chunk_invalid_byte_before_split_char() {
+        let mut carry = Vec::new();
+        // 0xFF is an invalid byte.
+        // 0xF0, 0x9F are the first two bytes of 4-byte emoji 😀 (0xF0, 0x9F, 0x98, 0x80).
+        let part1 = decode_utf8_chunk(&mut carry, &[0xFF, 0xF0, 0x9F]);
+        assert_eq!(part1, "\u{FFFD}");
+        assert_eq!(carry, vec![0xF0, 0x9F]);
+
+        let part2 = decode_utf8_chunk(&mut carry, &[0x98, 0x80]);
+        assert_eq!(part2, "😀");
+        assert!(carry.is_empty());
+    }
+
+    #[test]
     fn test_terminal_sessions_lifecycle() {
         let sessions = TerminalSessions::default();
         drop(sessions);
@@ -757,7 +822,7 @@ mod tests {
     #[test]
     fn test_terminal_sessions_full_lifecycle() {
         let sessions = TerminalSessions::default();
-        let (id, mut reader) = sessions.start(None, 80, 24).expect("start pty");
+        let (id, mut reader, _child) = sessions.start(None, 80, 24).expect("start pty");
         assert!(!id.is_empty());
 
         assert!(sessions.write(&id, "echo hello\r\n").is_ok());
@@ -775,7 +840,7 @@ mod tests {
     fn test_terminal_sessions_with_cwd() {
         let sessions = TerminalSessions::default();
         let tmp = std::env::temp_dir();
-        let (id, _) = sessions.start(tmp.to_str(), 80, 24).expect("start pty with cwd");
+        let (id, _, _child) = sessions.start(tmp.to_str(), 80, 24).expect("start pty with cwd");
         assert!(sessions.stop(&id).is_ok());
     }
 
@@ -796,7 +861,18 @@ mod tests {
     #[test]
     fn test_terminal_sessions_drop_kills_active() {
         let sessions = TerminalSessions::default();
-        let (_id, _) = sessions.start(None, 80, 24).expect("start pty");
+        let (_id, _, _child) = sessions.start(None, 80, 24).expect("start pty");
         drop(sessions);
+    }
+
+    #[test]
+    fn test_terminal_sessions_independent_child_wait() {
+        let sessions = TerminalSessions::default();
+        let (id, _reader, mut child) = sessions.start(None, 80, 24).expect("start pty");
+        // Kill session via stop
+        assert!(sessions.stop(&id).is_ok());
+        // Child wait should complete cleanly because killer terminated the child
+        let status = child.wait();
+        assert!(status.is_ok());
     }
 }

@@ -375,3 +375,47 @@ test('terminal drawer handles pending events and resize drag handle', async () =
   assert.ok(writes.includes('early output'));
   assert.equal(status, 'Shell exited');
 });
+
+test('startTerminal cleans up listener and pending queues when PTY startup fails without active session', async () => {
+  let unlistenCalled = false;
+  const writes: string[] = [];
+  const terminal = {
+    cols: 80,
+    rows: 24,
+    open() {},
+    loadAddon() {},
+    onData() {},
+    write: (d: string) => { writes.push(d); },
+    writeln: (d: string) => { writes.push(d); },
+    focus() {},
+  } as any;
+  (globalThis as any).document = {
+    getElementById: (id: string) => (id === 'terminal-output' ? {} : null),
+    body: { style: {} },
+  };
+  const controller = new TerminalDrawerController({
+    state: { active: 'left', left: { path: '/home' } } as any,
+    api: () => ({
+      terminalListen: async (out: Function, ext: Function) => {
+        out('other-id', 'stray output');
+        ext('other-id');
+        return () => { unlistenCalled = true; };
+      },
+      terminalStart: async () => { throw new Error('PTY spawn failed'); },
+    }),
+    setStatus: () => {},
+    focusActiveList: () => {},
+    terminalFactory: () => ({ terminal, fitAddon: { fit() {} } as any }),
+  });
+
+  (globalThis as any).window = { addEventListener() {}, removeEventListener() {}, innerHeight: 800 };
+  (globalThis as any).ResizeObserver = class { observe() {} disconnect() {} };
+  await controller.runCommand('test');
+
+  assert.equal(unlistenCalled, true);
+  assert.equal((controller as any).unlisten, null);
+  assert.deepEqual((controller as any).pendingOutput, []);
+  assert.equal((controller as any).pendingExits.size, 0);
+  assert.ok(writes.some(w => w.includes('PTY spawn failed')));
+});
+

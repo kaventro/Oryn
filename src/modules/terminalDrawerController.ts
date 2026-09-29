@@ -182,6 +182,12 @@ export class TerminalDrawerController {
       this.setStatus('Shell ready');
       this.terminal?.focus();
     } catch (error) {
+      if (!this.sessionId) {
+        this.unlisten?.();
+        this.unlisten = null;
+        this.pendingOutput = [];
+        this.pendingExits.clear();
+      }
       this.reportError(error);
     }
   }
