@@ -21,6 +21,12 @@
 
 https://github.com/user-attachments/assets/342674fb-085d-4427-b835-71c7cf2768bb
 
+## Showreel
+
+[![Oryn showreel: Two panes. One keystroke.](assets/showcase/oryn_showreel_poster.jpg)](assets/showcase/oryn_showreel.mp4)
+
+A 60-second motion-design cut of Oryn: the two-pane window, copy and rename from the keyboard, the command palette, SFTP, search, Git, the terminal drawer, and the same app on macOS, Windows, and Linux. [Watch the showreel](assets/showcase/oryn_showreel.mp4) (1080p, 60 fps, with sound).
+
 ## See it in use
 
 Each panorama blends two steps of the same task. The original screenshots are linked below each image.
