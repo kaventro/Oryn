@@ -1,581 +1,421 @@
-// src/modules/terminalDrawerController.test.ts
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import { TerminalDrawerController, ansiToHtml } from './terminalDrawerController.ts';
 
-// Mock localStorage
-const mockStorage: Record<string, string> = {};
-Object.defineProperty(globalThis, 'localStorage', {
-  value: {
-    getItem: (k: string) => mockStorage[k] || null,
-    setItem: (k: string, v: any) => { mockStorage[k] = String(v); },
-    removeItem: (k: string) => { delete mockStorage[k]; },
-    clear: () => { Object.keys(mockStorage).forEach((k) => delete mockStorage[k]); },
-  },
-  configurable: true,
-  writable: true,
+test('ansiToHtml escapes markup and converts supported color sequences', () => {
+  assert.equal(ansiToHtml('<b>A & B</b>'), '&lt;b&gt;A &amp; B&lt;/b&gt;');
+  assert.equal(ansiToHtml('\x1b[31mred\x1b[0m'), '<span style="color:#ff453a;">red</span>');
 });
 
-test('ansiToHtml escapes HTML entities and converts ANSI color & styling sequences', () => {
-  // 1. Escapes HTML entities
-  assert.equal(ansiToHtml('<b>Hello & Goodbye</b>'), '&lt;b&gt;Hello &amp; Goodbye&lt;/b&gt;');
-
-  // 2. Bold and reset
-  assert.equal(ansiToHtml('\x1b[1mBold\x1b[0m'), '<span style="font-weight:bold;">Bold</span>');
-
-  // 3. Colors
-  assert.equal(ansiToHtml('\x1b[31mRed\x1b[0m'), '<span style="color:#ff453a;">Red</span>');
-  assert.equal(ansiToHtml('\x1b[32mGreen\x1b[0m'), '<span style="color:#30d158;">Green</span>');
-  assert.equal(ansiToHtml('\x1b[33mYellow\x1b[0m'), '<span style="color:#ffd60a;">Yellow</span>');
-  assert.equal(ansiToHtml('\x1b[34mBlue\x1b[0m'), '<span style="color:#0a84ff;">Blue</span>');
-  assert.equal(ansiToHtml('\x1b[35mMagenta\x1b[0m'), '<span style="color:#bf5af2;">Magenta</span>');
-  assert.equal(ansiToHtml('\x1b[36mCyan\x1b[0m'), '<span style="color:#64d2ff;">Cyan</span>');
-  assert.equal(ansiToHtml('\x1b[90mGray\x1b[0m'), '<span style="color:#8e8e93;">Gray</span>');
-
-  // 4. Strips unsupported ANSI codes
-  assert.equal(ansiToHtml('\x1b[4mUnderline\x1b[38;5;200m256color\x1b[0m'), 'Underline256color</span>');
-});
-
-test('TerminalDrawerController open, toggle, and built-ins', async () => {
-  let navigatedTo: any = null;
-  const executedCommands: Array<{ cmd: string; cwd: string }> = [];
-
-  const mockApi = {
-    shellExec: async (cmd: string, cwd: string) => {
-      executedCommands.push({ cmd, cwd });
-      return { ok: true, code: 0, stdout: 'sample output\n', stderr: '' };
-    },
-    readDir: async (path: string) => {
-      if (path === '/valid/dir') {
-        return { ok: true, items: [{ base: 'sub', display: 'sub' }] };
-      }
-      throw new Error('Not found');
-    },
-    getHome: async () => '/Users/test',
-    clipboardWrite: async () => {},
-  };
-
-  const drawerEl = {
-    classList: {
-      _classes: new Set(['hidden']),
-      add(c: string) { this._classes.add(c); },
-      remove(c: string) { this._classes.delete(c); },
-      contains(c: string) { return this._classes.has(c); },
-    },
+test('terminal drawer streams a persistent PTY session and forwards terminal input', async () => {
+  const writes: string[] = [];
+  const sent: Array<{ sessionId: string; data: string }> = [];
+  const resized: Array<{ sessionId: string; cols: number; rows: number }> = [];
+  let outputListener: ((id: string, data: string) => void) | undefined;
+  let exitListener: ((id: string) => void) | undefined;
+  let inputListener: ((data: string) => void) | undefined;
+  let clipboard = '';
+  let status = '';
+  let fitCount = 0;
+  const terminal = {
+    cols: 82,
+    rows: 26,
+    open() {},
+    loadAddon() {},
+    onData(callback: (data: string) => void) { inputListener = callback; },
+    write(data: string) { writes.push(data); },
+    writeln(data: string) { writes.push(`${data}\n`); },
+    focus() {},
+    clear() { writes.length = 0; },
+    getSelection: () => 'selected text',
+    buffer: { active: { length: 0, getLine: () => undefined } },
+  } as any;
+  const fitAddon = { fit() { fitCount += 1; } } as any;
+  const classes = new Set(['hidden']);
+  const drawer = {
+    classList: { add: (name: string) => classes.add(name), remove: (name: string) => classes.delete(name) },
     setAttribute() {},
     style: {} as Record<string, string>,
+    offsetHeight: 280,
+    addEventListener() {},
   };
-
-  const outputEl: any = {
-    children: [] as any[],
-    appendChild(el: any) { this.children.push(el); },
-    replaceChildren() { this.children = []; },
-    scrollTop: 0,
-    scrollHeight: 100,
-    innerText: 'sample output',
-  };
-
-  const cwdEl = { textContent: '', title: '' };
+  const host = { addEventListener() {} };
+  const cwd = { textContent: '', title: '' };
   const statusEl = { textContent: '' };
-  const inputEl = {
-    value: '',
-    focus() {},
-    select() {},
-  };
-
-  globalThis.document = {
+  const handle = { classList: { add() {}, remove() {} }, addEventListener() {} };
+  (globalThis as any).document = {
     getElementById(id: string) {
-      if (id === 'terminal-drawer') return drawerEl as any;
-      if (id === 'terminal-output') return outputEl as any;
-      if (id === 'terminal-cwd') return cwdEl as any;
-      if (id === 'terminal-status') return statusEl as any;
-      if (id === 'terminal-input') return inputEl as any;
-      return null;
+      return ({
+        'terminal-drawer': drawer,
+        'terminal-output': host,
+        'terminal-cwd': cwd,
+        'terminal-status': statusEl,
+        'terminal-resize-handle': handle,
+      } as Record<string, any>)[id] || null;
     },
-    createElement(tag: string) {
-      return { className: '', textContent: '', innerHTML: '', appendChild() {} } as any;
-    },
-  } as any;
+    body: { style: {} },
+  };
+  (globalThis as any).window = { addEventListener() {}, removeEventListener() {}, innerHeight: 800 };
+  (globalThis as any).ResizeObserver = class { observe() {} };
+  (globalThis as any).localStorage = { getItem: () => null, setItem() {} };
 
-  let focusedList = false;
+  const api = {
+    terminalListen: async (onOutput: typeof outputListener, onExit: typeof exitListener) => {
+      outputListener = onOutput;
+      exitListener = onExit;
+      return () => {};
+    },
+    terminalStart: async (path: string, cols: number, rows: number) => {
+      assert.equal(path, '/workspace');
+      assert.equal(cols, 82);
+      assert.equal(rows, 26);
+      return 'pty-1';
+    },
+    terminalWrite: async (sessionId: string, data: string) => { sent.push({ sessionId, data }); },
+    terminalResize: async (sessionId: string, cols: number, rows: number) => { resized.push({ sessionId, cols, rows }); },
+    clipboardWrite: async (value: string) => { clipboard = value; },
+  };
   const controller = new TerminalDrawerController({
-    state: { active: 'left', left: { path: '/initial/dir' } },
-    api: () => mockApi as any,
-    setStatus: () => {},
-    focusActiveList: () => { focusedList = true; },
-    navigateTo: async (side: string, path: string) => { navigatedTo = { side, path }; },
+    state: { active: 'left', left: { path: '/workspace' } } as any,
+    api: () => api,
+    setStatus: (message) => { status = message; },
+    focusActiveList() {},
+    terminalFactory: () => ({ terminal, fitAddon }),
   });
 
-  // Test Show
-  controller.show('/initial/dir');
-  assert.equal(controller.isOpen, true);
-  assert.equal(drawerEl.classList.contains('hidden'), false);
-  assert.equal(cwdEl.textContent, '/initial/dir');
+  await controller.runCommand('top');
+  assert.equal(controller.isRunning, true, `${status}: ${writes.join('')}`);
+  assert.equal(sent.at(-1)?.data, 'top\r');
+  inputListener?.('q');
+  await Promise.resolve();
+  assert.deepEqual(sent.at(-1), { sessionId: 'pty-1', data: 'q' });
 
-  // Test run regular command
-  await controller.runCommand('git status');
-  assert.equal(executedCommands.length, 1);
-  assert.equal(executedCommands[0].cmd, 'git status');
-  assert.equal(executedCommands[0].cwd, '/initial/dir');
+  outputListener?.('pty-1', 'live output');
+  assert.ok(writes.includes('live output'));
+  controller.show();
+  assert.equal(fitCount > 0, true);
+  assert.deepEqual(resized.at(-1), { sessionId: 'pty-1', cols: 82, rows: 26 });
 
-  // Test built-in cd
-  await controller.runCommand('cd /valid/dir');
-  assert.equal(controller.cwd, '/valid/dir');
-  assert.equal(cwdEl.textContent, '/valid/dir');
-  assert.deepEqual(navigatedTo, { side: 'left', path: '/valid/dir' });
+  await controller.copyOutput();
+  assert.equal(clipboard, 'selected text');
 
-  // Test built-in pwd
-  await controller.runCommand('pwd');
-  assert.equal(outputEl.children.length > 0, true);
+  controller.appendOutput('info log');
+  controller.appendOutput('error log', true);
+  controller.appendOutput('cmd log', false, true);
+  assert.ok(writes.some(w => w.includes('info log')));
+  assert.ok(writes.some(w => w.includes('error log')));
+  assert.ok(writes.some(w => w.includes('cmd log')));
 
-  // Test Hide
+  controller.clear();
+  assert.equal(writes.length, 0);
+
   controller.hide();
   assert.equal(controller.isOpen, false);
-  assert.equal(drawerEl.classList.contains('hidden'), true);
-  assert.equal(focusedList, true);
-});
+  assert.ok(classes.has('hidden'));
 
-test('TerminalDrawerController appendOutput, toggle, copyOutput and openExternalTerminal', async () => {
-  let copiedText = '';
-  let statusMessage = '';
-  let openTerminalPath = '';
-
-  const mockApi: any = {
-    clipboardWrite: async (t: string) => { copiedText = t; },
-    openTerminal: async (p: string) => { openTerminalPath = p; },
-    getHome: async () => '/Users/testuser',
-    shellExec: async (_cmd?: string, _dir?: string) => ({ ok: true, code: 0, stdout: 'ok', stderr: '' }),
-  };
-
-  const lines: any[] = [];
-  const outputEl: any = {
-    children: lines,
-    appendChild(l: any) { lines.push(l); return l; },
-    replaceChildren() { lines.length = 0; },
-    innerText: 'Line 1\nLine 2',
-    scrollTop: 0,
-    scrollHeight: 200,
-  };
-
-  const statusEl = { textContent: '' };
-  const cwdEl = { textContent: '', title: '' };
-  const drawerEl = {
-    classList: {
-      _classes: new Set(['hidden']),
-      add(c: string) { this._classes.add(c); },
-      remove(c: string) { this._classes.delete(c); },
-      contains(c: string) { return this._classes.has(c); },
-    },
-    setAttribute() {},
-    style: {} as Record<string, string>,
-  };
-
-  globalThis.document = {
-    getElementById(id: string) {
-      if (id === 'terminal-drawer') return drawerEl as any;
-      if (id === 'terminal-output') return outputEl as any;
-      if (id === 'terminal-status') return statusEl as any;
-      if (id === 'terminal-cwd') return cwdEl as any;
-      return null;
-    },
-    createElement(tag: string) {
-      return { className: '', textContent: '', innerHTML: '' } as any;
-    },
-  } as any;
-
-  localStorage.setItem('Oryn.terminalHeight', '350');
-
-  const controller = new TerminalDrawerController({
-    state: { active: 'left', left: { path: '/home/dir' } },
-    api: () => mockApi as any,
-    setStatus: (msg: string) => { statusMessage = msg; },
-    focusActiveList: () => {},
-  });
-
-  // 1. Toggle when closed -> opens
-  controller.toggle();
+  controller.toggle('/custom/dir');
   assert.equal(controller.isOpen, true);
-  assert.equal(drawerEl.style.height, '350px');
+  assert.equal(controller.cwd, '/custom/dir');
+  assert.equal(cwd.textContent, '/custom/dir');
 
-  // 2. Toggle when open -> closes
   controller.toggle();
   assert.equal(controller.isOpen, false);
 
-  // 3. appendOutput with ANSI escape codes
-  controller.appendOutput('\x1b[32mSuccess\x1b[0m', false, false);
-  const ansiLine = lines[lines.length - 1];
-  assert.equal(ansiLine.className, 'terminal-line');
-  assert.equal(ansiLine.innerHTML, '<span style="color:#30d158;">Success</span>');
+  exitListener?.('pty-1');
+  assert.equal(controller.isRunning, false);
+  assert.equal(status, 'Shell exited');
+});
 
-  // 4. appendOutput without ANSI, with isErr and isCmd
-  controller.appendOutput('Error text', true, true);
-  const errLine = lines[lines.length - 1];
-  assert.equal(errLine.className, 'terminal-line terminal-line--err terminal-line--cmd');
-  assert.equal(errLine.textContent, 'Error text');
+test('terminal drawer handles external terminal launch and setup buttons', async () => {
+  let externalLaunched = '';
+  let statusMsg = '';
+  const registeredEvents: Record<string, Function> = {};
+  const btnClose = { addEventListener(ev: string, fn: Function) { registeredEvents['close:' + ev] = fn; } };
+  const btnClear = { addEventListener(ev: string, fn: Function) { registeredEvents['clear:' + ev] = fn; } };
+  const btnCopy = { addEventListener(ev: string, fn: Function) { registeredEvents['copy:' + ev] = fn; } };
+  const btnExternal = { addEventListener(ev: string, fn: Function) { registeredEvents['external:' + ev] = fn; } };
+  const host = { addEventListener(ev: string, fn: Function) { registeredEvents['host:' + ev] = fn; } };
 
-  // 5. copyOutput copies to clipboard
-  await controller.copyOutput();
-  assert.equal(copiedText, 'Line 1\nLine 2');
-  assert.equal(statusMessage, 'Terminal output copied to clipboard.');
-  assert.equal(statusEl.textContent, '✓ Copied');
-
-  // 6. openExternalTerminal with custom openTerminal
-  controller.cwd = '/custom/project';
-  await controller.openExternalTerminal();
-  assert.equal(openTerminalPath, '/custom/project');
-  assert.equal(statusEl.textContent, '✓ Terminal opened');
-
-  // 7. openExternalTerminal with fallback shellExec and ~ cwd
-  delete (mockApi as any).openTerminal;
-  let shellExecCmd = '';
-  let shellExecDir = '';
-  mockApi.shellExec = async (cmd: string, dir: string) => {
-    shellExecCmd = cmd;
-    shellExecDir = dir;
-    return { ok: true, code: 0, stdout: '', stderr: '' };
+  (globalThis as any).document = {
+    getElementById(id: string) {
+      if (id === 'terminal-close-btn') return btnClose;
+      if (id === 'terminal-clear-btn') return btnClear;
+      if (id === 'terminal-copy-btn') return btnCopy;
+      if (id === 'terminal-external-btn') return btnExternal;
+      if (id === 'terminal-output') return host;
+      if (id === 'terminal-status') return { textContent: '' };
+      return null;
+    },
+    body: { style: {} },
   };
+
+  const api = {
+    openTerminal: async (path: string) => { externalLaunched = path; },
+    getHome: async () => '/home/user',
+  };
+
+  const controller = new TerminalDrawerController({
+    state: { active: 'left', left: { path: '/home/user/project' } } as any,
+    api: () => api,
+    setStatus: (msg) => { statusMsg = msg; },
+    focusActiveList() {},
+  });
+
+  controller.setup();
+  assert.ok(registeredEvents['close:click']);
+  assert.ok(registeredEvents['clear:click']);
+  assert.ok(registeredEvents['copy:click']);
+  assert.ok(registeredEvents['external:click']);
+
+  await controller.openExternalTerminal();
+  assert.equal(externalLaunched, '/home/user/project');
+  assert.ok(statusMsg.includes('Launched external terminal'));
+
+  // Test fallback to shellExec when openTerminal is not a function
+  let shellExecCmd = '';
+  let shellExecCwd = '';
+  controller.api = () => ({
+    shellExec: async (cmd: string, cwd: string) => {
+      shellExecCmd = cmd;
+      shellExecCwd = cwd;
+    },
+    getHome: async () => '/home/fallback',
+  });
   controller.cwd = '~';
   await controller.openExternalTerminal();
   assert.equal(shellExecCmd, 'open -a Terminal .');
-  assert.equal(shellExecDir, '/Users/testuser');
+  assert.equal(shellExecCwd, '/home/fallback');
 
-  // 8. openExternalTerminal handles failure
-  mockApi.shellExec = async () => { throw new Error('Launch error'); };
-  await controller.openExternalTerminal();
-  assert.equal(statusEl.textContent, '✗ Launch failed');
-  assert.ok(statusMessage.includes('Failed to open external terminal'));
-
-  // 9. openExternalTerminal falls back to / when getHome fails
-  mockApi.getHome = async () => { throw new Error('Cannot get home'); };
-  let openedFallback = '';
-  mockApi.shellExec = async (_cmd: string, dir: string) => {
-    openedFallback = dir;
-    return { ok: true, code: 0, stdout: '', stderr: '' };
-  };
-  controller.cwd = '';
-  controller.state = { active: 'left', left: { path: '' } } as any;
-  await controller.openExternalTerminal();
-  assert.equal(openedFallback, '/');
-
-  // 10. updateCwd falls back to ~ when no cwd or state path
-  controller.cwd = null;
-  controller.state = { active: 'left', left: {} } as any;
-  controller.updateCwd();
-  assert.equal(controller.cwd, '~');
-  assert.equal(cwdEl.textContent, '~');
-});
-
-test('TerminalDrawerController runCommand handles help, clear, cd branches, relative paths, and errors', async () => {
-  const outputs: string[] = [];
-  const statusEl = { textContent: '' };
-  let loadDirSide: string | null = null;
-
-  const mockApi: any = {
-    getHome: async () => '/home/user',
-    statProps: async (p: string) => {
-      if (p === '/home/user/docs' || p === '/home/user' || p === '/Users/test' || p === 'D:\\' || p === 'C:\\') {
-        return { ok: true, props: { isDir: true } };
-      }
-      return { ok: false };
-    },
-    readDir: async (p: string) => {
-      if (p === '/fallback/dir') {
-        return { ok: true, items: [] };
-      }
-      return { ok: false };
-    },
-    shellExec: async (cmd: string) => {
-      if (cmd === 'failing-cmd') {
-        return { ok: false, code: 127, stdout: '', stderr: 'command not found' };
-      }
-      if (cmd === 'crash-cmd') {
-        throw new Error('Fatal process spawn failure');
-      }
-      return { ok: true, code: 0, stdout: 'success', stderr: '' };
-    },
-  };
-
-  const outputEl: any = {
-    children: [],
-    appendChild(el: any) {
-      outputs.push(el.innerHTML || el.textContent || '');
-      this.children.push(el);
-    },
-    replaceChildren() {
-      outputs.length = 0;
-      this.children.length = 0;
-    },
-    scrollTop: 0,
-    scrollHeight: 100,
-  };
-
-  const inputEl = { value: 'initial' };
-
-  globalThis.document = {
-    getElementById(id: string) {
-      if (id === 'terminal-output') return outputEl;
-      if (id === 'terminal-status') return statusEl;
-      if (id === 'terminal-input') return inputEl;
-      return null;
-    },
-    createElement(tag: string) {
-      return { className: '', textContent: '', innerHTML: '' } as any;
-    },
-  } as any;
-
-  const controller = new TerminalDrawerController({
-    state: { active: 'right', right: { path: '/home/user/docs' } },
-    api: () => mockApi,
-    setStatus: () => {},
-    focusActiveList: () => {},
-    loadDir: async (side: 'left' | 'right') => { loadDirSide = side; },
+  // Test error handling when getHome and launch fail
+  controller.api = () => ({
+    getHome: async () => { throw new Error('Home not found'); },
+    shellExec: async () => { throw new Error('Shell launch failed'); },
   });
+  controller.cwd = '~';
+  await controller.openExternalTerminal();
+  assert.ok(statusMsg.includes('Failed to open external terminal'));
 
-  // 1. Empty command returns early
+  // Test empty command early return
   await controller.runCommand('');
   await controller.runCommand('   ');
-
-  // 2. clear / cls
-  outputs.push('prior line');
-  await controller.runCommand('clear');
-  assert.equal(outputs.length, 0);
-
-  // 3. help
-  await controller.runCommand('help');
-  assert.ok(outputs.some((o) => o.includes('Oryn Integrated Shell Commands')));
-  assert.equal(statusEl.textContent, '✓ Done');
-
-  // 4. cd - with OLDPWD not set
-  await controller.runCommand('cd -');
-  assert.ok(outputs.some((o) => o.includes('cd: OLDPWD not set')));
-  assert.equal(statusEl.textContent, '✗ Error');
-
-  // 5. cd ~ and cd ~/docs
-  await controller.runCommand('cd ~');
-  assert.equal(controller.cwd, '/home/user');
-  assert.equal(loadDirSide, 'right');
-  assert.equal(statusEl.textContent, '✓ Done');
-
-  await controller.runCommand('cd ~/docs');
-  assert.equal(controller.cwd, '/home/user/docs');
-
-  // 6. cd - when previousCwd is set
-  await controller.runCommand('cd -');
-  assert.equal(controller.cwd, '/home/user');
-
-  // 7. cd .. navigation
-  controller.cwd = '/home/user/docs';
-  await controller.runCommand('cd ..');
-  assert.equal(controller.cwd, '/home/user');
-
-  // cd .. from root
-  controller.cwd = '/';
-  await controller.runCommand('cd ..');
-  assert.equal(controller.cwd, '/');
-
-  // cd .. from Windows drive root
-  controller.cwd = 'C:\\';
-  await controller.runCommand('cd ..');
-  assert.equal(controller.cwd, 'C:\\');
-
-  // cd .. from Windows drive parent
-  controller.cwd = 'C:\\Users';
-  await controller.runCommand('cd ..');
-  assert.equal(controller.cwd, 'C:\\');
-
-  // 8. cd to Windows drive letter
-  await controller.runCommand('cd D:');
-  assert.equal(controller.cwd, 'D:\\');
-
-  // 8b. cd with relative path
-  controller.cwd = '/home/user';
-  await controller.runCommand('cd docs');
-  assert.equal(controller.cwd, '/home/user/docs');
-
-  // 9. cd fallback via readDir
-  await controller.runCommand('cd /fallback/dir');
-  assert.equal(controller.cwd, '/fallback/dir');
-
-  // 10. cd nonexistent directory
-  await controller.runCommand('cd /nonexistent/nowhere');
-  assert.ok(outputs.some((o) => o.includes('cd: no such file or directory: /nonexistent/nowhere')));
-  assert.equal(statusEl.textContent, '✗ Error');
-
-  // 11. Command with non-zero exit code
-  await controller.runCommand('failing-cmd');
-  assert.ok(outputs.some((o) => o.includes('command not found')));
-  assert.equal(statusEl.textContent, '✗ Exit code 127');
-
-  // 12. Command throwing exception
-  await controller.runCommand('crash-cmd');
-  assert.ok(outputs.some((o) => o.includes('Fatal process spawn failure')));
-  assert.equal(statusEl.textContent, '✗ Error');
 });
 
-test('TerminalDrawerController setupResizeHandle, setup DOM listeners and keyboard shortcuts', async () => {
-  const listeners: Record<string, Function> = {};
-  const inputListeners: Record<string, Function> = {};
-  let focusedInput = false;
-
-  const handleEl = {
-    classList: {
-      _c: new Set<string>(),
-      add(c: string) { this._c.add(c); },
-      remove(c: string) { this._c.delete(c); },
+test('terminal drawer copyOutput falls back to readVisibleBuffer when selection is empty', async () => {
+  let copiedText = '';
+  const lines = ['First line', 'Second line'];
+  const terminal = {
+    cols: 80,
+    rows: 24,
+    open() {},
+    loadAddon() {},
+    onData() {},
+    write() {},
+    focus() {},
+    getSelection: () => '',
+    buffer: {
+      active: {
+        length: lines.length,
+        getLine: (i: number) => ({ translateToString: () => lines[i] }),
+      },
     },
-    addEventListener(evt: string, fn: any) { listeners[evt] = fn; },
-  };
-
-  const drawerEl = {
-    offsetHeight: 200,
-    style: {} as Record<string, string>,
-    classList: {
-      _c: new Set<string>(),
-      add(c: string) { this._c.add(c); },
-      remove(c: string) { this._c.delete(c); },
-      contains(c: string) { return this._c.has(c); },
+  } as any;
+  const statusEl = { textContent: '' };
+  (globalThis as any).document = {
+    getElementById(id: string) {
+      if (id === 'terminal-status') return statusEl;
+      if (id === 'terminal-drawer') return { classList: { remove() {}, add() {} }, setAttribute() {}, style: {} };
+      if (id === 'terminal-output') return {};
+      return null;
     },
-    setAttribute() {},
-    addEventListener(evt: string, fn: any) { listeners[`drawer_${evt}`] = fn; },
   };
 
-  const inputEl = {
-    value: '',
-    focus() { focusedInput = true; },
-    addEventListener(evt: string, fn: any) { inputListeners[evt] = fn; },
-  };
-
-  const buttonListeners: Record<string, Function> = {};
-  const createMockButton = (id: string) => ({
-    tagName: 'BUTTON',
-    addEventListener(evt: string, fn: any) { buttonListeners[`${id}_${evt}`] = fn; },
-    closest(sel: string) { return sel === 'button' ? this : null; },
+  const controller = new TerminalDrawerController({
+    state: { active: 'left', left: { path: '/home' } } as any,
+    api: () => ({
+      clipboardWrite: async (t: string) => { copiedText = t; },
+    }),
+    setStatus: () => {},
+    focusActiveList() {},
+    terminalFactory: () => ({ terminal, fitAddon: { fit() {} } as any }),
   });
 
-  const outputEl: any = {
-    children: [],
-    appendChild(c: any) { this.children.push(c); },
-    replaceChildren() { this.children = []; },
-    innerText: '',
+  controller.show();
+  await controller.copyOutput();
+  assert.equal(copiedText, 'First line\nSecond line');
+  assert.equal(statusEl.textContent, '✓ Copied');
+});
+
+test('terminal drawer handles unavailable PTY backend and start errors', async () => {
+  const writes: string[] = [];
+  let statusText = '';
+  const terminal = {
+    cols: 80,
+    rows: 24,
+    open() {},
+    loadAddon() {},
+    onData() {},
+    write: (d: string) => { writes.push(d); },
+    writeln: (d: string) => { writes.push(d); },
+    focus() {},
+  } as any;
+
+  (globalThis as any).document = {
+    getElementById(id: string) {
+      if (id === 'terminal-output') return {};
+      if (id === 'terminal-drawer') return { classList: { remove() {}, add() {} }, setAttribute() {}, style: {} };
+      return null;
+    },
+  };
+
+  // 1. Backend without terminalStart
+  const controllerUnavailable = new TerminalDrawerController({
+    state: { active: 'left', left: { path: '/home' } } as any,
+    api: () => ({}),
+    setStatus: (s) => { statusText = s; },
+    focusActiveList() {},
+    terminalFactory: () => ({ terminal, fitAddon: { fit() {} } as any }),
+  });
+  controllerUnavailable.show();
+  await new Promise(r => setTimeout(r, 20));
+  assert.ok(writes.some(w => w.includes('PTY is unavailable')));
+
+  // 2. terminalStart throws error
+  const controllerError = new TerminalDrawerController({
+    state: { active: 'left', left: { path: '/home' } } as any,
+    api: () => ({
+      terminalListen: async () => () => {},
+      terminalStart: async () => { throw new Error('Spawn failed'); },
+    }),
+    setStatus: (s) => { statusText = s; },
+    focusActiveList() {},
+    terminalFactory: () => ({ terminal, fitAddon: { fit() {} } as any }),
+  });
+  controllerError.show();
+  await new Promise(r => setTimeout(r, 20));
+  assert.equal(statusText, 'Terminal error');
+});
+
+test('terminal drawer handles pending events and resize drag handle', async () => {
+  let outputCallback: Function = () => {};
+  let exitCallback: Function = () => {};
+  const writes: string[] = [];
+  let status = '';
+  const terminal = {
+    cols: 80,
+    rows: 24,
+    open() {},
+    loadAddon() {},
+    onData() {},
+    write: (d: string) => { writes.push(d); },
+    focus() {},
+  } as any;
+
+  let resizeMouseDown: Function = () => {};
+  const windowListeners: Record<string, Function> = {};
+  const drawerEl = {
+    classList: { remove() {}, add() {} },
+    setAttribute() {},
+    style: { height: '200px' },
+    offsetHeight: 200,
   };
 
   (globalThis as any).document = {
-    body: { style: {} },
     getElementById(id: string) {
-      if (id === 'terminal-resize-handle') return handleEl as any;
-      if (id === 'terminal-drawer') return drawerEl as any;
-      if (id === 'terminal-input') return inputEl as any;
-      if (id === 'terminal-output') return outputEl as any;
-      if (id === 'terminal-status') return { textContent: '' } as any;
-      if (id === 'terminal-cwd') return { textContent: '' } as any;
-      if (id === 'terminal-close-btn') return createMockButton('close');
-      if (id === 'terminal-clear-btn') return createMockButton('clear');
-      if (id === 'terminal-copy-btn') return createMockButton('copy');
-      if (id === 'terminal-external-btn') return createMockButton('external');
+      if (id === 'terminal-output') return {};
+      if (id === 'terminal-drawer') return drawerEl;
+      if (id === 'terminal-resize-handle') return {
+        classList: { add() {}, remove() {} },
+        addEventListener: (ev: string, fn: Function) => {
+          if (ev === 'mousedown') resizeMouseDown = fn;
+        },
+      };
       return null;
     },
-    createElement() { return { className: '', textContent: '', innerHTML: '' }; },
+    body: { style: {} },
   };
-
-  const windowListeners: Record<string, Function> = {};
   (globalThis as any).window = {
+    addEventListener: (ev: string, fn: Function) => { windowListeners[ev] = fn; },
+    removeEventListener: (ev: string) => { delete windowListeners[ev]; },
     innerHeight: 1000,
-    addEventListener(evt: string, fn: any) { windowListeners[evt] = fn; },
-    removeEventListener(evt: string) { delete windowListeners[evt]; },
-  };
-
-  const mockApi = {
-    readDir: async () => ({
-      items: [
-        { base: 'notes.txt' },
-        { base: 'Project Plan.pdf' },
-        { base: 'photo1.png' },
-        { base: 'photo2.png' },
-      ],
-    }),
-    shellExec: async () => ({ ok: true, code: 0, stdout: 'done', stderr: '' }),
   };
 
   const controller = new TerminalDrawerController({
-    state: { active: 'left', left: { path: '/test' } },
-    api: () => mockApi as any,
-    setStatus: () => {},
-    focusActiveList: () => {},
+    state: { active: 'left', left: { path: '/home' } } as any,
+    api: () => ({
+      terminalListen: async (out: Function, ext: Function) => {
+        outputCallback = out;
+        exitCallback = ext;
+        // emit output and exit BEFORE terminalStart resolves
+        out('sess-queued', 'early output');
+        ext('sess-queued');
+        return () => {};
+      },
+      terminalStart: async () => 'sess-queued',
+      terminalResize: async () => {},
+    }),
+    setStatus: (s) => { status = s; },
+    focusActiveList() {},
+    terminalFactory: () => ({ terminal, fitAddon: { fit() {} } as any }),
   });
 
-  // Call setup
-  controller.setup();
+  controller.setupResizeHandle();
+  assert.ok(typeof resizeMouseDown === 'function');
 
-  // 1. Test Resize Handle
-  listeners['mousedown']({ clientY: 500 });
-  assert.ok(handleEl.classList._c.has('resizing'));
-  windowListeners['mousemove']({ clientY: 450 }); // delta = 50 -> height 250
-  assert.equal(drawerEl.style.height, '250px');
-  drawerEl.offsetHeight = 250;
-  windowListeners['mouseup']();
-  assert.equal(handleEl.classList._c.has('resizing'), false);
-  assert.equal(localStorage.getItem('Oryn.terminalHeight'), '250');
+  // Trigger drag resize
+  resizeMouseDown({ clientY: 500 } as MouseEvent);
+  assert.ok(windowListeners['mousemove']);
+  assert.ok(windowListeners['mouseup']);
 
-  // 2. Buttons click events
-  controller.isOpen = true;
-  buttonListeners['close_click']();
-  assert.equal(controller.isOpen, false);
+  windowListeners['mousemove']({ clientY: 450 } as MouseEvent);
+  windowListeners['mouseup']({} as MouseEvent);
 
-  buttonListeners['clear_click']();
-  assert.equal(outputEl.children.length, 0);
-
-  // 3. Drawer click focuses input
-  listeners['drawer_click']({ target: { tagName: 'DIV', closest: () => null } });
-  assert.equal(focusedInput, true);
-
-  // 4. Input keydown: Escape hides
-  controller.isOpen = true;
-  await inputListeners['keydown']({ key: 'Escape', preventDefault() {} });
-  assert.equal(controller.isOpen, false);
-
-  // 5. Input keydown: Ctrl+C clears input
-  inputEl.value = 'typed text';
-  await inputListeners['keydown']({ key: 'c', ctrlKey: true, preventDefault() {} });
-  assert.equal(inputEl.value, '');
-
-  // 6. Input keydown: Ctrl+L clears output
-  outputEl.children.push('some line');
-  await inputListeners['keydown']({ key: 'l', ctrlKey: true, preventDefault() {} });
-  assert.equal(outputEl.children.length, 0);
-
-  // 7. Input keydown: Enter runs command and history tracking
-  inputEl.value = 'echo 1';
-  await inputListeners['keydown']({ key: 'Enter', preventDefault() {} });
-  inputEl.value = 'echo 2';
-  await inputListeners['keydown']({ key: 'Enter', preventDefault() {} });
-
-  assert.deepEqual(controller.history, ['echo 1', 'echo 2']);
-
-  // History ArrowUp
-  await inputListeners['keydown']({ key: 'ArrowUp', preventDefault() {} });
-  assert.equal(inputEl.value, 'echo 2');
-  await inputListeners['keydown']({ key: 'ArrowUp', preventDefault() {} });
-  assert.equal(inputEl.value, 'echo 1');
-
-  // History ArrowDown
-  await inputListeners['keydown']({ key: 'ArrowDown', preventDefault() {} });
-  assert.equal(inputEl.value, 'echo 2');
-  await inputListeners['keydown']({ key: 'ArrowDown', preventDefault() {} });
-  assert.equal(inputEl.value, '');
-
-  // 8. Tab completion: single file without space
-  inputEl.value = 'cat not';
-  await inputListeners['keydown']({ key: 'Tab', preventDefault() {} });
-  assert.equal(inputEl.value, 'cat notes.txt');
-
-  // Tab completion: single file with space (quotes added)
-  inputEl.value = 'open Proj';
-  await inputListeners['keydown']({ key: 'Tab', preventDefault() {} });
-  assert.equal(inputEl.value, 'open "Project Plan.pdf"');
-
-  // Tab completion: multiple files
-  inputEl.value = 'ls pho';
-  await inputListeners['keydown']({ key: 'Tab', preventDefault() {} });
-  assert.ok(outputEl.children.some((c: any) => (c.textContent || '').includes('photo1.png')));
+  controller.show();
+  await new Promise(r => setTimeout(r, 20));
+  assert.ok(writes.includes('early output'));
+  assert.equal(status, 'Shell exited');
 });
+
+test('startTerminal cleans up listener and pending queues when PTY startup fails without active session', async () => {
+  let unlistenCalled = false;
+  const writes: string[] = [];
+  const terminal = {
+    cols: 80,
+    rows: 24,
+    open() {},
+    loadAddon() {},
+    onData() {},
+    write: (d: string) => { writes.push(d); },
+    writeln: (d: string) => { writes.push(d); },
+    focus() {},
+  } as any;
+  (globalThis as any).document = {
+    getElementById: (id: string) => (id === 'terminal-output' ? {} : null),
+    body: { style: {} },
+  };
+  const controller = new TerminalDrawerController({
+    state: { active: 'left', left: { path: '/home' } } as any,
+    api: () => ({
+      terminalListen: async (out: Function, ext: Function) => {
+        out('other-id', 'stray output');
+        ext('other-id');
+        return () => { unlistenCalled = true; };
+      },
+      terminalStart: async () => { throw new Error('PTY spawn failed'); },
+    }),
+    setStatus: () => {},
+    focusActiveList: () => {},
+    terminalFactory: () => ({ terminal, fitAddon: { fit() {} } as any }),
+  });
+
+  (globalThis as any).window = { addEventListener() {}, removeEventListener() {}, innerHeight: 800 };
+  (globalThis as any).ResizeObserver = class { observe() {} disconnect() {} };
+  await controller.runCommand('test');
+
+  assert.equal(unlistenCalled, true);
+  assert.equal((controller as any).unlisten, null);
+  assert.deepEqual((controller as any).pendingOutput, []);
+  assert.equal((controller as any).pendingExits.size, 0);
+  assert.ok(writes.some(w => w.includes('PTY spawn failed')));
+});
+

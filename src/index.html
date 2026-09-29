@@ -1359,15 +1359,10 @@
         <button type="button" id="terminal-clear-btn" class="search-action-btn search-action-btn--sm"
           title="Clear terminal">Clear</button>
         <button type="button" id="terminal-close-btn"
-          class="search-action-btn search-action-btn--sm search-action-btn--ghost" title="Close (Esc)">✕</button>
+          class="search-action-btn search-action-btn--sm search-action-btn--ghost" title="Close terminal drawer">✕</button>
       </div>
     </div>
-    <div id="terminal-output" class="terminal-output nx-mono" tabindex="0"></div>
-    <div class="terminal-input-bar">
-      <span class="terminal-prompt">$</span>
-      <input type="text" id="terminal-input" class="terminal-input nx-mono"
-        placeholder="Enter shell command… (type 'help' or 'cd <dir>')" autocomplete="off" spellcheck="false" />
-    </div>
+    <div id="terminal-output" class="terminal-output nx-mono" aria-label="Terminal" role="application"></div>
   </div>
 
   <!-- Disk space analyzer overlay -->

@@ -78,9 +78,10 @@ console.log('  ✔ UI integration tests passed with 0 errors.\n');
 
 // 4. Production build smoke check
 console.log('[4/4] Verifying production UI bundle builds cleanly...');
-const buildRun = spawnSync('npm', ['run', 'ui:build'], { stdio: 'pipe', cwd: rootDir });
+const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+const buildRun = spawnSync(npmCmd, ['run', 'ui:build'], { stdio: 'pipe', cwd: rootDir, shell: true });
 if (buildRun.status !== 0) {
-  console.error('❌ Production UI build failed:\n', buildRun.stderr.toString());
+  console.error('❌ Production UI build failed:\n', buildRun.stderr?.toString() || buildRun.error?.message || 'Unknown build error');
   process.exit(buildRun.status || 1);
 }
 console.log('  ✔ Production UI build succeeded (dist/ created cleanly).\n');

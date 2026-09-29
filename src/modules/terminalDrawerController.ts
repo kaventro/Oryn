@@ -1,4 +1,5 @@
-// src/modules/terminalDrawerController.ts
+import type { Terminal } from '@xterm/xterm';
+import type { FitAddon } from '@xterm/addon-fit';
 import type { AppState } from './stateModels.ts';
 
 export interface TerminalDrawerDeps {
@@ -8,14 +9,11 @@ export interface TerminalDrawerDeps {
   focusActiveList: () => void;
   loadDir?: (side: 'left' | 'right') => Promise<void>;
   navigateTo?: (side: string, path: string) => Promise<void>;
+  terminalFactory?: (host: HTMLElement) => { terminal: Terminal; fitAddon: FitAddon };
 }
 
 export function ansiToHtml(raw: string): string {
-  const safe = raw
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-
+  const safe = raw.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   return safe
     .replace(/\x1b\[0m/g, '</span>')
     .replace(/\x1b\[1m/g, '<span style="font-weight:bold;">')
@@ -36,13 +34,21 @@ export class TerminalDrawerController {
   public focusActiveList: () => void;
   public loadDir?: (side: 'left' | 'right') => Promise<void>;
   public navigateTo?: (side: string, path: string) => Promise<void>;
+  public terminalFactory?: TerminalDrawerDeps['terminalFactory'];
+  public isOpen = false;
+  public isRunning = false;
+  public cwd: string | null = null;
+  public history: string[] = [];
+  public historyIndex = -1;
 
-  public isOpen: boolean;
-  public history: string[];
-  public historyIndex: number;
-  public isRunning: boolean;
-  public cwd: string | null;
-  public previousCwd: string | null;
+  private terminal: Terminal | null = null;
+  private fitAddon: FitAddon | null = null;
+  private sessionId: string | null = null;
+  private unlisten: (() => void) | null = null;
+  private resizeObserver: ResizeObserver | null = null;
+  private starting: Promise<void> | null = null;
+  private pendingOutput: Array<{ sessionId: string; data: string }> = [];
+  private pendingExits = new Set<string>();
 
   constructor(deps: TerminalDrawerDeps) {
     this.state = deps.state;
@@ -51,68 +57,41 @@ export class TerminalDrawerController {
     this.focusActiveList = deps.focusActiveList;
     this.loadDir = deps.loadDir;
     this.navigateTo = deps.navigateTo;
-
-    this.isOpen = false;
-    this.history = [];
-    this.historyIndex = -1;
-    this.isRunning = false;
-    this.cwd = null;
-    this.previousCwd = null;
+    this.terminalFactory = deps.terminalFactory;
   }
 
   public toggle(targetPath?: string): void {
-    if (this.isOpen) {
-      this.hide();
-    } else {
-      this.show(targetPath);
-    }
+    if (this.isOpen) this.hide();
+    else this.show(targetPath);
   }
 
   public show(targetPath?: string): void {
     this.isOpen = true;
     const drawer = document.getElementById('terminal-drawer');
     if (!drawer) return;
-
     drawer.classList.remove('hidden');
     drawer.setAttribute('aria-hidden', 'false');
-
-    // Restore user height if set
     try {
       const savedHeight = localStorage.getItem('Oryn.terminalHeight') || localStorage.getItem('Oswin.terminalHeight');
       if (savedHeight) drawer.style.height = `${savedHeight}px`;
     } catch { }
 
-    if (targetPath) {
-      this.cwd = targetPath;
-    } else if (!this.cwd) {
-      this.cwd = this.state[this.state.active]?.path || null;
-    }
-
+    if (targetPath) this.cwd = targetPath;
+    else if (!this.cwd) this.cwd = this.state[this.state.active]?.path || null;
     this.updateCwd();
-
-    const input = document.getElementById('terminal-input') as HTMLInputElement | null;
-    if (input) {
-      input.focus();
-      input.select();
-    }
+    void this.ensureTerminal();
   }
 
   public hide(): void {
     this.isOpen = false;
     const drawer = document.getElementById('terminal-drawer');
-    if (drawer) {
-      drawer.classList.add('hidden');
-      drawer.setAttribute('aria-hidden', 'true');
-    }
-    if (typeof this.focusActiveList === 'function') {
-      this.focusActiveList();
-    }
+    drawer?.classList.add('hidden');
+    drawer?.setAttribute('aria-hidden', 'true');
+    this.focusActiveList();
   }
 
   public updateCwd(): void {
-    if (!this.cwd) {
-      this.cwd = this.state[this.state.active]?.path || '~';
-    }
+    if (!this.cwd) this.cwd = this.state[this.state.active]?.path || '~';
     const cwdEl = document.getElementById('terminal-cwd');
     if (cwdEl) {
       cwdEl.textContent = this.cwd || '~';
@@ -120,59 +99,158 @@ export class TerminalDrawerController {
     }
   }
 
-  public appendOutput(text: string, isErr = false, isCmd = false): void {
-    const outputEl = document.getElementById('terminal-output');
-    if (!outputEl) return;
-
-    const line = document.createElement('div');
-    line.className = `terminal-line${isErr ? ' terminal-line--err' : ''}${isCmd ? ' terminal-line--cmd' : ''}`;
-    if (text.includes('\x1b[')) {
-      line.innerHTML = ansiToHtml(text);
-    } else {
-      line.textContent = text;
+  private async ensureTerminal(): Promise<void> {
+    if (this.starting) return this.starting;
+    if (this.sessionId) {
+      this.fitAndResize();
+      this.terminal?.focus();
+      return;
     }
+    this.starting = this.startTerminal();
+    try { await this.starting; }
+    catch (error) { this.reportError(error); }
+    finally { this.starting = null; }
+  }
 
-    outputEl.appendChild(line);
-    outputEl.scrollTop = outputEl.scrollHeight;
+  private async startTerminal(): Promise<void> {
+    const host = document.getElementById('terminal-output');
+    if (!host) return;
+    if (!this.terminal) {
+      const createXterm = async () => {
+        const [{ Terminal }, { FitAddon }] = await Promise.all([
+          import('@xterm/xterm'),
+          import('@xterm/addon-fit'),
+        ]);
+        return { terminal: new Terminal({
+        cursorBlink: true,
+        fontFamily: 'var(--font-mono), Menlo, monospace',
+        fontSize: 12,
+        convertEol: false,
+        scrollback: 5000,
+        theme: { background: '#111214', foreground: '#e0e0e0', cursor: '#7ee787', selectionBackground: '#34516f' },
+        }), fitAddon: new FitAddon() };
+      };
+      const { terminal, fitAddon } = this.terminalFactory
+        ? this.terminalFactory(host)
+        : await createXterm();
+      this.terminal = terminal;
+      this.fitAddon = fitAddon;
+      this.terminal.loadAddon(this.fitAddon);
+      this.terminal.open(host);
+      this.terminal.onData((data) => {
+        if (this.sessionId) void this.api().terminalWrite(this.sessionId, data).catch((e: any) => this.reportError(e));
+      });
+      this.resizeObserver = new ResizeObserver(() => this.fitAndResize());
+      this.resizeObserver.observe(host);
+      window.addEventListener('resize', this.fitAndResize);
+    }
+    this.fitAddon?.fit();
+    const cols = this.terminal.cols || 80;
+    const rows = this.terminal.rows || 24;
+    const api = this.api();
+    if (typeof api.terminalListen !== 'function' || typeof api.terminalStart !== 'function') {
+      this.terminal.write('Terminal PTY is unavailable in this backend build.\r\n');
+      return;
+    }
+    this.unlisten ??= await api.terminalListen(
+      (sessionId: string, data: string) => {
+        if (sessionId === this.sessionId) this.terminal?.write(data);
+        else if (!this.sessionId) this.pendingOutput.push({ sessionId, data });
+      },
+      (sessionId: string) => {
+        if (sessionId === this.sessionId) {
+          this.sessionId = null;
+          this.isRunning = false;
+          this.setStatus('Shell exited');
+        } else if (!this.sessionId) this.pendingExits.add(sessionId);
+      },
+    );
+    try {
+      const sessionId: string = await api.terminalStart(this.cwd, cols, rows);
+      this.sessionId = sessionId;
+      for (const event of this.pendingOutput) {
+        if (event.sessionId === sessionId) this.terminal?.write(event.data);
+      }
+      this.pendingOutput = [];
+      if (this.pendingExits.delete(sessionId)) {
+        this.sessionId = null;
+        this.isRunning = false;
+        this.setStatus('Shell exited');
+        return;
+      }
+      this.isRunning = true;
+      this.setStatus('Shell ready');
+      this.terminal?.focus();
+    } catch (error) {
+      if (!this.sessionId) {
+        this.unlisten?.();
+        this.unlisten = null;
+        this.pendingOutput = [];
+        this.pendingExits.clear();
+      }
+      this.reportError(error);
+    }
+  }
+
+  private fitAndResize = (): void => {
+    if (!this.terminal || !this.fitAddon) return;
+    try {
+      this.fitAddon.fit();
+      if (this.sessionId) void this.api().terminalResize(this.sessionId, this.terminal.cols, this.terminal.rows).catch(() => {});
+    } catch { }
+  };
+
+  private reportError(error: any): void {
+    const message = error?.message || String(error);
+    this.terminal?.writeln(`\r\n\x1b[31m${message}\x1b[0m`);
+    this.setStatus('Terminal error');
   }
 
   public clear(): void {
-    const outputEl = document.getElementById('terminal-output');
-    if (outputEl) outputEl.replaceChildren();
-    const statusEl = document.getElementById('terminal-status');
-    if (statusEl) statusEl.textContent = '';
+    this.terminal?.clear();
+    this.terminal?.focus();
+  }
+
+  public appendOutput(text: string, isErr = false, isCmd = false): void {
+    if (!this.terminal) return;
+    if (isCmd) this.terminal.write('\x1b[1;34m');
+    if (isErr) this.terminal.write('\x1b[31m');
+    this.terminal.write(text);
+    if (isErr || isCmd) this.terminal.write('\x1b[0m');
+    this.terminal.write('\r\n');
   }
 
   public async copyOutput(): Promise<void> {
-    const outputEl = document.getElementById('terminal-output');
-    if (!outputEl) return;
-    const text = outputEl.innerText || outputEl.textContent || '';
+    const selection = this.terminal?.getSelection() || '';
+    const text = selection || this.readVisibleBuffer();
     if (text) {
       await this.api().clipboardWrite(text);
-      this.setStatus('Terminal output copied to clipboard.');
+      this.setStatus(selection ? 'Selection copied.' : 'Terminal output copied to clipboard.');
       const statusEl = document.getElementById('terminal-status');
       if (statusEl) statusEl.textContent = '✓ Copied';
     }
   }
 
+  private readVisibleBuffer(): string {
+    const buffer = this.terminal?.buffer.active;
+    if (!buffer) return '';
+    const lines: string[] = [];
+    for (let i = 0; i < buffer.length; i++) lines.push(buffer.getLine(i)?.translateToString(true) || '');
+    return lines.join('\n').trimEnd();
+  }
+
   public async openExternalTerminal(): Promise<void> {
-    let p = this.cwd || this.state[this.state.active]?.path;
-    if (!p || p === '~') {
-      try {
-        p = await this.api().getHome();
-      } catch {
-        p = '/';
-      }
+    let path = this.cwd || this.state[this.state.active]?.path;
+    if (!path || path === '~') {
+      try { path = await this.api().getHome(); }
+      catch { path = '/'; }
     }
     const statusEl = document.getElementById('terminal-status');
     if (statusEl) statusEl.textContent = 'Launching…';
     try {
-      if (typeof this.api().openTerminal === 'function') {
-        await this.api().openTerminal(p);
-      } else {
-        await this.api().shellExec('open -a Terminal .', p);
-      }
-      this.setStatus(`Launched external terminal at: ${p}`);
+      if (typeof this.api().openTerminal === 'function') await this.api().openTerminal(path);
+      else await this.api().shellExec('open -a Terminal .', path);
+      this.setStatus(`Launched external terminal at: ${path}`);
       if (statusEl) statusEl.textContent = '✓ Terminal opened';
     } catch (e: any) {
       this.setStatus(`Failed to open external terminal: ${e?.message || e}`);
@@ -180,293 +258,56 @@ export class TerminalDrawerController {
     }
   }
 
-  public async runCommand(cmdText?: string): Promise<void> {
-    const cmd = (cmdText || '').trim();
-    if (!cmd) return;
-
-    // Handle clear built-in
-    if (cmd === 'clear' || cmd === 'cls') {
-      this.clear();
-      return;
-    }
-
-    if (!this.cwd) {
-      this.cwd = this.state[this.state.active]?.path || null;
-    }
-
-    this.history.push(cmd);
+  public async runCommand(command?: string): Promise<void> {
+    if (!command?.trim()) return;
+    if (!this.cwd) this.cwd = this.state[this.state.active]?.path || null;
+    this.history.push(command.trim());
     this.historyIndex = this.history.length;
-
-    this.appendOutput(`$ ${cmd}`, false, true);
-
-    const input = document.getElementById('terminal-input') as HTMLInputElement | null;
-    if (input) input.value = '';
-
-    const statusEl = document.getElementById('terminal-status');
-    if (statusEl) statusEl.textContent = 'Running…';
-
-    // Built-in: help
-    if (cmd === 'help') {
-      this.appendOutput(
-        'Oryn Integrated Shell Commands:\n' +
-        '  cd <path>      Change directory (syncs file manager pane in real-time)\n' +
-        '  pwd            Print current working directory\n' +
-        '  clear / cls    Clear terminal screen\n' +
-        '  help           Show this help text\n' +
-        '  <any command>  Executed in native login shell with full PATH\n\n' +
-        'Hotkeys & Shortcuts:\n' +
-        '  Ctrl+` / F9    Toggle terminal drawer\n' +
-        '  Tab            Autocomplete file/folder names\n' +
-        '  Up / Down      Browse command history\n' +
-        '  Ctrl+C         Clear input line\n' +
-        '  Ctrl+L         Clear output screen\n' +
-        '  Esc            Close terminal & return focus',
-        false
-      );
-      if (statusEl) statusEl.textContent = '✓ Done';
-      return;
-    }
-
-    // Built-in: pwd
-    if (cmd === 'pwd') {
-      this.appendOutput(this.cwd || '/', false);
-      if (statusEl) statusEl.textContent = '✓ Done';
-      return;
-    }
-
-    // Built-in: cd
-    if (cmd === 'cd' || cmd.startsWith('cd ') || cmd.startsWith('cd\t')) {
-      let rawTarget = cmd.slice(2).trim();
-      let target = rawTarget
-        .replace(/\\ /g, ' ')
-        .replace(/^["']|["']$/g, '');
-
-      let home = '/';
-      try {
-        home = await this.api().getHome();
-      } catch { }
-
-      if (!target || target === '~') {
-        target = home;
-      } else if (target === '~/' || target === '~\\' || target.startsWith('~/') || target.startsWith('~\\')) {
-        target = `${home.replace(/[/\\]+$/, '')}/${target.slice(2)}`;
-      } else if (target === '-') {
-        if (this.previousCwd) {
-          target = this.previousCwd;
-        } else {
-          this.appendOutput('cd: OLDPWD not set', true);
-          if (statusEl) statusEl.textContent = '✗ Error';
-          return;
-        }
-      } else if (target === '..') {
-        const cur = (this.cwd || '').replace(/[/\\]+$/, '');
-        if (cur.match(/^[A-Za-z]:$/) || cur === '/' || cur === '') {
-          target = cur.includes(':') ? `${cur}\\` : '/';
-        } else {
-          const lastSlash = Math.max(cur.lastIndexOf('/'), cur.lastIndexOf('\\'));
-          const parent = cur.substring(0, lastSlash);
-          if (parent.match(/^[A-Za-z]:$/)) {
-            target = `${parent}\\`;
-          } else {
-            target = parent || (cur.includes(':') ? `${cur.slice(0, 2)}\\` : '/');
-          }
-        }
-      } else if (target.match(/^[A-Za-z]:$/)) {
-        target = `${target}\\`;
-      } else if (!target.startsWith('/') && !target.match(/^[A-Za-z]:[/\\]/)) {
-        // Relative path
-        const base = (this.cwd || '').replace(/[/\\]+$/, '');
-        const sep = base.includes('\\') ? '\\' : '/';
-        target = `${base}${sep}${target}`;
-      }
-
-      // Check if target directory exists
-      let isDir = false;
-      try {
-        const stat = await this.api().statProps(target);
-        if (stat && stat.ok && stat.props?.isDir) {
-          isDir = true;
-        }
-      } catch { }
-
-      if (!isDir) {
-        try {
-          const list = await this.api().readDir(target);
-          if (list && (list.ok || Array.isArray(list.items))) {
-            isDir = true;
-          }
-        } catch { }
-      }
-
-      if (isDir) {
-        this.previousCwd = this.cwd;
-        this.cwd = target;
-        this.updateCwd();
-        const activeSide = this.state.active;
-        if (typeof this.navigateTo === 'function') {
-          await this.navigateTo(activeSide, target);
-        } else if (typeof this.loadDir === 'function') {
-          this.state[activeSide].path = target;
-          await this.loadDir(activeSide);
-        }
-        if (statusEl) statusEl.textContent = '✓ Done';
-        return;
-      } else {
-        this.appendOutput(`cd: no such file or directory: ${target}`, true);
-        if (statusEl) statusEl.textContent = '✗ Error';
-        return;
-      }
-    }
-
-    this.isRunning = true;
-    try {
-      const res = await this.api().shellExec(cmd, this.cwd);
-      if (res.stdout) {
-        this.appendOutput(res.stdout.trimEnd(), false);
-      }
-      if (res.stderr) {
-        this.appendOutput(res.stderr.trimEnd(), true);
-      }
-      if (statusEl) {
-        statusEl.textContent = res.code === 0 ? '✓ Done' : `✗ Exit code ${res.code}`;
-      }
-    } catch (err: any) {
-      this.appendOutput(err?.message || String(err), true);
-      if (statusEl) statusEl.textContent = '✗ Error';
-    } finally {
-      this.isRunning = false;
-    }
+    await this.ensureTerminal();
+    if (this.sessionId) await this.api().terminalWrite(this.sessionId, `${command}\r`);
   }
 
   public setupResizeHandle(): void {
     const handle = document.getElementById('terminal-resize-handle');
     const drawer = document.getElementById('terminal-drawer');
     if (!handle || !drawer) return;
-
-    let isResizing = false;
+    let resizing = false;
     let startY = 0;
     let startHeight = 0;
-
     const onMouseDown = (e: MouseEvent) => {
-      isResizing = true;
+      resizing = true;
       startY = e.clientY;
       startHeight = drawer.offsetHeight;
       handle.classList.add('resizing');
       document.body.style.userSelect = 'none';
       document.body.style.cursor = 'ns-resize';
-
       window.addEventListener('mousemove', onMouseMove);
       window.addEventListener('mouseup', onMouseUp);
     };
-
     const onMouseMove = (e: MouseEvent) => {
-      if (!isResizing) return;
-      const delta = startY - e.clientY;
-      const maxH = Math.floor(window.innerHeight * 0.85);
-      const newHeight = Math.max(140, Math.min(maxH, startHeight + delta));
-      drawer.style.height = `${newHeight}px`;
+      if (!resizing) return;
+      drawer.style.height = `${Math.max(140, Math.min(Math.floor(window.innerHeight * 0.85), startHeight + startY - e.clientY))}px`;
+      this.fitAndResize();
     };
-
     const onMouseUp = () => {
-      if (!isResizing) return;
-      isResizing = false;
+      if (!resizing) return;
+      resizing = false;
       handle.classList.remove('resizing');
       document.body.style.userSelect = '';
       document.body.style.cursor = '';
       window.removeEventListener('mousemove', onMouseMove);
       window.removeEventListener('mouseup', onMouseUp);
-
-      try {
-        localStorage.setItem('Oryn.terminalHeight', String(drawer.offsetHeight));
-        localStorage.setItem('Oswin.terminalHeight', String(drawer.offsetHeight));
-      } catch { }
+      try { localStorage.setItem('Oryn.terminalHeight', String(drawer.offsetHeight)); } catch { }
     };
-
     handle.addEventListener('mousedown', onMouseDown);
   }
 
   public setup(): void {
     this.setupResizeHandle();
-
     document.getElementById('terminal-close-btn')?.addEventListener('click', () => this.hide());
     document.getElementById('terminal-clear-btn')?.addEventListener('click', () => this.clear());
     document.getElementById('terminal-copy-btn')?.addEventListener('click', () => void this.copyOutput());
     document.getElementById('terminal-external-btn')?.addEventListener('click', () => void this.openExternalTerminal());
-
-    const drawer = document.getElementById('terminal-drawer');
-    const input = document.getElementById('terminal-input') as HTMLInputElement | null;
-
-    if (drawer && input) {
-      drawer.addEventListener('click', (e) => {
-        const target = e.target as HTMLElement;
-        if (target.tagName !== 'BUTTON' && !target.closest('button')) {
-          input.focus();
-        }
-      });
-    }
-
-    if (input) {
-      input.addEventListener('keydown', async (e) => {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          void this.runCommand(input.value);
-        } else if (e.key === 'Tab') {
-          e.preventDefault();
-          const val = input.value;
-          const lastWordMatch = val.match(/([^\s"']+)$/);
-          const prefix = lastWordMatch ? lastWordMatch[1] : '';
-          if (!prefix) return;
-
-          try {
-            const res = await this.api().readDir(this.cwd || '.');
-            const items = res?.items || [];
-            const matches = items
-              .map((en: any) => en.base || en.display || en.name)
-              .filter((name: string) => name && name !== '..' && name.toLowerCase().startsWith(prefix.toLowerCase()));
-
-            if (matches.length === 1) {
-              const completed = matches[0];
-              const suffix = val.slice(0, val.length - prefix.length);
-              const needsQuote = completed.includes(' ') && !val.includes('"');
-              if (needsQuote) {
-                input.value = `${suffix}"${completed}"`;
-              } else {
-                input.value = `${suffix}${completed}`;
-              }
-            } else if (matches.length > 1) {
-              this.appendOutput(matches.join('   '), false);
-            }
-          } catch { }
-        } else if (e.key === 'ArrowUp') {
-          e.preventDefault();
-          if (this.history.length > 0) {
-            if (this.historyIndex > 0) {
-              this.historyIndex -= 1;
-            }
-            input.value = this.history[this.historyIndex] || '';
-          }
-        } else if (e.key === 'ArrowDown') {
-          e.preventDefault();
-          if (this.history.length > 0) {
-            if (this.historyIndex < this.history.length - 1) {
-              this.historyIndex += 1;
-              input.value = this.history[this.historyIndex] || '';
-            } else {
-              this.historyIndex = this.history.length;
-              input.value = '';
-            }
-          }
-        } else if (e.key === 'Escape') {
-          e.preventDefault();
-          this.hide();
-        } else if (e.ctrlKey && (e.key.toLowerCase() === 'c' || e.key === 'c')) {
-          e.preventDefault();
-          input.value = '';
-        } else if (e.ctrlKey && (e.key.toLowerCase() === 'l' || e.key === 'l')) {
-          e.preventDefault();
-          this.clear();
-        }
-      });
-    }
+    document.getElementById('terminal-output')?.addEventListener('click', () => this.terminal?.focus());
   }
 }

@@ -462,11 +462,6 @@ export class KeyboardController {
         this.terminalDrawerController?.toggle();
         return;
       }
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        this.terminalDrawerController?.hide();
-        return;
-      }
       return;
     }
 
