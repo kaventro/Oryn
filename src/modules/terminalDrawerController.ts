@@ -125,7 +125,7 @@ export class TerminalDrawerController {
         cursorBlink: true,
         fontFamily: 'var(--font-mono), Menlo, monospace',
         fontSize: 12,
-        convertEol: true,
+        convertEol: false,
         scrollback: 5000,
         theme: { background: '#111214', foreground: '#e0e0e0', cursor: '#7ee787', selectionBackground: '#34516f' },
         }), fitAddon: new FitAddon() };

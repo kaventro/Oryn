@@ -99,7 +99,76 @@ test('terminal drawer streams a persistent PTY session and forwards terminal inp
 
   await controller.copyOutput();
   assert.equal(clipboard, 'selected text');
+
+  controller.appendOutput('info log');
+  controller.appendOutput('error log', true);
+  controller.appendOutput('cmd log', false, true);
+  assert.ok(writes.some(w => w.includes('info log')));
+  assert.ok(writes.some(w => w.includes('error log')));
+  assert.ok(writes.some(w => w.includes('cmd log')));
+
+  controller.clear();
+  assert.equal(writes.length, 0);
+
+  controller.hide();
+  assert.equal(controller.isOpen, false);
+  assert.ok(classes.has('hidden'));
+
+  controller.toggle('/custom/dir');
+  assert.equal(controller.isOpen, true);
+  assert.equal(controller.cwd, '/custom/dir');
+  assert.equal(cwd.textContent, '/custom/dir');
+
+  controller.toggle();
+  assert.equal(controller.isOpen, false);
+
   exitListener?.('pty-1');
   assert.equal(controller.isRunning, false);
   assert.equal(status, 'Shell exited');
+});
+
+test('terminal drawer handles external terminal launch and setup buttons', async () => {
+  let externalLaunched = '';
+  let statusMsg = '';
+  const registeredEvents: Record<string, Function> = {};
+  const btnClose = { addEventListener(ev: string, fn: Function) { registeredEvents['close:' + ev] = fn; } };
+  const btnClear = { addEventListener(ev: string, fn: Function) { registeredEvents['clear:' + ev] = fn; } };
+  const btnCopy = { addEventListener(ev: string, fn: Function) { registeredEvents['copy:' + ev] = fn; } };
+  const btnExternal = { addEventListener(ev: string, fn: Function) { registeredEvents['external:' + ev] = fn; } };
+  const host = { addEventListener(ev: string, fn: Function) { registeredEvents['host:' + ev] = fn; } };
+
+  (globalThis as any).document = {
+    getElementById(id: string) {
+      if (id === 'terminal-close-btn') return btnClose;
+      if (id === 'terminal-clear-btn') return btnClear;
+      if (id === 'terminal-copy-btn') return btnCopy;
+      if (id === 'terminal-external-btn') return btnExternal;
+      if (id === 'terminal-output') return host;
+      if (id === 'terminal-status') return { textContent: '' };
+      return null;
+    },
+    body: { style: {} },
+  };
+
+  const api = {
+    openTerminal: async (path: string) => { externalLaunched = path; },
+    getHome: async () => '/home/user',
+  };
+
+  const controller = new TerminalDrawerController({
+    state: { active: 'left', left: { path: '/home/user/project' } } as any,
+    api: () => api,
+    setStatus: (msg) => { statusMsg = msg; },
+    focusActiveList() {},
+  });
+
+  controller.setup();
+  assert.ok(registeredEvents['close:click']);
+  assert.ok(registeredEvents['clear:click']);
+  assert.ok(registeredEvents['copy:click']);
+  assert.ok(registeredEvents['external:click']);
+
+  await controller.openExternalTerminal();
+  assert.equal(externalLaunched, '/home/user/project');
+  assert.ok(statusMsg.includes('Launched external terminal'));
 });

@@ -82,6 +82,10 @@ def main():
                             { id: 'srv1', name: 'Production Cloud (SFTP)', host: '192.168.1.100', port: 22, username: 'deploy', auth_type: 'Password', initial_path: '/var/www' }
                         ];
                     }
+                    if (cmd === 'shell_terminal_start') return 'session-1';
+                    if (cmd === 'shell_terminal_write') return null;
+                    if (cmd === 'shell_terminal_resize') return null;
+                    if (cmd === 'shell_terminal_stop') return null;
                     if (cmd === 'shell_exec') {
                         if (args.cmd === 'pwd') return { code: 0, stdout: '/workspace/Oryn\n', stderr: '' };
                         return { code: 0, stdout: 'ok\n', stderr: '' };
@@ -170,11 +174,10 @@ def main():
             time.sleep(0.5)
 
             # 5. Open Terminal Drawer
-            print("💻 Opening Terminal Drawer and executing command...")
+            print("💻 Opening Terminal Drawer...")
             page.click("#btn-status-terminal-toggle")
             page.wait_for_selector("#terminal-drawer:not(.hidden)", timeout=5000)
-            page.fill("#terminal-input", "pwd")
-            page.press("#terminal-input", "Enter")
+            page.wait_for_selector("#terminal-output .xterm", timeout=5000)
             time.sleep(0.5)
             shot5 = os.path.join(ARTIFACT_DIR, "oryn_terminal_drawer.png")
             page.screenshot(path=shot5)

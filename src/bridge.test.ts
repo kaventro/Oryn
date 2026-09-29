@@ -400,6 +400,39 @@ test('bridge event listeners and channel callbacks', async () => {
   assert.equal(lastInvokeCmd, 'compare_dirs');
 });
 
+test('bridge terminal methods invoke backend and stream events', async () => {
+  await bridge.terminalStart('/workspace', 80, 24);
+  assert.equal(lastInvokeCmd, 'shell_terminal_start');
+  assert.deepEqual(lastInvokeArgs, { input: { cwd: '/workspace', cols: 80, rows: 24 } });
+
+  await bridge.terminalWrite('sess_1', 'ls -la\n');
+  assert.equal(lastInvokeCmd, 'shell_terminal_write');
+  assert.deepEqual(lastInvokeArgs, { input: { sessionId: 'sess_1', data: 'ls -la\n' } });
+
+  await bridge.terminalResize('sess_1', 100, 30);
+  assert.equal(lastInvokeCmd, 'shell_terminal_resize');
+  assert.deepEqual(lastInvokeArgs, { input: { sessionId: 'sess_1', cols: 100, rows: 30 } });
+
+  await bridge.terminalStop('sess_1');
+  assert.equal(lastInvokeCmd, 'shell_terminal_stop');
+  assert.deepEqual(lastInvokeArgs, { input: { sessionId: 'sess_1' } });
+
+  let outputReceived = '';
+  let exitReceived = '';
+  const unlisten = await bridge.terminalListen(
+    (sessionId, data) => { outputReceived = `${sessionId}:${data}`; },
+    (sessionId) => { exitReceived = sessionId; },
+  );
+
+  (eventHandlers['terminal-output'] || []).forEach((fn) => fn({ payload: { sessionId: 'sess_1', data: 'hello' } }));
+  assert.equal(outputReceived, 'sess_1:hello');
+
+  (eventHandlers['terminal-exit'] || []).forEach((fn) => fn({ payload: { sessionId: 'sess_1' } }));
+  assert.equal(exitReceived, 'sess_1');
+
+  unlisten();
+});
+
 test('bridge git and remote methods invoke backend', async () => {
   await bridge.gitIsRepo('/repo');
   assert.equal(lastInvokeCmd, 'git_is_repo');

@@ -344,7 +344,19 @@ pub struct TerminalResizeIn {
 
 static NEXT_TERMINAL_ID: AtomicU64 = AtomicU64::new(1);
 
-#[tauri::command]
+pub(crate) fn decode_utf8_chunk(carry: &mut Vec<u8>, chunk: &[u8]) -> String {
+    carry.extend_from_slice(chunk);
+    let valid = match std::str::from_utf8(carry) {
+        Ok(_) => carry.len(),
+        Err(e) if e.error_len().is_none() => e.valid_up_to(),
+        Err(_) => carry.len(),
+    };
+    let data = String::from_utf8_lossy(&carry[..valid]).into_owned();
+    carry.drain(..valid);
+    data
+}
+
+#[tauri::command(async)]
 pub fn shell_terminal_start(
     app: tauri::AppHandle,
     sessions: tauri::State<'_, TerminalSessions>,
@@ -361,7 +373,7 @@ pub fn shell_terminal_start(
     #[cfg(not(target_os = "windows"))]
     let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".into());
     #[cfg(target_os = "windows")]
-    let shell = std::env::var("COMSPEC").unwrap_or_else(|_| "powershell.exe".into());
+    let shell = "powershell.exe".to_string();
     let mut command = CommandBuilder::new(shell);
     #[cfg(not(target_os = "windows"))]
     command.arg("-l");
@@ -393,21 +405,24 @@ pub fn shell_terminal_start(
             child: Mutex::new(child),
         }),
     );
+
     let output_id = id.clone();
     let sessions = Arc::clone(&sessions.0);
     std::thread::spawn(move || {
         let mut buf = [0u8; 8192];
+        let mut carry: Vec<u8> = Vec::new();
         loop {
             match reader.read(&mut buf) {
                 Ok(0) => break,
                 Ok(n) => {
-                    let data = String::from_utf8_lossy(&buf[..n]).into_owned();
-                    if app
-                        .emit(
-                            "terminal-output",
-                            serde_json::json!({"sessionId": output_id, "data": data}),
-                        )
-                        .is_err()
+                    let data = decode_utf8_chunk(&mut carry, &buf[..n]);
+                    if !data.is_empty()
+                        && app
+                            .emit(
+                                "terminal-output",
+                                serde_json::json!({"sessionId": output_id, "data": data}),
+                            )
+                            .is_err()
                     {
                         break;
                     }
@@ -415,11 +430,17 @@ pub fn shell_terminal_start(
                 Err(_) => break,
             }
         }
-        if let Ok(mut sessions) = sessions.lock() {
-            if let Some(session) = sessions.remove(&output_id) {
-                if let Ok(mut child) = session.child.lock() {
-                    let _ = child.wait();
-                }
+        if !carry.is_empty() {
+            let data = String::from_utf8_lossy(&carry).into_owned();
+            let _ = app.emit(
+                "terminal-output",
+                serde_json::json!({"sessionId": output_id, "data": data}),
+            );
+        }
+        let removed = sessions.lock().ok().and_then(|mut s| s.remove(&output_id));
+        if let Some(session) = removed {
+            if let Ok(mut child) = session.child.lock() {
+                let _ = child.wait();
             }
         }
         let _ = app.emit("terminal-exit", serde_json::json!({"sessionId": output_id}));
@@ -428,7 +449,7 @@ pub fn shell_terminal_start(
 }
 
 #[tauri::command]
-pub fn shell_terminal_write(
+pub async fn shell_terminal_write(
     sessions: tauri::State<'_, TerminalSessions>,
     input: TerminalWriteIn,
 ) -> Result<(), String> {
@@ -438,15 +459,20 @@ pub fn shell_terminal_write(
         .map_err(|e| e.to_string())?
         .get(&input.session_id)
         .cloned()
-        .ok_or("Terminal session not found")?;
-    let mut writer = session.writer.lock().map_err(|e| e.to_string())?;
-    writer
-        .write_all(input.data.as_bytes())
-        .and_then(|_| writer.flush())
-        .map_err(|e| e.to_string())
+        .ok_or_else(|| "Terminal session not found".to_string())?;
+
+    tokio::task::spawn_blocking(move || {
+        let mut writer = session.writer.lock().map_err(|e| e.to_string())?;
+        writer
+            .write_all(input.data.as_bytes())
+            .and_then(|_| writer.flush())
+            .map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn shell_terminal_resize(
     sessions: tauri::State<'_, TerminalSessions>,
     input: TerminalResizeIn,
@@ -472,7 +498,7 @@ pub fn shell_terminal_resize(
     result
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn shell_terminal_stop(
     sessions: tauri::State<'_, TerminalSessions>,
     input: TerminalSessionIn,
@@ -658,5 +684,49 @@ mod tests {
         });
         assert!(res.is_err());
         assert!(res.unwrap_err().contains("No custom editor command"));
+    }
+
+    #[test]
+    fn test_decode_utf8_chunk_split_sequence() {
+        let mut carry = Vec::new();
+        let full = "Привет".as_bytes();
+        let part1 = &full[..3];
+        let part2 = &full[3..];
+
+        let out1 = decode_utf8_chunk(&mut carry, part1);
+        assert_eq!(out1, "П");
+        assert_eq!(carry.len(), 1);
+
+        let out2 = decode_utf8_chunk(&mut carry, part2);
+        assert_eq!(out2, "ривет");
+        assert!(carry.is_empty());
+    }
+
+    #[test]
+    fn test_decode_utf8_chunk_multibyte_emoji() {
+        let mut carry = Vec::new();
+        let emoji = "🚀".as_bytes();
+        let out1 = decode_utf8_chunk(&mut carry, &emoji[..2]);
+        assert_eq!(out1, "");
+        assert_eq!(carry.len(), 2);
+
+        let out2 = decode_utf8_chunk(&mut carry, &emoji[2..]);
+        assert_eq!(out2, "🚀");
+        assert!(carry.is_empty());
+    }
+
+    #[test]
+    fn test_decode_utf8_chunk_invalid_bytes() {
+        let mut carry = Vec::new();
+        let invalid = [0xFF, 0xFE];
+        let out = decode_utf8_chunk(&mut carry, &invalid);
+        assert!(out.contains('\u{FFFD}'));
+        assert!(carry.is_empty());
+    }
+
+    #[test]
+    fn test_terminal_sessions_lifecycle() {
+        let sessions = TerminalSessions::default();
+        drop(sessions);
     }
 }
