@@ -41,7 +41,8 @@ def main():
         ["npx", "vite", "--port", str(PORT)],
         cwd=REPO_ROOT,
         stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL
+        stderr=subprocess.DEVNULL,
+        shell=sys.platform == "win32"
     )
 
     try:
@@ -60,10 +61,23 @@ def main():
             # Mock Tauri IPC backend in browser
             mock_init_script = r"""
             window.__IPC_CALLS__ = window.__IPC_CALLS__ || [];
+            const __callbacks = new Map();
+            let __cbId = 1;
             window.__TAURI_INTERNALS__ = {
                 convertFileSrc: (src, protocol = 'asset') => `${protocol}://localhost/${encodeURIComponent(src)}`,
+                transformCallback: (callback, once = false) => {
+                    const id = __cbId++;
+                    __callbacks.set(id, callback);
+                    return id;
+                },
+                unregisterCallback: (id) => {
+                    __callbacks.delete(id);
+                },
+                callbacks: __callbacks,
                 invoke: async (cmd, args) => {
-                    window.__IPC_CALLS__.push({ cmd, args: JSON.parse(JSON.stringify(args || {})) });
+                    let sanitizedArgs = {};
+                    try { sanitizedArgs = JSON.parse(JSON.stringify(args || {})); } catch { }
+                    window.__IPC_CALLS__.push({ cmd, args: sanitizedArgs });
                     if (cmd === 'app_get_home') return '/workspace/Oryn';
                     if (cmd === 'config_load') return {};
                     if (cmd === 'system_get_stats') return { cpuPct: 14, ramUsed: 8589934592, ramTotal: 17179869184, ramPct: 50, uptimeSec: 72000 };
@@ -189,17 +203,24 @@ def main():
 
             # Assert shell_terminal_start and shell_terminal_write IPC invocations
             calls = page.evaluate("() => window.__IPC_CALLS__ || []")
+            def get_arg(call, key):
+                args = call.get("args", {})
+                if key in args:
+                    return args[key]
+                return args.get("input", {}).get(key)
+
             start_calls = [c for c in calls if c.get("cmd") == "shell_terminal_start"]
             write_calls = [c for c in calls if c.get("cmd") == "shell_terminal_write"]
-            assert len(start_calls) > 0, "Expected at least one shell_terminal_start IPC invocation"
-            assert len(write_calls) > 0, "Expected at least one shell_terminal_write IPC invocation"
-            assert any(w.get("args", {}).get("sessionId") == "session-1" for w in write_calls), (
+            assert len(start_calls) > 0, f"Expected at least one shell_terminal_start IPC invocation, got: {[c.get('cmd') for c in calls]}"
+            assert len(write_calls) > 0, f"Expected at least one shell_terminal_write IPC invocation, got: {[c.get('cmd') for c in calls]}"
+            assert any(get_arg(w, "sessionId") == "session-1" for w in write_calls), (
                 f"Expected shell_terminal_write with sessionId 'session-1', got: {write_calls}"
             )
-            assert any("pwd" in w.get("args", {}).get("data", "") for w in write_calls), (
-                f"Expected shell_terminal_write with data containing 'pwd', got: {write_calls}"
+            total_typed_data = "".join(str(get_arg(w, "data") or "") for w in write_calls)
+            assert "pwd" in total_typed_data, (
+                f"Expected shell_terminal_write data to contain 'pwd', got: {write_calls}"
             )
-            print(f"  ✔ Verified terminal PTY input forwarding: {len(start_calls)} start call(s), {len(write_calls)} write call(s)")
+            print(f"  ✔ Verified terminal PTY input forwarding: {len(start_calls)} start call(s), {len(write_calls)} write call(s), typed='{total_typed_data.strip()}'")
 
             shot5 = os.path.join(ARTIFACT_DIR, "oryn_terminal_drawer.png")
             page.screenshot(path=shot5)
