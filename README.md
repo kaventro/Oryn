@@ -15,9 +15,10 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-AGPL--3.0-blue.svg" alt="AGPL-3.0 license" /></a>
 </p>
 
+https://github.com/user-attachments/assets/e4cbcd2c-efbd-400e-9108-5d95ae87fe34
+
 <p align="center">
-  <a href="assets/showcase/oryn_showreel.mp4"><img src="assets/showcase/oryn_showreel_poster.jpg" alt="Oryn showreel: Two panes. One keystroke. Click to watch the 60-second film." width="100%" /></a><br />
-  <sub>60-second showreel: two panes, copy and rename, search, Git, terminal, SFTP, and the app on macOS, Windows, and Linux. <a href="assets/showcase/oryn_showreel.mp4">Watch it</a> (1080p, 60 fps, sound on).</sub>
+  <sub>60-second showreel: two panes, copy and rename, search, Git, terminal, SFTP, and the app on macOS, Windows, and Linux. <a href="assets/showcase/oryn_showreel.mp4">Full-quality version</a> (1080p, 60 fps).</sub>
 </p>
 
 <p align="center">
