@@ -433,6 +433,28 @@ test('bridge terminal methods invoke backend and stream events', async () => {
   unlisten();
 });
 
+test('bridge terminalListen cleans up and throws if second listener fails', async () => {
+  const origInvoke = (globalThis as any).__TAURI_INTERNALS__.invoke;
+  let callCount = 0;
+  (globalThis as any).__TAURI_INTERNALS__.invoke = async (cmd: string, args: any) => {
+    if (cmd === 'plugin:event|listen') {
+      callCount++;
+      if (callCount === 2) {
+        throw new Error('exit listener failed');
+      }
+    }
+    return origInvoke(cmd, args);
+  };
+  try {
+    await assert.rejects(
+      bridge.terminalListen(() => {}, () => {}),
+      /exit listener failed/
+    );
+  } finally {
+    (globalThis as any).__TAURI_INTERNALS__.invoke = origInvoke;
+  }
+});
+
 test('bridge git and remote methods invoke backend', async () => {
   await bridge.gitIsRepo('/repo');
   assert.equal(lastInvokeCmd, 'git_is_repo');

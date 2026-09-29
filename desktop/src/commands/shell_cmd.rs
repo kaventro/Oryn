@@ -295,14 +295,14 @@ pub struct ShellExecIn {
     pub cwd: Option<String>,
 }
 
-struct PtySession {
-    writer: Mutex<Box<dyn Write + Send>>,
-    master: Mutex<Box<dyn MasterPty + Send>>,
-    child: Mutex<Box<dyn Child + Send + Sync>>,
+pub(crate) struct PtySession {
+    pub(crate) writer: Mutex<Box<dyn Write + Send>>,
+    pub(crate) master: Mutex<Box<dyn MasterPty + Send>>,
+    pub(crate) child: Mutex<Box<dyn Child + Send + Sync>>,
 }
 
-#[derive(Default)]
-pub struct TerminalSessions(Arc<Mutex<HashMap<String, Arc<PtySession>>>>);
+#[derive(Default, Clone)]
+pub struct TerminalSessions(pub(crate) Arc<Mutex<HashMap<String, Arc<PtySession>>>>);
 
 impl Drop for TerminalSessions {
     fn drop(&mut self) {
@@ -313,6 +313,117 @@ impl Drop for TerminalSessions {
                 }
             }
         }
+    }
+}
+
+impl TerminalSessions {
+    pub fn start(
+        &self,
+        cwd: Option<&str>,
+        cols: u16,
+        rows: u16,
+    ) -> Result<(String, Box<dyn Read + Send>), String> {
+        let pair = native_pty_system()
+            .openpty(PtySize {
+                rows: rows.clamp(2, 300),
+                cols: cols.clamp(2, 500),
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .map_err(|e| e.to_string())?;
+        #[cfg(not(target_os = "windows"))]
+        let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".into());
+        #[cfg(target_os = "windows")]
+        let shell = "powershell.exe".to_string();
+        let mut command = CommandBuilder::new(shell);
+        #[cfg(not(target_os = "windows"))]
+        command.arg("-l");
+        #[cfg(target_os = "windows")]
+        command.arg("-NoLogo");
+        if let Some(cwd) = cwd.filter(|p| !p.trim().is_empty()) {
+            command.cwd(cwd);
+        }
+        command.env("TERM", "xterm-256color");
+        command.env("COLORTERM", "truecolor");
+
+        let reader = pair.master.try_clone_reader().map_err(|e| e.to_string())?;
+        let writer = pair.master.take_writer().map_err(|e| e.to_string())?;
+        let child = pair
+            .slave
+            .spawn_command(command)
+            .map_err(|e| e.to_string())?;
+        drop(pair.slave);
+        let id = format!(
+            "{}-{}",
+            std::process::id(),
+            NEXT_TERMINAL_ID.fetch_add(1, Ordering::Relaxed)
+        );
+        let session = Arc::new(PtySession {
+            writer: Mutex::new(writer),
+            master: Mutex::new(pair.master),
+            child: Mutex::new(child),
+        });
+        self.0
+            .lock()
+            .map_err(|e| e.to_string())?
+            .insert(id.clone(), session);
+        Ok((id, reader))
+    }
+
+    pub fn write(&self, session_id: &str, data: &str) -> Result<(), String> {
+        let session = self
+            .0
+            .lock()
+            .map_err(|e| e.to_string())?
+            .get(session_id)
+            .cloned()
+            .ok_or_else(|| "Terminal session not found".to_string())?;
+
+        let mut writer = session.writer.lock().map_err(|e| e.to_string())?;
+        writer
+            .write_all(data.as_bytes())
+            .and_then(|_| writer.flush())
+            .map_err(|e| e.to_string())
+    }
+
+    pub fn resize(&self, session_id: &str, cols: u16, rows: u16) -> Result<(), String> {
+        let session = self
+            .0
+            .lock()
+            .map_err(|e| e.to_string())?
+            .get(session_id)
+            .cloned()
+            .ok_or_else(|| "Terminal session not found".to_string())?;
+
+        let result = session
+            .master
+            .lock()
+            .map_err(|e| e.to_string())?
+            .resize(PtySize {
+                rows: rows.clamp(2, 300),
+                cols: cols.clamp(2, 500),
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .map_err(|e| e.to_string());
+        result
+    }
+
+    pub fn stop(&self, session_id: &str) -> Result<(), String> {
+        let session = self
+            .0
+            .lock()
+            .map_err(|e| e.to_string())?
+            .remove(session_id);
+        if let Some(session) = session {
+            session
+                .child
+                .lock()
+                .map_err(|e| e.to_string())?
+                .kill()
+                .map_err(|e| e.to_string())?;
+        }
+        Ok(())
     }
 }
 
@@ -362,52 +473,9 @@ pub fn shell_terminal_start(
     sessions: tauri::State<'_, TerminalSessions>,
     input: TerminalStartIn,
 ) -> Result<String, String> {
-    let pair = native_pty_system()
-        .openpty(PtySize {
-            rows: input.rows.clamp(2, 300),
-            cols: input.cols.clamp(2, 500),
-            pixel_width: 0,
-            pixel_height: 0,
-        })
-        .map_err(|e| e.to_string())?;
-    #[cfg(not(target_os = "windows"))]
-    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".into());
-    #[cfg(target_os = "windows")]
-    let shell = "powershell.exe".to_string();
-    let mut command = CommandBuilder::new(shell);
-    #[cfg(not(target_os = "windows"))]
-    command.arg("-l");
-    #[cfg(target_os = "windows")]
-    command.arg("-NoLogo");
-    if let Some(cwd) = input.cwd.filter(|p| !p.trim().is_empty()) {
-        command.cwd(cwd);
-    }
-    command.env("TERM", "xterm-256color");
-    command.env("COLORTERM", "truecolor");
-
-    let mut reader = pair.master.try_clone_reader().map_err(|e| e.to_string())?;
-    let writer = pair.master.take_writer().map_err(|e| e.to_string())?;
-    let child = pair
-        .slave
-        .spawn_command(command)
-        .map_err(|e| e.to_string())?;
-    drop(pair.slave);
-    let id = format!(
-        "{}-{}",
-        std::process::id(),
-        NEXT_TERMINAL_ID.fetch_add(1, Ordering::Relaxed)
-    );
-    sessions.0.lock().map_err(|e| e.to_string())?.insert(
-        id.clone(),
-        Arc::new(PtySession {
-            writer: Mutex::new(writer),
-            master: Mutex::new(pair.master),
-            child: Mutex::new(child),
-        }),
-    );
-
+    let (id, mut reader) = sessions.start(input.cwd.as_deref(), input.cols, input.rows)?;
     let output_id = id.clone();
-    let sessions = Arc::clone(&sessions.0);
+    let sessions_map = Arc::clone(&sessions.0);
     std::thread::spawn(move || {
         let mut buf = [0u8; 8192];
         let mut carry: Vec<u8> = Vec::new();
@@ -437,7 +505,7 @@ pub fn shell_terminal_start(
                 serde_json::json!({"sessionId": output_id, "data": data}),
             );
         }
-        let removed = sessions.lock().ok().and_then(|mut s| s.remove(&output_id));
+        let removed = sessions_map.lock().ok().and_then(|mut s| s.remove(&output_id));
         if let Some(session) = removed {
             if let Ok(mut child) = session.child.lock() {
                 let _ = child.wait();
@@ -453,23 +521,10 @@ pub async fn shell_terminal_write(
     sessions: tauri::State<'_, TerminalSessions>,
     input: TerminalWriteIn,
 ) -> Result<(), String> {
-    let session = sessions
-        .0
-        .lock()
+    let sessions = sessions.inner().clone();
+    tokio::task::spawn_blocking(move || sessions.write(&input.session_id, &input.data))
+        .await
         .map_err(|e| e.to_string())?
-        .get(&input.session_id)
-        .cloned()
-        .ok_or_else(|| "Terminal session not found".to_string())?;
-
-    tokio::task::spawn_blocking(move || {
-        let mut writer = session.writer.lock().map_err(|e| e.to_string())?;
-        writer
-            .write_all(input.data.as_bytes())
-            .and_then(|_| writer.flush())
-            .map_err(|e| e.to_string())
-    })
-    .await
-    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command(async)]
@@ -477,25 +532,7 @@ pub fn shell_terminal_resize(
     sessions: tauri::State<'_, TerminalSessions>,
     input: TerminalResizeIn,
 ) -> Result<(), String> {
-    let session = sessions
-        .0
-        .lock()
-        .map_err(|e| e.to_string())?
-        .get(&input.session_id)
-        .cloned()
-        .ok_or("Terminal session not found")?;
-    let result = session
-        .master
-        .lock()
-        .map_err(|e| e.to_string())?
-        .resize(PtySize {
-            rows: input.rows.clamp(2, 300),
-            cols: input.cols.clamp(2, 500),
-            pixel_width: 0,
-            pixel_height: 0,
-        })
-        .map_err(|e| e.to_string());
-    result
+    sessions.resize(&input.session_id, input.cols, input.rows)
 }
 
 #[tauri::command(async)]
@@ -503,20 +540,7 @@ pub fn shell_terminal_stop(
     sessions: tauri::State<'_, TerminalSessions>,
     input: TerminalSessionIn,
 ) -> Result<(), String> {
-    let session = sessions
-        .0
-        .lock()
-        .map_err(|e| e.to_string())?
-        .remove(&input.session_id);
-    if let Some(session) = session {
-        session
-            .child
-            .lock()
-            .map_err(|e| e.to_string())?
-            .kill()
-            .map_err(|e| e.to_string())?;
-    }
-    Ok(())
+    sessions.stop(&input.session_id)
 }
 
 #[tauri::command]
@@ -727,6 +751,52 @@ mod tests {
     #[test]
     fn test_terminal_sessions_lifecycle() {
         let sessions = TerminalSessions::default();
+        drop(sessions);
+    }
+
+    #[test]
+    fn test_terminal_sessions_full_lifecycle() {
+        let sessions = TerminalSessions::default();
+        let (id, mut reader) = sessions.start(None, 80, 24).expect("start pty");
+        assert!(!id.is_empty());
+
+        assert!(sessions.write(&id, "echo hello\r\n").is_ok());
+        assert!(sessions.resize(&id, 100, 30).is_ok());
+
+        let mut buf = [0u8; 1024];
+        let _ = reader.read(&mut buf);
+
+        assert!(sessions.stop(&id).is_ok());
+        assert!(sessions.write(&id, "fail").is_err());
+        assert!(sessions.resize(&id, 80, 24).is_err());
+    }
+
+    #[test]
+    fn test_terminal_sessions_with_cwd() {
+        let sessions = TerminalSessions::default();
+        let tmp = std::env::temp_dir();
+        let (id, _) = sessions.start(tmp.to_str(), 80, 24).expect("start pty with cwd");
+        assert!(sessions.stop(&id).is_ok());
+    }
+
+    #[test]
+    fn test_terminal_sessions_not_found_errors() {
+        let sessions = TerminalSessions::default();
+        assert_eq!(
+            sessions.write("non_existent", "abc").unwrap_err(),
+            "Terminal session not found"
+        );
+        assert_eq!(
+            sessions.resize("non_existent", 80, 24).unwrap_err(),
+            "Terminal session not found"
+        );
+        assert!(sessions.stop("non_existent").is_ok());
+    }
+
+    #[test]
+    fn test_terminal_sessions_drop_kills_active() {
+        let sessions = TerminalSessions::default();
+        let (_id, _) = sessions.start(None, 80, 24).expect("start pty");
         drop(sessions);
     }
 }
