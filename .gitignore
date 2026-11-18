@@ -83,7 +83,7 @@ claude.json
 .claudeignore
 
 # Gemini / AGY / Agents
-AGENTS.md
+# Root AGENTS.md is tracked (pointer to DESIGN.md). Other agent files stay local.
 .github/AGENTS.md
 GEMINI.md
 .agents/
