@@ -24,7 +24,7 @@ New colour, radius, and type go in `src/styles/01-vars.css`. Prefer `var(--…)`
 
 **Chrome map:** sidebar + dual/single panes (`src/styles/layout/`), list/grid/columns (`viewController.ts`, `columns/`), F-key bar and terminal drawer (`layout/terminal.css`, `@xterm/xterm`), dialogs (`styles/modals/`). On macOS, `body.platform-mac` reserves traffic-light space — do not invent a second title-bar.
 
-**How to add UI:** new dialog markup goes in `src/index.html` with styles in `src/styles/modals/`; new controller in `src/modules/` wired from `src/app.ts`. New file-type icons get an `IconKey` in `iconDefinitions.ts` and a mapping in `iconRegistry.ts`. New menu actions get an SVG in `menuIcons.ts`. Do not introduce CSS-in-JS, a component library, or a second icon pack.
+**How to add UI:** new dialog markup goes in `src/index.html` with styles in `src/styles/modals/`; new controller in `src/modules/` wired from `src/app.ts`. New file-type icons get an `IconKey` in `iconDefinitions.ts` and a mapping in `iconRegistry.ts`. New menu actions get an SVG in `menuIcons.ts`. Do not introduce CSS-in-JS, a component library, or a second icon pack. `AppSettings.rowDensity` exists in `settingsModel.ts` but is not applied in CSS — do not invent density classes until that setting is wired.
 
 ## 2. What to use / what not to pull in
 
