@@ -1,5 +1,3 @@
-// src/modules/remoteController.ts
-
 export interface RemotePathInfo {
   isRemote: boolean;
   profileId: string | null;

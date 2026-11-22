@@ -1,5 +1,3 @@
-// src/modules/thumbnail/thumbnailCache.ts
-
 export const SUPPORTED_IMAGE_EXTENSIONS = new Set([
   'png',
   'jpg',
@@ -74,10 +72,6 @@ export class ThumbnailCache {
     this.failedSet.clear();
   }
 
-  /**
-   * Mounts a lazy-loaded thumbnail image over the fallback icon.
-   * If the image loads, it shows the thumbnail; if it fails, the fallback SVG stays visible.
-   */
   public mountThumbnail(
     iconEl: HTMLElement,
     filePath: string,
@@ -91,7 +85,6 @@ export class ThumbnailCache {
     const cached = this.getCached(filePath);
     const resolved = cached || this.resolveAssetUrl(filePath);
 
-    // Keep lazy images rendered so browsers can start loading them.
     const img = document.createElement('img');
     img.className = 'row-thumbnail';
     img.loading = 'lazy';

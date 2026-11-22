@@ -1,4 +1,3 @@
-// src/modules/remoteController.test.ts
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { isRemotePath, formatRemotePath, RemoteController } from './remoteController.ts';
@@ -143,7 +142,6 @@ test('RemoteController forwards every remote operation to the resolved API', asy
   assert.equal(await controller.download('srv1', '/c.txt', '/tmp/c.txt'), 'remoteDownload-result');
   assert.equal(await controller.upload('srv1', '/tmp/d.txt', '/d.txt'), 'remoteUpload-result');
 
-  // The API is resolved on every call, so a late-bound bridge is always picked up.
   assert.equal(resolves, 12);
   assert.deepEqual(calls, [
     ['remoteDeleteProfile', ['srv1']],

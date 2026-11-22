@@ -286,7 +286,6 @@
   font-weight: 500;
 }
 
-/* Grid view mode */
 
 .grid-mode .pane-col-head {
   display: none !important;
@@ -399,7 +398,6 @@
   display: none;
 }
 
-/* Columns view mode (Miller columns) */
 
 .columns-container {
   display: none !important;
@@ -503,7 +501,6 @@
   color: #ffffff !important;
 }
 
-/* File Preview / Inspector Column */
 .columns-preview-column {
   width: 280px;
   min-width: 240px;
