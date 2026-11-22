@@ -58,13 +58,12 @@ def main():
             context = browser.new_context(viewport={"width": 1440, "height": 900})
             page = context.new_page()
 
-            # Mock Tauri IPC backend in browser
             mock_init_script = r"""
             window.__IPC_CALLS__ = window.__IPC_CALLS__ || [];
             const __callbacks = new Map();
             let __cbId = 1;
             window.__TAURI_INTERNALS__ = {
-                convertFileSrc: (src, protocol = 'asset') => `${protocol}://localhost/${encodeURIComponent(src)}`,
+                convertFileSrc: () => '/dock-icons/1.png',
                 transformCallback: (callback, once = false) => {
                     const id = __cbId++;
                     __callbacks.set(id, callback);
@@ -98,6 +97,7 @@ def main():
                             { id: 'srv1', name: 'Production Cloud (SFTP)', host: '192.168.1.100', port: 22, username: 'deploy', auth_type: 'Password', initial_path: '/var/www' }
                         ];
                     }
+                    if (cmd === 'fs_grant_preview_asset') return args.input.path;
                     if (cmd === 'shell_terminal_start') return 'session-1';
                     if (cmd === 'shell_terminal_write') return null;
                     if (cmd === 'shell_terminal_resize') return null;
@@ -139,27 +139,32 @@ def main():
             page.wait_for_selector("#list-left .row", timeout=5000)
             time.sleep(1.0) # allow initial render
 
-            # 1. Dual Pane View Screenshot
             shot1 = os.path.join(ARTIFACT_DIR, "oryn_dual_pane.png")
             page.screenshot(path=shot1)
             print(f"  📸 Saved screenshot 1 (Dual Pane View): {shot1}")
 
-            # 2. Switch to Grid / Icons View
             print("🖼 Switching to Grid / Icons Mode...")
             page.click("#btn-view-grid")
             page.wait_for_selector(".grid-mode", timeout=5000)
+            page.wait_for_function("""() => {
+                const expected = ['banner.png', 'screenshot.jpg'];
+                const panes = [...document.querySelectorAll('.grid-mode')];
+                return panes.length > 0 && panes.every(pane => expected.every(name => {
+                    const row = [...pane.querySelectorAll('.row')].find(r => r.textContent.includes(name));
+                    const img = row && row.querySelector('img.row-thumbnail');
+                    return !!img && img.complete && img.naturalWidth > 0;
+                }));
+            }""", timeout=10000)
             time.sleep(0.5)
             shot2 = os.path.join(ARTIFACT_DIR, "oryn_grid_view.png")
             page.screenshot(path=shot2)
             print(f"  📸 Saved screenshot 2 (Grid / Icons View): {shot2}")
 
-            # 3. Switch to Miller Columns View
             print("🔀 Switching to Miller Columns Mode...")
             page.click("#btn-view-columns")
             page.wait_for_selector(".columns-column", timeout=5000)
             time.sleep(0.5)
 
-            # Benchmark Miller columns in-page rendering
             t0 = time.time()
             page.evaluate("""() => {
                 const cvc = window.app?.columnsViewController;
@@ -174,11 +179,9 @@ def main():
             page.screenshot(path=shot3)
             print(f"  📸 Saved screenshot 3 (Miller Columns View): {shot3}")
 
-            # Switch back to List View
             page.click("#btn-view-list")
             time.sleep(0.5)
 
-            # 4. Open Remote SFTP Modal
             print("🌐 Opening Remote SFTP Dialog...")
             page.click("#btn-remote-toggle")
             page.wait_for_selector("#remote-dialog-overlay", timeout=5000)
@@ -189,19 +192,16 @@ def main():
             page.click("#btn-remote-close")
             time.sleep(0.5)
 
-            # 5. Open Terminal Drawer
             print("💻 Opening Terminal Drawer...")
             page.click("#btn-status-terminal-toggle")
             page.wait_for_selector("#terminal-drawer:not(.hidden)", timeout=5000)
             page.wait_for_selector("#terminal-output .xterm", timeout=5000)
             time.sleep(0.5)
 
-            # Focus the terminal and type input to verify PTY input forwarding
             page.click("#terminal-output")
             page.keyboard.type("pwd\n")
             time.sleep(0.5)
 
-            # Assert shell_terminal_start and shell_terminal_write IPC invocations
             calls = page.evaluate("() => window.__IPC_CALLS__ || []")
             def get_arg(call, key):
                 args = call.get("args", {})
@@ -228,24 +228,20 @@ def main():
             page.click("#terminal-close-btn")
             time.sleep(0.5)
 
-            # 6. Open Preferences Modal and verify Default Editor selection
             print("⚙ Opening Preferences Modal...")
             page.click("#btn-settings-toggle")
             page.wait_for_selector("#preferences-overlay:not(.hidden)", timeout=5000)
             time.sleep(0.5)
 
-            # Switch to 'External Tools' tab which contains default editor selector
             print("🔧 Switching to External Tools (editor) tab...")
             page.click('button[data-ptab="editor"]')
             page.wait_for_selector("#pref-panel-editor", state="visible", timeout=5000)
             time.sleep(0.5)
 
-            # Check Default Editor dropdown options
             editor_select = page.locator("#pref-default-editor")
             options = editor_select.locator("option").all_inner_texts()
             print(f"  ✔ Verified Default Editor options: {options}")
 
-            # Change selection to Cursor
             editor_select.select_option(value="cursor")
             time.sleep(0.5)
 

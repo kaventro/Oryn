@@ -1,4 +1,3 @@
-// src/modules/thumbnail/thumbnailCache.test.ts
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ThumbnailCache, SUPPORTED_IMAGE_EXTENSIONS, thumbnailCache } from './thumbnailCache.ts';
@@ -41,12 +40,10 @@ test('ThumbnailCache caching, eviction and error marking lifecycle', () => {
   cache.setCached('file2.png', 'url2');
   assert.equal(cache.getCached('file2.png'), 'url2');
 
-  // Trigger maxEntries eviction
   cache.setCached('file3.png', 'url3');
-  assert.equal(cache.getCached('file1.png'), null); // file1 evicted
+  assert.equal(cache.getCached('file1.png'), null);
   assert.equal(cache.getCached('file3.png'), 'url3');
 
-  // Failure marking
   cache.markFailed('file2.png');
   assert.equal(cache.isFailed('file2.png'), true);
   assert.equal(cache.getCached('file2.png'), null);
@@ -119,20 +116,17 @@ test('ThumbnailCache.mountThumbnail handles missing or failed paths, lazy loads,
       return el;
     };
 
-    // 1. Missing or empty path
     const emptyIcon = createIconEl();
     cache.mountThumbnail(emptyIcon, '', '<svg class="mac-icon"></svg>');
     assert.equal(emptyIcon.innerHTML, '<svg class="mac-icon"></svg>');
     assert.equal(emptyIcon.children.length, 0);
 
-    // 2. Failed path
     cache.markFailed('/failed.png');
     const failedIcon = createIconEl();
     cache.mountThumbnail(failedIcon, '/failed.png', '<svg class="mac-icon"></svg>');
     assert.equal(failedIcon.innerHTML, '<svg class="mac-icon"></svg>');
     assert.equal(failedIcon.children.length, 0);
 
-    // 3. Uncached success flow
     const icon1 = createIconEl();
     mockMacIcon.style.display = '';
     cache.mountThumbnail(icon1, '/photo.png', '<svg class="mac-icon"></svg>');
@@ -141,23 +135,21 @@ test('ThumbnailCache.mountThumbnail handles missing or failed paths, lazy loads,
     assert.equal(createdImg.className, 'row-thumbnail');
     assert.equal(createdImg.loading, 'lazy');
     assert.equal(createdImg.decoding, 'async');
-    assert.equal(createdImg.style.display, 'none');
+    assert.equal(createdImg.style.display, '');
+    assert.equal(createdImg.style.opacity, '0');
     assert.equal(createdImg.src, 'asset:///photo.png');
 
-    // Trigger onload
     createdImg.onload();
     assert.equal(cache.getCached('/photo.png'), 'asset:///photo.png');
-    assert.equal(createdImg.style.display, 'block');
+    assert.equal(createdImg.style.opacity, '1');
     assert.equal(mockMacIcon.style.display, 'none');
 
-    // 4. Cached hit flow
     const icon2 = createIconEl();
     mockMacIcon.style.display = 'block';
     cache.mountThumbnail(icon2, '/photo.png', '<svg class="mac-icon"></svg>');
-    assert.equal(createdImg.style.display, 'block');
+    assert.equal(createdImg.style.opacity, '1');
     assert.equal(mockMacIcon.style.display, 'none');
 
-    // 5. Error flow
     const icon3 = createIconEl();
     mockMacIcon.style.display = 'none';
     cache.mountThumbnail(icon3, '/corrupted.png', '<svg class="mac-icon"></svg>');
@@ -167,7 +159,6 @@ test('ThumbnailCache.mountThumbnail handles missing or failed paths, lazy loads,
     assert.equal(createdImg._removed, true);
     assert.equal(mockMacIcon.style.display, '');
 
-    // 6. Test resolveAssetUrl with window.ow fallback and Windows path
     const fallbackCache = new ThumbnailCache();
     assert.equal(fallbackCache.resolveAssetUrl(''), '');
 
@@ -178,11 +169,9 @@ test('ThumbnailCache.mountThumbnail handles missing or failed paths, lazy loads,
     };
     assert.equal(fallbackCache.resolveAssetUrl('/test.png'), 'window-asset:///test.png');
 
-    // Without a bridge, no unscoped asset URL is produced
     (globalThis as any).window = {};
     assert.equal(fallbackCache.resolveAssetUrl('C:\\Users\\test\\img.png'), '');
 
-    // 7. Verify exported thumbnailCache singleton
     assert.ok(thumbnailCache instanceof ThumbnailCache);
   } finally {
     globalThis.document = origDoc;

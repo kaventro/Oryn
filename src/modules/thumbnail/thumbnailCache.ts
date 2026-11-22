@@ -1,5 +1,3 @@
-// src/modules/thumbnail/thumbnailCache.ts
-
 export const SUPPORTED_IMAGE_EXTENSIONS = new Set([
   'png',
   'jpg',
@@ -74,10 +72,6 @@ export class ThumbnailCache {
     this.failedSet.clear();
   }
 
-  /**
-   * Mounts a lazy-loaded thumbnail image into the icon element.
-   * If the image loads, it shows the thumbnail; if it fails, the fallback SVG stays visible.
-   */
   public mountThumbnail(
     iconEl: HTMLElement,
     filePath: string,
@@ -91,19 +85,18 @@ export class ThumbnailCache {
     const cached = this.getCached(filePath);
     const resolved = cached || this.resolveAssetUrl(filePath);
 
-    // Create thumbnail image element with lazy loading
     const img = document.createElement('img');
     img.className = 'row-thumbnail';
     img.loading = 'lazy';
     img.decoding = 'async';
     img.alt = '';
-    img.style.display = cached ? 'block' : 'none';
+    img.style.opacity = cached ? '1' : '0';
 
     const bind = (url: string) => {
       img.onload = () => {
         if (iconEl.querySelector('.row-thumbnail') !== img) return;
         this.setCached(filePath, url);
-        img.style.display = 'block';
+        img.style.opacity = '1';
         const fallback = iconEl.querySelector('.mac-icon');
         if (fallback) {
           (fallback as HTMLElement).style.display = 'none';
