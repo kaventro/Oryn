@@ -64,7 +64,8 @@ def main():
             const __callbacks = new Map();
             let __cbId = 1;
             window.__TAURI_INTERNALS__ = {
-                convertFileSrc: (src, protocol = 'asset') => `${protocol}://localhost/${encodeURIComponent(src)}`,
+                // Serve a real PNG so Grid thumbnails load in the headless browser.
+                convertFileSrc: () => '/dock-icons/1.png',
                 transformCallback: (callback, once = false) => {
                     const id = __cbId++;
                     __callbacks.set(id, callback);
@@ -98,6 +99,7 @@ def main():
                             { id: 'srv1', name: 'Production Cloud (SFTP)', host: '192.168.1.100', port: 22, username: 'deploy', auth_type: 'Password', initial_path: '/var/www' }
                         ];
                     }
+                    if (cmd === 'fs_grant_preview_asset') return args.input.path;
                     if (cmd === 'shell_terminal_start') return 'session-1';
                     if (cmd === 'shell_terminal_write') return null;
                     if (cmd === 'shell_terminal_resize') return null;
@@ -148,6 +150,10 @@ def main():
             print("🖼 Switching to Grid / Icons Mode...")
             page.click("#btn-view-grid")
             page.wait_for_selector(".grid-mode", timeout=5000)
+            page.wait_for_function("""() => {
+                const thumbnails = [...document.querySelectorAll('.grid-mode img.row-thumbnail')];
+                return thumbnails.length > 0 && thumbnails.every(img => img.complete && img.naturalWidth > 0);
+            }""", timeout=10000)
             time.sleep(0.5)
             shot2 = os.path.join(ARTIFACT_DIR, "oryn_grid_view.png")
             page.screenshot(path=shot2)
