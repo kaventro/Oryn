@@ -99,3 +99,79 @@ test('RemoteController resolves a function API for profiles and connection opera
   assert.deepEqual(await controller.saveProfile(mockProfiles[0]), mockProfiles);
   assert.deepEqual(calls, ['list', 'connect:srv1', 'save:srv1']);
 });
+
+test('RemoteController forwards every remote operation to the resolved API', async () => {
+  const calls: Array<[string, unknown[]]> = [];
+  const record = (name: string) => async (...args: unknown[]) => {
+    calls.push([name, args]);
+    return name === 'remoteDeleteProfile' ? [] : `${name}-result`;
+  };
+  const mockApi = {
+    remoteDeleteProfile: record('remoteDeleteProfile'),
+    remoteTestConnection: record('remoteTestConnection'),
+    remoteDisconnect: record('remoteDisconnect'),
+    remoteReadDir: record('remoteReadDir'),
+    remoteReadFileText: record('remoteReadFileText'),
+    remoteWriteFileText: record('remoteWriteFileText'),
+    remoteMkdir: record('remoteMkdir'),
+    remoteCreateFile: record('remoteCreateFile'),
+    remoteRename: record('remoteRename'),
+    remoteDelete: record('remoteDelete'),
+    remoteDownload: record('remoteDownload'),
+    remoteUpload: record('remoteUpload'),
+  };
+  let resolves = 0;
+  const controller = new RemoteController({
+    api: () => {
+      resolves += 1;
+      return mockApi;
+    },
+  });
+  const profile = { id: 'srv1', name: 'Server 1', host: 'example.com', username: 'root' } as any;
+
+  assert.deepEqual(await controller.deleteProfile('srv1'), []);
+  assert.deepEqual(controller.profiles, []);
+  assert.equal(await controller.testConnection(profile), 'remoteTestConnection-result');
+  assert.equal(await controller.disconnect('srv1'), 'remoteDisconnect-result');
+  assert.equal(await controller.readDir('srv1', '/var'), 'remoteReadDir-result');
+  assert.equal(await controller.readFileText('srv1', '/a.txt'), 'remoteReadFileText-result');
+  assert.equal(await controller.writeFileText('srv1', '/a.txt', 'hi'), 'remoteWriteFileText-result');
+  assert.equal(await controller.mkdir('srv1', '/dir'), 'remoteMkdir-result');
+  assert.equal(await controller.createFile('srv1', '/b.txt'), 'remoteCreateFile-result');
+  assert.equal(await controller.rename('srv1', '/a.txt', '/c.txt'), 'remoteRename-result');
+  assert.equal(await controller.delete('srv1', '/dir', true), 'remoteDelete-result');
+  assert.equal(await controller.download('srv1', '/c.txt', '/tmp/c.txt'), 'remoteDownload-result');
+  assert.equal(await controller.upload('srv1', '/tmp/d.txt', '/d.txt'), 'remoteUpload-result');
+
+  // The API is resolved on every call, so a late-bound bridge is always picked up.
+  assert.equal(resolves, 12);
+  assert.deepEqual(calls, [
+    ['remoteDeleteProfile', ['srv1']],
+    ['remoteTestConnection', [profile]],
+    ['remoteDisconnect', ['srv1']],
+    ['remoteReadDir', ['srv1', '/var']],
+    ['remoteReadFileText', ['srv1', '/a.txt']],
+    ['remoteWriteFileText', ['srv1', '/a.txt', 'hi']],
+    ['remoteMkdir', ['srv1', '/dir']],
+    ['remoteCreateFile', ['srv1', '/b.txt']],
+    ['remoteRename', ['srv1', '/a.txt', '/c.txt']],
+    ['remoteDelete', ['srv1', '/dir', true]],
+    ['remoteDownload', ['srv1', '/c.txt', '/tmp/c.txt']],
+    ['remoteUpload', ['srv1', '/tmp/d.txt', '/d.txt']],
+  ]);
+});
+
+test('RemoteController falls back to window.ow when no API is supplied', async () => {
+  const origWindow = (globalThis as any).window;
+  const profiles = [{ id: 'srv2', name: 'Server 2', host: 'example.org', username: 'deploy' }];
+  try {
+    (globalThis as any).window = { ow: { remoteListProfiles: async () => profiles } };
+    const controller = new RemoteController();
+    assert.deepEqual(await controller.loadProfiles(), profiles);
+
+    (globalThis as any).window = {};
+    assert.deepEqual(await new RemoteController().loadProfiles(), []);
+  } finally {
+    (globalThis as any).window = origWindow;
+  }
+});
