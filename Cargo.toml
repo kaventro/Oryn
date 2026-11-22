@@ -1,0 +1,17 @@
+[workspace]
+resolver = "3"
+members = ["crates/oryn-core", "crates/oryn-app"]
+exclude = ["desktop"]
+
+[workspace.package]
+version = "0.1.0-spike"
+edition = "2024"
+license = "AGPL-3.0-only"
+repository = "https://github.com/kaventro/Oryn"
+
+[workspace.dependencies]
+anyhow = "1"
+gpui-kit = "=0.10.0"
+
+[profile.release]
+opt-level = 3
