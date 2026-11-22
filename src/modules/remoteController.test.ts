@@ -175,3 +175,34 @@ test('RemoteController falls back to window.ow when no API is supplied', async (
     (globalThis as any).window = origWindow;
   }
 });
+
+test('RemoteController loadProfiles handles no window, empty results and failures', async () => {
+  const origWindow = (globalThis as any).window;
+  const origWarn = console.warn;
+  const warnings: unknown[][] = [];
+  try {
+    delete (globalThis as any).window;
+    assert.deepEqual(await new RemoteController().loadProfiles(), []);
+
+    const empty = new RemoteController({ api: () => ({ remoteListProfiles: async () => null }) });
+    assert.deepEqual(await empty.loadProfiles(), []);
+    assert.deepEqual(empty.profiles, []);
+
+    console.warn = (...args: unknown[]) => {
+      warnings.push(args);
+    };
+    const failing = new RemoteController({
+      api: () => ({
+        remoteListProfiles: async () => {
+          throw new Error('offline');
+        },
+      }),
+    });
+    assert.deepEqual(await failing.loadProfiles(), []);
+    assert.equal(warnings.length, 1);
+    assert.equal(warnings[0][0], '[RemoteController] Failed to load profiles:');
+  } finally {
+    console.warn = origWarn;
+    (globalThis as any).window = origWindow;
+  }
+});
