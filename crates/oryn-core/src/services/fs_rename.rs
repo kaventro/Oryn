@@ -4,8 +4,6 @@ use std::path::{Component, Path, PathBuf};
 
 use crate::services::ServiceResult;
 
-/// Normalizes a path for comparison across platforms.
-/// Handles mixed slashes, casing (on Windows/macOS), and trailing slashes.
 fn normalize_parent(p: &Path) -> PathBuf {
     if let Ok(canon) = p.canonicalize() {
         return canon;
@@ -29,12 +27,10 @@ pub fn rename(src: &str, dst: &str) -> ServiceResult<()> {
     let src_path = Path::new(src_clean);
     let dst_path = Path::new(dst_clean);
 
-    // Ensure src exists
     if !src_path.exists() {
         bail!("Source file does not exist: {src}");
     }
 
-    // Parent directories must match (rename cannot move outside folder)
     let src_parent = src_path.parent().unwrap_or(Path::new(""));
     let dst_parent = dst_path.parent().unwrap_or(Path::new(""));
 
@@ -55,7 +51,6 @@ pub fn rename(src: &str, dst: &str) -> ServiceResult<()> {
         bail!("Rename destination cannot change parent directory (use move instead)");
     }
 
-    // Validate new basename
     let dst_name = match dst_path.file_name().and_then(|n| n.to_str()) {
         Some(name) => name.trim(),
         None => bail!("Invalid destination file name"),
@@ -69,7 +64,6 @@ pub fn rename(src: &str, dst: &str) -> ServiceResult<()> {
         bail!("File name cannot contain path separators or null bytes");
     }
 
-    // Windows filename constraints (cross-platform enforcement for safety)
     const FORBIDDEN_CHARS: &[char] = &['<', '>', ':', '"', '/', '\\', '|', '?', '*'];
     if dst_name
         .chars()
@@ -78,7 +72,6 @@ pub fn rename(src: &str, dst: &str) -> ServiceResult<()> {
         bail!("File name contains invalid characters: {dst_name:?}");
     }
 
-    // Windows reserved device names
     let stem = dst_name
         .split('.')
         .next()
@@ -111,13 +104,11 @@ mod tests {
         let file = dir.path().join("foo.txt");
         fs::write(&file, "hello").unwrap();
 
-        // Valid rename
         let valid_dst = dir.path().join("bar.txt");
         assert!(rename(file.to_str().unwrap(), valid_dst.to_str().unwrap()).is_ok());
         assert!(!file.exists());
         assert!(valid_dst.exists());
 
-        // Path traversal rejection
         let invalid_dst = dir.path().join("../escaped.txt");
         assert!(rename(valid_dst.to_str().unwrap(), invalid_dst.to_str().unwrap()).is_err());
     }

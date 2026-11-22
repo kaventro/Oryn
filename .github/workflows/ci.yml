@@ -80,7 +80,9 @@ jobs:
       - name: Rust Cache
         uses: swatinem/rust-cache@v2
         with:
-          workspaces: 'desktop -> desktop/target'
+          workspaces: |
+            desktop -> desktop/target
+            . -> target
 
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
@@ -91,11 +93,14 @@ jobs:
       - name: Cargo Test & Coverage
         run: cargo llvm-cov --manifest-path desktop/Cargo.toml --all-targets --lcov --output-path desktop-coverage.lcov
 
+      - name: oryn-core Test & Coverage
+        run: cargo llvm-cov -p oryn-core --lcov --output-path core-coverage.lcov
+
       - name: Upload backend coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./desktop-coverage.lcov
+          files: ./desktop-coverage.lcov,./core-coverage.lcov
           flags: backend
           fail_ci_if_error: false
 

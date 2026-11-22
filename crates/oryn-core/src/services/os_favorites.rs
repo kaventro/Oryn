@@ -47,6 +47,7 @@ pub fn read_os_favorites() -> Vec<FavoriteFolder> {
     }
 }
 
+#[cfg_attr(not(any(target_os = "macos", target_os = "windows")), allow(dead_code))]
 fn name_from_path(path: &str) -> String {
     let trimmed = path.trim();
     if (trimmed.len() == 2 && trimmed.ends_with(':'))
@@ -69,6 +70,7 @@ fn name_from_path(path: &str) -> String {
         .unwrap_or_else(|| path.to_string())
 }
 
+#[cfg_attr(not(any(target_os = "macos", target_os = "windows")), allow(dead_code))]
 fn push_unique(out: &mut Vec<FavoriteFolder>, path: PathBuf) {
     let Ok(meta) = std::fs::symlink_metadata(&path) else {
         return;
@@ -84,7 +86,7 @@ fn push_unique(out: &mut Vec<FavoriteFolder>, path: PathBuf) {
             return;
         }
     }
-    let cleaned = crate::commands::path::clean_verbatim_path(&path.to_string_lossy());
+    let cleaned = crate::paths::clean_verbatim_path(&path.to_string_lossy());
     if cleaned.is_empty() {
         return;
     }
@@ -216,7 +218,8 @@ mod macos {
                         continue;
                     }
                     let mut err: CfTypeRef = std::ptr::null();
-                    let url = LSSharedFileListItemCopyResolvedURL(item, K_LS_NO_UI_NO_MOUNT, &mut err);
+                    let url =
+                        LSSharedFileListItemCopyResolvedURL(item, K_LS_NO_UI_NO_MOUNT, &mut err);
                     if !err.is_null() {
                         CFRelease(err);
                     }
@@ -280,7 +283,8 @@ mod windows {
 
     #[repr(C)]
     struct IShellFolderVtbl {
-        query_interface: unsafe extern "system" fn(*mut c_void, *const GUID, *mut *mut c_void) -> HRESULT,
+        query_interface:
+            unsafe extern "system" fn(*mut c_void, *const GUID, *mut *mut c_void) -> HRESULT,
         add_ref: unsafe extern "system" fn(*mut c_void) -> u32,
         release: unsafe extern "system" fn(*mut c_void) -> u32,
         parse_display_name: unsafe extern "system" fn(
@@ -292,7 +296,8 @@ mod windows {
             *mut *mut c_void,
             *mut u32,
         ) -> HRESULT,
-        enum_objects: unsafe extern "system" fn(*mut c_void, HWND, u32, *mut *mut c_void) -> HRESULT,
+        enum_objects:
+            unsafe extern "system" fn(*mut c_void, HWND, u32, *mut *mut c_void) -> HRESULT,
         bind_to_object: unsafe extern "system" fn(
             *mut c_void,
             *const c_void,
@@ -300,18 +305,44 @@ mod windows {
             *const GUID,
             *mut *mut c_void,
         ) -> HRESULT,
-        bind_to_storage: unsafe extern "system" fn(*mut c_void, *const c_void, *mut c_void, *const GUID, *mut *mut c_void) -> HRESULT,
-        compare_ids: unsafe extern "system" fn(*mut c_void, isize, *const c_void, *const c_void) -> HRESULT,
-        create_view_object: unsafe extern "system" fn(*mut c_void, HWND, *const GUID, *mut *mut c_void) -> HRESULT,
-        get_attributes_of: unsafe extern "system" fn(*mut c_void, u32, *const *const c_void, *mut u32) -> HRESULT,
-        get_ui_object_of: unsafe extern "system" fn(*mut c_void, HWND, u32, *const *const c_void, *const GUID, *mut u32, *mut *mut c_void) -> HRESULT,
-        get_display_name_of: unsafe extern "system" fn(*mut c_void, *const c_void, u32, *mut STRRET) -> HRESULT,
-        set_name_of: unsafe extern "system" fn(*mut c_void, HWND, *const c_void, *const u16, u32, *mut *mut c_void) -> HRESULT,
+        bind_to_storage: unsafe extern "system" fn(
+            *mut c_void,
+            *const c_void,
+            *mut c_void,
+            *const GUID,
+            *mut *mut c_void,
+        ) -> HRESULT,
+        compare_ids:
+            unsafe extern "system" fn(*mut c_void, isize, *const c_void, *const c_void) -> HRESULT,
+        create_view_object:
+            unsafe extern "system" fn(*mut c_void, HWND, *const GUID, *mut *mut c_void) -> HRESULT,
+        get_attributes_of:
+            unsafe extern "system" fn(*mut c_void, u32, *const *const c_void, *mut u32) -> HRESULT,
+        get_ui_object_of: unsafe extern "system" fn(
+            *mut c_void,
+            HWND,
+            u32,
+            *const *const c_void,
+            *const GUID,
+            *mut u32,
+            *mut *mut c_void,
+        ) -> HRESULT,
+        get_display_name_of:
+            unsafe extern "system" fn(*mut c_void, *const c_void, u32, *mut STRRET) -> HRESULT,
+        set_name_of: unsafe extern "system" fn(
+            *mut c_void,
+            HWND,
+            *const c_void,
+            *const u16,
+            u32,
+            *mut *mut c_void,
+        ) -> HRESULT,
     }
 
     #[repr(C)]
     struct IEnumIDListVtbl {
-        query_interface: unsafe extern "system" fn(*mut c_void, *const GUID, *mut *mut c_void) -> HRESULT,
+        query_interface:
+            unsafe extern "system" fn(*mut c_void, *const GUID, *mut *mut c_void) -> HRESULT,
         add_ref: unsafe extern "system" fn(*mut c_void) -> u32,
         release: unsafe extern "system" fn(*mut c_void) -> u32,
         next: unsafe extern "system" fn(*mut c_void, u32, *mut *mut c_void, *mut u32) -> HRESULT,
@@ -327,7 +358,12 @@ mod windows {
 
     #[link(name = "shlwapi")]
     extern "system" {
-        fn StrRetToBufW(pstr: *mut STRRET, pidl: *const c_void, pszBuf: *mut u16, cchBuf: u32) -> HRESULT;
+        fn StrRetToBufW(
+            pstr: *mut STRRET,
+            pidl: *const c_void,
+            pszBuf: *mut u16,
+            cchBuf: u32,
+        ) -> HRESULT;
     }
 
     #[link(name = "ole32")]
@@ -386,7 +422,8 @@ mod windows {
         fn drop(&mut self) {
             if !self.raw.is_null() {
                 unsafe {
-                    let unk = *(self.raw as *mut *mut [unsafe extern "system" fn(*mut c_void) -> u32; 3]);
+                    let unk =
+                        *(self.raw as *mut *mut [unsafe extern "system" fn(*mut c_void) -> u32; 3]);
                     let release = (*unk)[2];
                     release(self.raw as *mut c_void);
                 }
@@ -496,7 +533,9 @@ mod windows {
             let mut buf = vec![0u16; 1024];
             let mut count_added = 0;
 
-            while unsafe { (enum_list.vtbl().next)(enum_list.as_raw(), 1, &mut child_pidl, &mut fetched) } == S_OK
+            while unsafe {
+                (enum_list.vtbl().next)(enum_list.as_raw(), 1, &mut child_pidl, &mut fetched)
+            } == S_OK
                 && fetched == 1
             {
                 let child_guard = CoMem::new(child_pidl);
@@ -507,7 +546,12 @@ mod windows {
                 let mut attrs = SFGAO_FOLDER | SFGAO_STREAM;
                 let apidl = [child_pidl as *const c_void];
                 let _ = unsafe {
-                    (qa_folder.vtbl().get_attributes_of)(qa_folder.as_raw(), 1, apidl.as_ptr(), &mut attrs)
+                    (qa_folder.vtbl().get_attributes_of)(
+                        qa_folder.as_raw(),
+                        1,
+                        apidl.as_ptr(),
+                        &mut attrs,
+                    )
                 };
                 let is_folder = (attrs & SFGAO_FOLDER) != 0 && (attrs & SFGAO_STREAM) == 0;
                 if !is_folder {
@@ -516,8 +560,24 @@ mod windows {
 
                 let mut strret_path: STRRET = unsafe { std::mem::zeroed() };
                 let mut path_str = String::new();
-                if unsafe { (qa_folder.vtbl().get_display_name_of)(qa_folder.as_raw(), child_pidl, SHGDN_FORPARSING, &mut strret_path) } == S_OK {
-                    if unsafe { StrRetToBufW(&mut strret_path, child_pidl, buf.as_mut_ptr(), buf.len() as u32) } == S_OK {
+                if unsafe {
+                    (qa_folder.vtbl().get_display_name_of)(
+                        qa_folder.as_raw(),
+                        child_pidl,
+                        SHGDN_FORPARSING,
+                        &mut strret_path,
+                    )
+                } == S_OK
+                {
+                    if unsafe {
+                        StrRetToBufW(
+                            &mut strret_path,
+                            child_pidl,
+                            buf.as_mut_ptr(),
+                            buf.len() as u32,
+                        )
+                    } == S_OK
+                    {
                         let len = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
                         path_str = String::from_utf16_lossy(&buf[..len]);
                     }
@@ -525,8 +585,24 @@ mod windows {
 
                 let mut strret_name: STRRET = unsafe { std::mem::zeroed() };
                 let mut name_str = String::new();
-                if unsafe { (qa_folder.vtbl().get_display_name_of)(qa_folder.as_raw(), child_pidl, SHGDN_NORMAL, &mut strret_name) } == S_OK {
-                    if unsafe { StrRetToBufW(&mut strret_name, child_pidl, buf.as_mut_ptr(), buf.len() as u32) } == S_OK {
+                if unsafe {
+                    (qa_folder.vtbl().get_display_name_of)(
+                        qa_folder.as_raw(),
+                        child_pidl,
+                        SHGDN_NORMAL,
+                        &mut strret_name,
+                    )
+                } == S_OK
+                {
+                    if unsafe {
+                        StrRetToBufW(
+                            &mut strret_name,
+                            child_pidl,
+                            buf.as_mut_ptr(),
+                            buf.len() as u32,
+                        )
+                    } == S_OK
+                    {
                         let len = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
                         name_str = String::from_utf16_lossy(&buf[..len]);
                     }
@@ -538,8 +614,10 @@ mod windows {
                     } else {
                         name_from_path(&path_str)
                     };
-                    let cleaned = crate::commands::path::clean_verbatim_path(&path_str);
-                    if !cleaned.is_empty() && !out.iter().any(|f| f.path.eq_ignore_ascii_case(&cleaned)) {
+                    let cleaned = crate::paths::clean_verbatim_path(&path_str);
+                    if !cleaned.is_empty()
+                        && !out.iter().any(|f| f.path.eq_ignore_ascii_case(&cleaned))
+                    {
                         out.push(FavoriteFolder {
                             name: label,
                             path: cleaned,
@@ -642,10 +720,12 @@ mod tests {
         let favs = provider.get_favorites();
         assert!(!favs.is_empty());
         let paths: Vec<&str> = favs.iter().map(|f| f.path.as_str()).collect();
-        assert!(paths.iter().any(|p| p.eq_ignore_ascii_case("D:\\") || p.eq_ignore_ascii_case("D:")));
+        assert!(paths
+            .iter()
+            .any(|p| p.eq_ignore_ascii_case("D:\\") || p.eq_ignore_ascii_case("D:")));
         assert!(paths.iter().any(|p| p.to_lowercase().ends_with("shelf")));
         if let Some(desktop) = dirs::desktop_dir() {
-            let d_str = crate::commands::path::clean_verbatim_path(&desktop.to_string_lossy());
+            let d_str = crate::paths::clean_verbatim_path(&desktop.to_string_lossy());
             assert!(paths.iter().any(|p| p.eq_ignore_ascii_case(&d_str)));
         }
     }

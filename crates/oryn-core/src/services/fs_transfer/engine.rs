@@ -6,8 +6,6 @@ use std::path::{Path, PathBuf};
 use crate::services::fs_transfer::sink::ProgressSink;
 use crate::vfs::{VfsRouter, VirtualFileSystem};
 
-/// What to do when the destination already exists.
-/// Resolved by the UI (one dialog per operation) before the engine runs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum OverwritePolicy {
     #[default]
@@ -33,8 +31,6 @@ pub struct CopyStats {
 }
 
 impl CopyStats {
-    /// True when every source item made it to the destination, so a move
-    /// may safely delete the source tree.
     pub fn is_complete(&self) -> bool {
         self.skipped_existing == 0 && self.symlinks_skipped == 0
     }
@@ -61,9 +57,6 @@ impl From<std::io::Error> for CopyError {
     }
 }
 
-/// Recursive copier: walks the source tree, honours the overwrite policy,
-/// recreates symlinks instead of silently dropping them, and preserves
-/// permissions + mtime on everything it writes.
 pub struct CopyEngine<'a> {
     sink: &'a dyn ProgressSink,
     policy: OverwritePolicy,
@@ -87,10 +80,6 @@ impl<'a> CopyEngine<'a> {
         Ok(self.stats)
     }
 
-    /// Reject copying/moving a real directory into itself or one of its own
-    /// descendants. Without this, `copy_tree` re-reads the directory it is
-    /// writing into and recurses until the disk fills or the stack overflows
-    /// (which aborts the whole app under `panic = "abort"`).
     fn guard_dst_not_inside_src(src: &Path, dst: &Path) -> Result<(), CopyError> {
         let is_real_dir = fs::symlink_metadata(src)
             .map(|m| m.file_type().is_dir())
@@ -101,7 +90,6 @@ impl<'a> CopyEngine<'a> {
         let Ok(src_can) = fs::canonicalize(src) else {
             return Ok(());
         };
-        // `dst` may not exist yet; resolve its nearest existing ancestor.
         let mut probe = dst.to_path_buf();
         let dst_can = loop {
             if let Ok(resolved) = fs::canonicalize(&probe) {
@@ -111,8 +99,6 @@ impl<'a> CopyEngine<'a> {
                 return Ok(());
             }
         };
-        // `starts_with` is component-wise and matches equality too, so this
-        // covers both "into itself" and "into a subfolder of itself".
         if dst_can.starts_with(&src_can) {
             return Err(CopyError::Failed(
                 "Cannot copy or move a folder into itself or one of its own subfolders.".into(),
@@ -158,7 +144,6 @@ impl<'a> CopyEngine<'a> {
             return self.copy_file_checked(src, dst, &meta);
         }
         if !ft.is_dir() {
-            // Sockets, fifos, devices: nothing sensible to copy.
             return Ok(());
         }
 
@@ -202,8 +187,6 @@ impl<'a> CopyEngine<'a> {
         }
         #[cfg(not(unix))]
         {
-            // Creating symlinks on Windows needs elevated rights; report
-            // instead of failing the whole transfer.
             let _ = target;
             self.stats.symlinks_skipped += 1;
             self.sink
@@ -244,7 +227,6 @@ impl<'a> CopyEngine<'a> {
         let rel = self.rel_of(src);
         let total = fs::metadata(src)?.len();
 
-        // 1. Instant APFS Copy-on-Write Clonefile on macOS
         if try_clone_file(src, dst) {
             self.sink.emit(json!({
                 "type": "file",
@@ -257,7 +239,6 @@ impl<'a> CopyEngine<'a> {
             return Ok(());
         }
 
-        // 2. Throttled buffered fallback copy (used on Windows, Linux, non-APFS volumes)
         self.copy_file_buffered(src, dst, parent, &name, &rel, total)
     }
 
@@ -329,9 +310,7 @@ fn try_clone_file(src: &Path, dst: &Path) -> bool {
         return false;
     };
 
-    unsafe {
-        libc::clonefile(src_c.as_ptr(), dst_c.as_ptr(), 0) == 0
-    }
+    unsafe { libc::clonefile(src_c.as_ptr(), dst_c.as_ptr(), 0) == 0 }
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -339,8 +318,6 @@ fn try_clone_file(_src: &Path, _dst: &Path) -> bool {
     false
 }
 
-/// Best effort: failing to copy permissions or mtime must not fail the
-/// transfer itself (e.g. FAT volumes without permission bits).
 fn preserve_metadata(src_meta: &fs::Metadata, dst: &Path) {
     let _ = fs::set_permissions(dst, src_meta.permissions());
     let mtime = filetime::FileTime::from_last_modification_time(src_meta);
@@ -355,7 +332,6 @@ fn remove_existing(dst: &Path) -> std::io::Result<()> {
     }
 }
 
-/// Source lives inside a zip/tar archive and must go through the VFS.
 fn is_archive_inner_path(src: &Path) -> bool {
     let text = src.to_string_lossy().to_lowercase();
     let markers = [
@@ -538,20 +514,24 @@ mod tests {
 
         let events = sink.events.lock().unwrap();
         assert!(!events.is_empty(), "Must emit progress events");
-        let last_file_event = events.iter().filter(|e| e.get("type").and_then(|t| t.as_str()) == Some("file")).next_back();
+        let last_file_event = events
+            .iter()
+            .rfind(|e| e.get("type").and_then(|t| t.as_str()) == Some("file"));
         if let Some(ev) = last_file_event {
-            assert_eq!(ev.get("bytes").and_then(|b| b.as_u64()), Some(2 * 1024 * 1024));
+            assert_eq!(
+                ev.get("bytes").and_then(|b| b.as_u64()),
+                Some(2 * 1024 * 1024)
+            );
         }
     }
 
     #[test]
     fn test_streaming_copy_cross_platform_fallback() {
-        // Explicitly tests the streaming path executed on Windows, Linux, and non-APFS volumes
         let tmp = tempfile::tempdir().unwrap();
         let src = tmp.path().join("src_stream.bin");
         let dst = tmp.path().join("dst_stream.bin");
 
-        let data = vec![0x3Cu8; 1024 * 1024 + 128]; // >1MB to verify multi-chunk buffer loop
+        let data = vec![0x3Cu8; 1024 * 1024 + 128];
         fs::write(&src, &data).unwrap();
 
         let sink = TestSink::default();
@@ -569,11 +549,13 @@ mod tests {
 
         assert_eq!(fs::read(&dst).unwrap(), data);
         let events = sink.events.lock().unwrap();
-        assert!(!events.is_empty(), "Must emit progress events during streaming");
+        assert!(
+            !events.is_empty(),
+            "Must emit progress events during streaming"
+        );
         let last_event = events
             .iter()
-            .filter(|e| e.get("type").and_then(|t| t.as_str()) == Some("file"))
-            .next_back();
+            .rfind(|e| e.get("type").and_then(|t| t.as_str()) == Some("file"));
         assert!(last_event.is_some());
         assert_eq!(
             last_event.unwrap().get("bytes").and_then(|b| b.as_u64()),

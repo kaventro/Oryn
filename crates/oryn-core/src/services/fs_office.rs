@@ -44,17 +44,11 @@ pub struct OfficeDoc {
     pub truncated: bool,
 }
 
-// ── Minimal XML scanning ──────────────────────────────────────────────────
-
 #[derive(Debug, PartialEq)]
 pub enum Node<'a> {
-    /// `<name attrs>` — `attrs` is the raw run after the name.
     Open(&'a str, &'a str),
-    /// `</name>`
     Close(&'a str),
-    /// `<name attrs/>`
     Empty(&'a str, &'a str),
-    /// Character data between tags, still entity-encoded.
     Text(&'a str),
 }
 
@@ -73,8 +67,6 @@ pub fn scan(xml: &str) -> Vec<Node<'_>> {
             continue;
         }
 
-        // Comments, CDATA, processing instructions and declarations carry no
-        // text we want; skip to the end of the construct.
         if xml[i..].starts_with("<!--") {
             i = find_from(xml, i, "-->").map_or(bytes.len(), |p| p + 3);
             continue;
@@ -91,7 +83,6 @@ pub fn scan(xml: &str) -> Vec<Node<'_>> {
             continue;
         }
 
-        // A tag ends at the first '>' outside a quoted attribute value.
         let mut j = i + 1;
         let mut quote = 0u8;
         while j < bytes.len() {
@@ -142,7 +133,6 @@ fn split_name(inner: &str) -> (&str, &str) {
     }
 }
 
-/// Reads one attribute out of the raw run captured by `scan`.
 pub fn attr<'a>(attrs: &'a str, key: &str) -> Option<&'a str> {
     let mut rest = attrs;
     while let Some(eq) = rest.find('=') {
@@ -172,7 +162,6 @@ pub fn decode_entities(s: &str) -> String {
         out.push_str(&rest[..amp]);
         let tail = &rest[amp..];
         let semi = match tail.find(';') {
-            // A bare '&' is not an entity; keep it and move on.
             Some(p) if (1..=12).contains(&p) => p,
             _ => {
                 out.push('&');
@@ -205,8 +194,6 @@ pub fn decode_entities(s: &str) -> String {
     out
 }
 
-// ── Container access ──────────────────────────────────────────────────────
-
 fn read_entry(zip: &mut zip::ZipArchive<File>, name: &str) -> Option<String> {
     let mut entry = zip.by_name(name).ok()?;
     if entry.size() > MAX_ENTRY_BYTES {
@@ -217,10 +204,6 @@ fn read_entry(zip: &mut zip::ZipArchive<File>, name: &str) -> Option<String> {
     Some(buf)
 }
 
-// ── docx / pptx ───────────────────────────────────────────────────────────
-
-/// Collects the text of each `para` element, joining every `text_el` inside
-/// it. `<br/>` and `<tab/>` become whitespace so lines do not run together.
 fn paragraphs_of(xml: &str, para: &str, text_el: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut current = String::new();
@@ -256,10 +239,6 @@ fn paragraphs_of(xml: &str, para: &str, text_el: &str) -> Vec<String> {
     out
 }
 
-// ── xlsx ──────────────────────────────────────────────────────────────────
-
-/// Shared strings are stored once per workbook; a cell of type "s" holds an
-/// index into this table rather than its own text.
 fn shared_strings(xml: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut current = String::new();
@@ -286,8 +265,6 @@ fn shared_strings(xml: &str) -> Vec<String> {
     out
 }
 
-/// "AB12" -> 27. Excel omits empty cells entirely, so the column letters are the
-/// only way to know where a value belongs in its row.
 fn column_index(reference: &str) -> usize {
     let mut n = 0usize;
     for c in reference.chars() {
@@ -364,9 +341,6 @@ fn sheet_rows(xml: &str, shared: &[String]) -> (Vec<Vec<String>>, bool) {
     (rows, truncated)
 }
 
-/// Sheet display names live in workbook.xml keyed by relationship id, and the
-/// id-to-file mapping lives in the rels part. Resolving both is what keeps a
-/// tab labelled "Q3" from being shown as "sheet2.xml".
 fn sheet_targets(workbook: &str, rels: &str) -> Vec<(String, String)> {
     let mut by_id: BTreeMap<String, String> = BTreeMap::new();
     for node in scan(rels) {
@@ -401,8 +375,6 @@ fn sheet_targets(workbook: &str, rels: &str) -> Vec<(String, String)> {
     }
     out
 }
-
-// ── Entry point ───────────────────────────────────────────────────────────
 
 pub fn extension_of(path: &str) -> String {
     std::path::Path::new(path)
@@ -475,8 +447,6 @@ pub fn read_office(path: &str) -> ServiceResult<OfficeDoc> {
 
             let mut targets = sheet_targets(&workbook, &rels);
             if targets.is_empty() {
-                // No usable workbook metadata; fall back to whatever sheet parts
-                // the container holds so the file still previews.
                 let mut names: Vec<String> = zip
                     .file_names()
                     .filter(|n| n.starts_with("xl/worksheets/sheet") && n.ends_with(".xml"))
@@ -516,7 +486,6 @@ pub fn read_office(path: &str) -> ServiceResult<OfficeDoc> {
     }
 }
 
-/// Sorts sheet2 before sheet10, which a plain string sort would not.
 fn slide_number(name: &str) -> u32 {
     name.chars()
         .rev()
@@ -571,7 +540,6 @@ mod tests {
         assert_eq!(decode_entities("&lt;tag&gt;"), "<tag>");
         assert_eq!(decode_entities("&quot;q&apos;"), "\"q'");
         assert_eq!(decode_entities("&#65;&#x42;"), "AB");
-        // A bare ampersand is not an entity and must survive untouched.
         assert_eq!(decode_entities("Tom & Jerry"), "Tom & Jerry");
         assert_eq!(decode_entities("&unknown;"), "&unknown;");
     }
@@ -589,7 +557,6 @@ mod tests {
 
     #[test]
     fn paragraph_text_outside_a_run_is_not_collected() {
-        // Numbering and style parts sit between runs; their content is not body text.
         let xml = "<w:p><w:pPr>styling</w:pPr><w:r><w:t>only this</w:t></w:r></w:p>";
         assert_eq!(paragraphs_of(xml, "w:p", "w:t"), vec!["only this"]);
     }
@@ -606,7 +573,6 @@ mod tests {
     #[test]
     fn shared_string_cells_resolve_and_gaps_are_filled() {
         let shared = vec!["Name".to_string(), "Total".to_string()];
-        // Column B is absent from the row; C must still land in position 2.
         let xml = "<sheetData><row><c r=\"A1\" t=\"s\"><v>0</v></c>\
                    <c r=\"C1\" t=\"s\"><v>1</v></c></row>\
                    <row><c r=\"A2\"><v>42</v></c></row></sheetData>";

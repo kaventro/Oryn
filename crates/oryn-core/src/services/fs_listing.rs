@@ -17,7 +17,11 @@ pub fn list_dir(path: &Path) -> ServiceResult<Vec<ListItem>> {
     let effective_path = {
         let path_str = path.to_string_lossy();
         if path_str.len() == 2
-            && path_str.chars().next().map(|c| c.is_ascii_alphabetic()).unwrap_or(false)
+            && path_str
+                .chars()
+                .next()
+                .map(|c| c.is_ascii_alphabetic())
+                .unwrap_or(false)
             && path_str.ends_with(':')
         {
             path_buf = std::path::PathBuf::from(format!("{}\\", path_str));
@@ -172,21 +176,36 @@ mod tests {
         let items = list_dir(tmp.path()).unwrap();
         let link_item = items.iter().find(|i| i.name == "link_folder");
         if let Some(item) = link_item {
-            assert!(item.is_dir, "Symlink to a directory must be listed as is_dir: true");
+            assert!(
+                item.is_dir,
+                "Symlink to a directory must be listed as is_dir: true"
+            );
         }
     }
 
     #[test]
     fn test_sort_by_cached_key_speed() {
         let mut sample: Vec<String> = (0..10_000)
-            .map(|i| if i % 2 == 0 { format!("Item_{:05}.TXT", i) } else { format!("item_{:05}.txt", i) })
+            .map(|i| {
+                if i % 2 == 0 {
+                    format!("Item_{:05}.TXT", i)
+                } else {
+                    format!("item_{:05}.txt", i)
+                }
+            })
             .collect();
 
         let start = std::time::Instant::now();
         sample.sort_by_cached_key(|item| item.to_lowercase());
         let duration = start.elapsed();
-        println!("Sorted 10,000 items with sort_by_cached_key in {:?}", duration);
-        assert!(duration.as_millis() < 200, "Sorting 10k items must be fast (< 200ms)");
+        println!(
+            "Sorted 10,000 items with sort_by_cached_key in {:?}",
+            duration
+        );
+        assert!(
+            duration.as_millis() < 200,
+            "Sorting 10k items must be fast (< 200ms)"
+        );
         assert_eq!(sample.len(), 10_000);
     }
 }

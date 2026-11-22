@@ -199,8 +199,12 @@ mod tests {
 
     #[test]
     fn invalid_zip_path_errors() {
-        assert!(ZipProvider.read_dir("/path/to/some/random/file.txt").is_err());
-        assert!(ZipProvider.extract_to("/path/to/random/file.txt", std::path::Path::new("out")).is_err());
+        assert!(ZipProvider
+            .read_dir("/path/to/some/random/file.txt")
+            .is_err());
+        assert!(ZipProvider
+            .extract_to("/path/to/random/file.txt", std::path::Path::new("out"))
+            .is_err());
     }
 
     #[test]

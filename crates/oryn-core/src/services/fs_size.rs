@@ -32,8 +32,6 @@ pub struct DiskSpaceAnalysis {
     pub items: Vec<DiskSpaceNode>,
 }
 
-/// Computes recursive disk space breakdown of immediate items in a directory.
-/// Safely skips symlinks and junctions, uses bounded thread pool to avoid OS starvation.
 pub fn analyze_directory(root: &Path) -> std::io::Result<DiskSpaceAnalysis> {
     let mut items = Vec::new();
     let entries = std::fs::read_dir(root)?;
@@ -48,7 +46,6 @@ pub fn analyze_directory(root: &Path) -> std::io::Result<DiskSpaceAnalysis> {
             continue;
         };
 
-        // Symlinks & junctions are skipped to prevent cycles and cross-volume traversing
         if ft.is_symlink() {
             continue;
         }
@@ -68,7 +65,6 @@ pub fn analyze_directory(root: &Path) -> std::io::Result<DiskSpaceAnalysis> {
         }
     }
 
-    // Compute sizes of subdirectories using a bounded worker pool
     if !dir_entries.is_empty() {
         use std::sync::Mutex as StdMutex;
         let queue = StdMutex::new(dir_entries);
@@ -109,7 +105,6 @@ pub fn analyze_directory(root: &Path) -> std::io::Result<DiskSpaceAnalysis> {
         items.append(&mut dirs_done);
     }
 
-    // Sort descending by size
     items.sort_by_key(|a| std::cmp::Reverse(a.size));
 
     let mut total_size = 0u64;
@@ -132,8 +127,6 @@ pub fn analyze_directory(root: &Path) -> std::io::Result<DiskSpaceAnalysis> {
     })
 }
 
-/// Size of a path: file length for files, recursive content size for dirs.
-/// Symlinks are never followed (a cycle cannot hang the scan).
 pub fn path_size(root: &Path) -> DirSizeSummary {
     let Ok(meta) = std::fs::symlink_metadata(root) else {
         return DirSizeSummary::default();
@@ -148,14 +141,6 @@ pub fn path_size(root: &Path) -> DirSizeSummary {
     dir_size(root)
 }
 
-/// Recursive directory size via a bounded worker pool.
-///
-/// Iterative on purpose: arbitrarily deep trees cannot overflow the stack,
-/// and the fixed thread count keeps the scan from starving the rest of the
-/// app. Unreadable entries are skipped, matching `du`-style tools.
-/// Shared work state: the pending directory queue plus a count of directories
-/// that are queued OR currently being scanned. When `pending` reaches zero the
-/// whole tree is accounted for and every worker may exit.
 struct Work {
     queue: Vec<PathBuf>,
     pending: usize,
@@ -179,9 +164,6 @@ fn dir_size(root: &Path) -> DirSizeSummary {
     std::thread::scope(|scope| {
         for _ in 0..workers {
             scope.spawn(|| loop {
-                // Take the next directory, or block until one appears / the
-                // scan finishes. A condvar replaces a busy-wait so idle workers
-                // don't spin the CPU while a few deep branches are scanned.
                 let dir = {
                     let mut guard = work.lock();
                     loop {
@@ -189,20 +171,15 @@ fn dir_size(root: &Path) -> DirSizeSummary {
                             break dir;
                         }
                         if guard.pending == 0 {
-                            // Nothing queued and nothing in flight: done. Wake
-                            // any parked siblings so they observe this and exit.
                             available.notify_all();
                             return;
                         }
-                        // Re-checks the predicate on wake, so spurious wakeups
-                        // and lost notifications are both handled.
                         available.wait(&mut guard);
                     }
                 };
 
                 scan_one(&dir, &bytes, &files, &dirs, &work, &available);
 
-                // This directory is now fully accounted for.
                 let mut guard = work.lock();
                 guard.pending -= 1;
                 if guard.pending == 0 {
@@ -234,7 +211,6 @@ fn scan_one(
         let Ok(ft) = entry.file_type() else {
             continue;
         };
-        // Symlinks & junctions are skipped entirely: prevents infinite loops and cross-device hopping.
         if ft.is_symlink() {
             continue;
         }
@@ -284,8 +260,6 @@ mod tests {
     fn deep_tree_does_not_overflow_stack() {
         let tmp = tempfile::tempdir().unwrap();
         let mut p = tmp.path().to_path_buf();
-        // Deep but under macOS PATH_MAX (1024); the scan itself is iterative,
-        // so depth is bounded by path length, not stack.
         for i in 0..200 {
             p.push(format!("d{i}"));
         }
@@ -317,8 +291,6 @@ mod tests {
 
     #[test]
     fn wide_tree_drains_across_workers() {
-        // Many sibling directories, each with a nested subdir and two files,
-        // exercise the condvar queue drain across all worker threads.
         let tmp = tempfile::tempdir().unwrap();
         for i in 0..60 {
             let d = tmp.path().join(format!("d{i}"));
@@ -329,7 +301,7 @@ mod tests {
         let s = path_size(tmp.path());
         assert_eq!(s.bytes, 60 * 8);
         assert_eq!(s.files, 120);
-        assert_eq!(s.dirs, 120); // 60 top-level + 60 nested
+        assert_eq!(s.dirs, 120);
     }
 
     #[test]

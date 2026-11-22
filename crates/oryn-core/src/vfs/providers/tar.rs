@@ -258,6 +258,8 @@ mod tests {
     fn invalid_tar_path_fails() {
         assert!(TarProvider.read_dir("nonexistent.tar.gz").is_err());
         assert!(TarProvider.read_dir("not_a_tar.txt").is_err());
-        assert!(TarProvider.extract_to("not_tar.txt", std::path::Path::new("out")).is_err());
+        assert!(TarProvider
+            .extract_to("not_tar.txt", std::path::Path::new("out"))
+            .is_err());
     }
 }

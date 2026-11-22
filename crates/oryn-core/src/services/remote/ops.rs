@@ -23,7 +23,6 @@ pub fn list_dir(session: &RemoteSession, remote_path: &str) -> Result<DirListing
 
     let mut items: Vec<FileItem> = Vec::with_capacity(entries.len() + 1);
 
-    // Add parent ".." entry
     items.push(FileItem {
         display: "..".into(),
         base: "..".into(),
@@ -64,7 +63,6 @@ pub fn list_dir(session: &RemoteSession, remote_path: &str) -> Result<DirListing
         });
     }
 
-    // Sort: directories first, then alphabetical (case-insensitive)
     file_items.sort_by(|a, b| match (a.is_dir, b.is_dir) {
         (true, false) => std::cmp::Ordering::Less,
         (false, true) => std::cmp::Ordering::Greater,

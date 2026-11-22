@@ -94,7 +94,6 @@ mod tests {
         assert!(cfg.is_object());
 
         let opts_default = resolve_delete_options(None).unwrap();
-        // Default use_trash is true unless overridden by existing config
         assert!(opts_default.log_path.is_some());
 
         let opts_override_false = resolve_delete_options(Some(false)).unwrap();

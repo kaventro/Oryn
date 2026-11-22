@@ -13,9 +13,6 @@ pub struct FsProps {
     pub mtime: String,
 }
 
-/// Shallow stat: for directories `size` is 0 — recursive content size is a
-/// separate, potentially long scan (`fs_size::path_size`) that callers run
-/// asynchronously instead of blocking every stat on a full tree walk.
 pub fn stat_props(path: &Path) -> ServiceResult<FsProps> {
     let metadata = fs::metadata(path)?;
     let is_dir = metadata.is_dir();

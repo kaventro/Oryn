@@ -74,15 +74,7 @@ fn expand_home(path: &str) -> String {
     path.to_string()
 }
 
-pub fn clean_verbatim_path(path: &str) -> String {
-    if let Some(rest) = path.strip_prefix(r"\\?\UNC\") {
-        format!(r"\\{}", rest)
-    } else if let Some(rest) = path.strip_prefix(r"\\?\") {
-        rest.to_string()
-    } else {
-        path.to_string()
-    }
-}
+pub use oryn_core::paths::clean_verbatim_path;
 
 #[tauri::command]
 pub fn path_normalize(input: PathArg) -> Result<String, String> {
@@ -160,12 +152,10 @@ mod tests {
             ""
         );
 
-        // path_normalize
         assert_eq!(path_normalize(PathArg { path: "  ".into() }).unwrap(), "");
         let norm = path_normalize(PathArg { path: "a/b/../c".into() }).unwrap();
         assert!(norm.contains("c"));
 
-        // app_get_home
         assert!(app_get_home().is_ok());
     }
 

@@ -69,9 +69,6 @@ fn run_zip_command(
     candidate: &Path,
 ) -> ServiceResult<()> {
     let base_str = base.to_string_lossy();
-    // Prefix "./" so a file/dir named like "-x" or "--out=…" cannot be parsed
-    // as a zip option (argument injection). `current_dir(parent)` makes the
-    // relative "./name" resolve correctly.
     let status = Command::new("zip")
         .args(["-r", "-q"])
         .arg(candidate)
@@ -104,7 +101,6 @@ mod tests {
         assert!(Path::new(&zip1).exists());
         assert!(zip1.ends_with("my_doc.txt.zip") || zip1.ends_with("my_doc.zip"));
 
-        // Running again should create a suffixed version
         let zip2 = compress_zip(target.to_str().unwrap()).unwrap();
         assert!(Path::new(&zip2).exists());
         assert_ne!(zip1, zip2);

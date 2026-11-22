@@ -1,6 +1,6 @@
 # Rust-only UI spike (phase 0)
 
-`crates/oryn-app` is a GPUI Kit build of the Oryn shell with no WebView, HTML, CSS or TypeScript. `crates/oryn-core` reuses `desktop/src/services/fs_listing.rs` as is, so both apps list folders with the same code.
+`crates/oryn-app` is a GPUI Kit build of the Oryn shell with no WebView, HTML, CSS or TypeScript. `crates/oryn-core` holds the file services, the VFS and `fs_safe`, moved out of `desktop/` in phase 1. The Tauri app depends on it through a path dependency, so both apps run the same file code. Tauri-specific parts stay in `desktop/`: the `AppSink` progress sink for transfers, and `TauriEvents`, which implements `oryn_core::events::EventSink` for the folder watcher.
 
 ## Run
 

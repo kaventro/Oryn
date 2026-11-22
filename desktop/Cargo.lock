@@ -26,6 +26,7 @@ dependencies = [
  "objc2-foundation",
  "once_cell",
  "opener",
+ "oryn-core",
  "parking_lot",
  "portable-pty",
  "regex",
@@ -2891,6 +2892,32 @@ name = "option-ext"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
+
+[[package]]
+name = "oryn-core"
+version = "0.1.0-spike"
+dependencies = [
+ "anyhow",
+ "base64 0.22.1",
+ "cap-std",
+ "chrono",
+ "dirs",
+ "filetime",
+ "flate2",
+ "hex",
+ "libc",
+ "notify",
+ "parking_lot",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+ "ssh2",
+ "tar",
+ "tracing",
+ "trash",
+ "walkdir",
+ "zip 8.6.0",
+]
 
 [[package]]
 name = "osakit"

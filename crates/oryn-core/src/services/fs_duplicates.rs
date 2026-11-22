@@ -1,4 +1,3 @@
-// desktop/src/services/fs_duplicates.rs
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -51,10 +50,9 @@ pub fn scan_duplicates(opts: DuplicateScanOptions) -> Result<DuplicateScanResult
         return Err(anyhow::anyhow!("Directory does not exist: {}", opts.path));
     }
 
-    let min_size = opts.min_size_bytes.unwrap_or(1024); // default > 1 KB
+    let min_size = opts.min_size_bytes.unwrap_or(1024);
     let mut total_scanned = 0u64;
 
-    // Step 1: Collect files and group by exact length
     let mut size_map: HashMap<u64, Vec<PathBuf>> = HashMap::new();
 
     for entry in WalkDir::new(root)
@@ -73,14 +71,12 @@ pub fn scan_duplicates(opts: DuplicateScanOptions) -> Result<DuplicateScanResult
         }
     }
 
-    // Filter sizes with at least 2 files
     let candidate_items: Vec<(u64, PathBuf)> = size_map
         .into_iter()
         .filter(|(_, paths)| paths.len() > 1)
         .flat_map(|(size, paths)| paths.into_iter().map(move |p| (size, p)))
         .collect();
 
-    // Step 2 & 3: Compute hashes in parallel using bounded worker pool
     let mut hash_map: HashMap<(u64, String), Vec<PathBuf>> = HashMap::new();
 
     if !candidate_items.is_empty() {
@@ -170,7 +166,6 @@ pub fn scan_duplicates(opts: DuplicateScanOptions) -> Result<DuplicateScanResult
         }
     }
 
-    // Sort by wasted bytes descending (heaviest duplicate sets first)
     duplicate_groups.sort_by_key(|a| std::cmp::Reverse(a.total_wasted));
 
     if let Some(max) = opts.max_results {
@@ -199,18 +194,15 @@ fn compute_file_hash(path: &Path) -> Result<String> {
         let chunk_size = 64 * 1024;
         let mut buf = vec![0u8; chunk_size];
 
-        // Head
         let n = file.read(&mut buf)?;
         hasher.update(&buf[..n]);
 
-        // Middle
         if len > 3 * chunk_size as u64 {
             file.seek(SeekFrom::Start(len / 2))?;
             let n = file.read(&mut buf)?;
             hasher.update(&buf[..n]);
         }
 
-        // Tail
         if len > chunk_size as u64 {
             file.seek(SeekFrom::End(-(chunk_size as i64)))?;
             let n = file.read(&mut buf)?;
@@ -267,14 +259,16 @@ mod tests {
             path: "non_existent_dir_12345".into(),
             min_size_bytes: None,
             max_results: None,
-        }).is_err());
+        })
+        .is_err());
 
         let tmp = tempfile::tempdir().unwrap();
         let res = scan_duplicates(DuplicateScanOptions {
             path: tmp.path().to_string_lossy().to_string(),
             min_size_bytes: None,
             max_results: None,
-        }).unwrap();
+        })
+        .unwrap();
         assert!(res.ok);
         assert_eq!(res.total_scanned, 0);
         assert_eq!(res.duplicate_groups.len(), 0);
@@ -283,7 +277,6 @@ mod tests {
     #[test]
     fn test_scan_duplicates_large_file_hashing_and_max_results() {
         let tmp = tempfile::tempdir().unwrap();
-        // Create 2 identical files of 2.5 MB to exercise large file hashing (lines 198-220)
         let size = 2500 * 1024;
         let mut data = vec![0xABu8; size];
         data[0] = 0x12;
@@ -293,22 +286,20 @@ mod tests {
         fs::write(tmp.path().join("large1.bin"), &data).unwrap();
         fs::write(tmp.path().join("large2.bin"), &data).unwrap();
 
-        // Also a smaller pair of duplicate files
         let small = b"small duplicate pair 123456789";
         fs::write(tmp.path().join("small1.txt"), small).unwrap();
         fs::write(tmp.path().join("small2.txt"), small).unwrap();
 
-        // Test with max_results = 1
         let res = scan_duplicates(DuplicateScanOptions {
             path: tmp.path().to_string_lossy().to_string(),
             min_size_bytes: Some(10),
             max_results: Some(1),
-        }).unwrap();
+        })
+        .unwrap();
 
         assert!(res.ok);
         assert_eq!(res.total_scanned, 4);
         assert_eq!(res.duplicate_groups.len(), 1);
-        // The largest group is the 2.5MB group because it has higher total_wasted
         assert_eq!(res.duplicate_groups[0].size, size as u64);
     }
 }

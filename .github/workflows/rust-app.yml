@@ -41,7 +41,8 @@ jobs:
             libxcb1-dev \
             libfontconfig-dev \
             libfreetype-dev \
-            libzstd-dev
+            libzstd-dev \
+            libssl-dev
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable

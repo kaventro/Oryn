@@ -2,8 +2,6 @@ use std::path::Path;
 
 use walkdir::WalkDir;
 
-/// Items in the source that already exist at the mirrored destination path.
-/// Informs the UI's one-shot Overwrite/Skip dialog before a transfer starts.
 #[derive(Debug, Default)]
 pub struct ConflictReport {
     pub conflicts: Vec<String>,
@@ -32,7 +30,7 @@ pub fn scan(src: &Path, dst: &Path, limit: usize) -> ConflictReport {
         .filter_map(|e| e.ok())
     {
         if entry.file_type().is_dir() {
-            continue; // directories merge; only leaf entries clash
+            continue;
         }
         let Ok(rel) = entry.path().strip_prefix(src) else {
             continue;

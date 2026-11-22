@@ -236,17 +236,16 @@ mod tests {
     #[test]
     fn create_dir_all_and_resolved_path() {
         let (tmp, safe) = root();
-        // Empty path should just return root
         let res_empty = safe.create_dir_all(Path::new("")).unwrap();
         assert_eq!(res_empty, tmp.path().join("root"));
 
-        // Nested dirs with CurDir
         let res_nested = safe.create_dir_all(Path::new("./sub/nested")).unwrap();
         assert!(tmp.path().join("root/sub/nested").is_dir());
         assert_eq!(res_nested, tmp.path().join("root/sub/nested"));
 
-        // resolved_path
-        let resolved = safe.resolved_path(Path::new("./sub/nested/file.txt")).unwrap();
+        let resolved = safe
+            .resolved_path(Path::new("./sub/nested/file.txt"))
+            .unwrap();
         assert_eq!(resolved, tmp.path().join("root/sub/nested/file.txt"));
     }
 

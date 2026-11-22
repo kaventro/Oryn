@@ -78,7 +78,6 @@ fn remove_dir_all_robust(path: &Path) -> std::io::Result<()> {
         return Ok(());
     }
 
-    // Recursively clear read-only attributes on files and folders
     for entry in walkdir::WalkDir::new(path)
         .contents_first(true)
         .into_iter()
@@ -94,7 +93,6 @@ fn remove_dir_all_robust(path: &Path) -> std::io::Result<()> {
         }
     }
 
-    // Retry remove_dir_all with short exponential backoff for transient Windows locks
     let mut last_err = None;
     for delay_ms in [10, 25, 50, 100, 200] {
         match fs::remove_dir_all(path) {
@@ -106,7 +104,6 @@ fn remove_dir_all_robust(path: &Path) -> std::io::Result<()> {
         }
     }
 
-    // Fallback: manual depth-first removal of files, then directories
     for entry in walkdir::WalkDir::new(path)
         .contents_first(true)
         .into_iter()
@@ -133,9 +130,7 @@ fn remove_dir_all_robust(path: &Path) -> std::io::Result<()> {
         }
     }
 
-    Err(last_err.unwrap_or_else(|| {
-        std::io::Error::new(std::io::ErrorKind::Other, "Failed to remove directory")
-    }))
+    Err(last_err.unwrap_or_else(|| std::io::Error::other("Failed to remove directory")))
 }
 
 #[cfg(test)]
@@ -161,7 +156,10 @@ mod tests {
         if res.is_ok() {
             assert!(!file.exists());
         } else {
-            assert!(file.exists(), "File must be preserved if moving to trash fails");
+            assert!(
+                file.exists(),
+                "File must be preserved if moving to trash fails"
+            );
         }
     }
 
@@ -186,7 +184,10 @@ mod tests {
         if res.is_ok() {
             assert!(!nested.exists());
         } else {
-            assert!(nested.exists(), "Directory must be preserved if moving to trash fails");
+            assert!(
+                nested.exists(),
+                "Directory must be preserved if moving to trash fails"
+            );
         }
     }
 

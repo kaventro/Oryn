@@ -93,7 +93,12 @@ mod tests {
 
         assert!(validate_preview_asset(key.to_str().unwrap()).is_err());
 
-        let via_parent = tmp.path().join("other").join("..").join(".ssh").join("id_rsa.png");
+        let via_parent = tmp
+            .path()
+            .join("other")
+            .join("..")
+            .join(".ssh")
+            .join("id_rsa.png");
         assert!(validate_preview_asset(via_parent.to_str().unwrap()).is_err());
     }
 

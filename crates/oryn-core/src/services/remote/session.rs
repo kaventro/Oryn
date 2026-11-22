@@ -34,7 +34,6 @@ impl RemoteSession {
         session.set_tcp_stream(tcp);
         session.handshake().context("SSH handshake failed")?;
 
-        // Host key verification
         verify_ssh_host_key(&mut session, profile)?;
 
         match profile.auth_type {
@@ -134,7 +133,6 @@ impl SessionPool {
     pub fn get_or_connect(&self, profile: &RemoteProfile) -> Result<Arc<Mutex<RemoteSession>>> {
         let mut pool = self.sessions.lock();
         if let Some(existing) = pool.get(&profile.id) {
-            // Test if still connected
             let session_guard = existing.lock();
             if session_guard.session.authenticated() {
                 drop(session_guard);

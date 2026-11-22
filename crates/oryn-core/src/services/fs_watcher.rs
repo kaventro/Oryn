@@ -4,7 +4,8 @@ use serde::Serialize;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use tauri::{AppHandle, Emitter};
+
+use crate::events::EventSink;
 
 #[derive(Clone, Serialize)]
 pub struct FsChangeEvent {
@@ -14,7 +15,7 @@ pub struct FsChangeEvent {
 pub struct FsWatcherService {
     watcher: Mutex<Option<RecommendedWatcher>>,
     watched_dirs: Arc<Mutex<HashSet<PathBuf>>>,
-    app_handle: Mutex<Option<AppHandle>>,
+    sink: Mutex<Option<Arc<dyn EventSink>>>,
 }
 
 impl Default for FsWatcherService {
@@ -22,21 +23,20 @@ impl Default for FsWatcherService {
         Self {
             watcher: Mutex::new(None),
             watched_dirs: Arc::new(Mutex::new(HashSet::new())),
-            app_handle: Mutex::new(None),
+            sink: Mutex::new(None),
         }
     }
 }
 
 impl FsWatcherService {
-    pub fn set_app_handle(&self, handle: AppHandle) {
-        *self.app_handle.lock() = Some(handle);
+    pub fn set_sink(&self, sink: Arc<dyn EventSink>) {
+        *self.sink.lock() = Some(sink);
     }
 
     pub fn watch_dirs(&self, paths: Vec<String>) -> Result<(), String> {
         let mut watcher_lock = self.watcher.lock();
         let mut watched_dirs_lock = self.watched_dirs.lock();
 
-        // Clear existing watcher
         *watcher_lock = None;
         watched_dirs_lock.clear();
 
@@ -44,21 +44,19 @@ impl FsWatcherService {
             return Ok(());
         }
 
-        let app_handle_opt = self.app_handle.lock().clone();
+        let sink_opt = self.sink.lock().clone();
         let watched_dirs_clone = Arc::clone(&self.watched_dirs);
 
         let event_handler = move |res: Result<Event, notify::Error>| {
             if let Ok(event) = res {
-                if let Some(app) = &app_handle_opt {
+                if let Some(sink) = &sink_opt {
                     let watched = watched_dirs_clone.lock();
                     let mut affected_dirs = HashSet::new();
 
                     for event_path in &event.paths {
-                        // Check if the event path directly matches a watched dir
                         if watched.contains(event_path) {
                             affected_dirs.insert(event_path.clone());
                         }
-                        // Or check if its parent is a watched dir
                         if let Some(parent) = event_path.parent() {
                             if watched.contains(parent) {
                                 affected_dirs.insert(parent.to_path_buf());
@@ -68,7 +66,11 @@ impl FsWatcherService {
 
                     for dir in affected_dirs {
                         let path_str = dir.to_string_lossy().to_string();
-                        let _ = app.emit("fs:change", FsChangeEvent { path: path_str });
+                        sink.emit(
+                            "fs:change",
+                            serde_json::to_value(FsChangeEvent { path: path_str })
+                                .unwrap_or_default(),
+                        );
                     }
                 }
             }

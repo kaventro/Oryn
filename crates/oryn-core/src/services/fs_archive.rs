@@ -83,8 +83,8 @@ pub fn compress_zip(sources: &[PathBuf], destination_zip: &Path) -> Result<()> {
 }
 
 const MAX_EXTRACT_ENTRIES: usize = 50_000;
-const MAX_TOTAL_EXTRACT_BYTES: u64 = 5 * 1024 * 1024 * 1024; // 5 GB
-const MAX_SINGLE_ENTRY_BYTES: u64 = 2 * 1024 * 1024 * 1024; // 2 GB
+const MAX_TOTAL_EXTRACT_BYTES: u64 = 5 * 1024 * 1024 * 1024;
+const MAX_SINGLE_ENTRY_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 
 pub fn extract_archive(archive_path: &Path, destination_dir: &Path) -> Result<()> {
     if !archive_path.exists() {
@@ -217,10 +217,8 @@ mod tests {
     fn test_compress_zip_edge_cases() {
         let tmp = tempdir().unwrap();
         let zip_path = tmp.path().join("test.zip");
-        // Empty sources should error
         assert!(compress_zip(&[], &zip_path).is_err());
 
-        // Single file source
         let file = tmp.path().join("single.txt");
         fs::write(&file, b"content").unwrap();
         assert!(compress_zip(&[file], &zip_path).is_ok());
@@ -238,7 +236,6 @@ mod tests {
         fs::write(&invalid_fmt, b"invalid").unwrap();
         assert!(extract_archive(&invalid_fmt, &dest).is_err());
 
-        // Plain tar extraction
         let tar_path = tmp.path().join("test.tar");
         let file = File::create(&tar_path).unwrap();
         let mut builder = tar::Builder::new(file);
@@ -246,7 +243,9 @@ mod tests {
         header.set_size(7);
         header.set_mode(0o644);
         header.set_cksum();
-        builder.append_data(&mut header, "test.txt", &b"tar dir"[..]).unwrap();
+        builder
+            .append_data(&mut header, "test.txt", &b"tar dir"[..])
+            .unwrap();
         builder.finish().unwrap();
 
         let tar_out = tmp.path().join("tar_out");
