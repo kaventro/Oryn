@@ -16,3 +16,4 @@ oryn-core = { path = "../oryn-core" }
 alacritty_terminal = "0.26"
 portable-pty = "0.9"
 futures = "0.3"
+rust-embed = "8"

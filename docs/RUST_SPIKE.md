@@ -12,13 +12,19 @@ cargo run --release -p oryn-app -- [left-dir] [right-dir]
 | --- | --- |
 | Up, Down, Page Up, Page Down, Home, End | Move the cursor |
 | Enter, double-click | Open a folder |
-| Backspace | Parent folder |
+| Backspace, Alt+Up | Parent folder |
+| Alt+Left, Alt+Right | Back, forward |
 | Space, Insert | Mark or unmark, then move down |
 | Ctrl+A (Cmd+A on macOS) | Mark or unmark all |
 | Tab | Switch pane |
-| Ctrl+` | Toggle the terminal |
-| Ctrl+Shift+T (Cmd+Shift+T on macOS) | Cycle accent trays |
-| Ctrl+Q (Cmd+Q on macOS) | Quit |
+| Ctrl+F (Cmd+F) | Filter the active pane |
+| Ctrl+\\ (Cmd+\\) | Dual or single pane |
+| Ctrl+B (Cmd+B) | Show or hide the sidebar |
+| Ctrl+\` or F9 | Toggle the terminal |
+| Ctrl+, (Cmd+,) | Cycle accent trays |
+| Ctrl+Q (Cmd+Q) | Quit |
+
+The layout copies the current web UI: the sidebar sections, the 52 px header with the folder tab and icon buttons, the toolbar groups, the breadcrumb and search pills, the file rows and the status bar use the same sizes, colours and SVG icons as `src/`. File icons and colours come from `oryn_core::icons`, a port of `iconRegistry.ts`. The toolbar's file actions, the grid and column views, new tabs and remote servers are drawn but not wired yet.
 
 `ORYN_BENCH=1` scrolls the left pane from top to bottom in 173-row steps and prints frame timings. `ORYN_TRAY=0..5` picks the starting accent.
 

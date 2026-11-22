@@ -1,4 +1,5 @@
 pub mod format;
+pub mod icons;
 
 pub mod services {
     pub type ServiceResult<T> = anyhow::Result<T>;

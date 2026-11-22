@@ -3,13 +3,15 @@ use std::time::{Duration, Instant};
 
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
-use oryn_core::format::{FileKind, file_kind, fmt_size, row_date_text};
+use oryn_core::format::{fmt_size, row_date_text};
 
 use crate::actions::*;
-use crate::icons::kind_icon;
-use crate::theme::{Palette, palette, with_alpha};
+use crate::icons::file_icon;
+use crate::theme::{Palette, black_alpha, palette, white_alpha, with_alpha};
 
 pub const ROW_HEIGHT: f32 = 30.0;
+const DATE_COL: f32 = 180.0;
+const SIZE_COL: f32 = 85.0;
 
 #[derive(Clone)]
 pub struct Row {
@@ -18,19 +20,22 @@ pub struct Row {
     pub is_parent: bool,
     pub size: Option<u64>,
     pub mtime: String,
-    pub kind: FileKind,
 }
 
 pub struct FilePane {
     pub path: PathBuf,
     pub rows: Vec<Row>,
+    all_rows: Vec<Row>,
     pub cursor: usize,
     pub marked: Vec<bool>,
     pub focus: FocusHandle,
     pub error: Option<SharedString>,
     pub load_time: Duration,
+    pub dual: bool,
+    filter: String,
     scroll: UniformListScrollHandle,
-    history: Vec<(PathBuf, String)>,
+    back: Vec<PathBuf>,
+    forward: Vec<PathBuf>,
     bench: Option<Bench>,
 }
 
@@ -44,13 +49,17 @@ impl FilePane {
         let mut pane = Self {
             path: PathBuf::new(),
             rows: Vec::new(),
+            all_rows: Vec::new(),
             cursor: 0,
             marked: Vec::new(),
             focus: cx.focus_handle(),
             error: None,
             load_time: Duration::ZERO,
+            dual: true,
+            filter: String::new(),
             scroll: UniformListScrollHandle::new(),
-            history: Vec::new(),
+            back: Vec::new(),
+            forward: Vec::new(),
             bench: None,
         };
         pane.load(path, None);
@@ -77,46 +86,88 @@ impl FilePane {
                         is_parent: true,
                         size: None,
                         mtime: String::new(),
-                        kind: FileKind::Folder,
                     });
                 }
                 rows.extend(items.into_iter().map(|it| Row {
-                    kind: file_kind(&it.name, it.is_dir),
                     name: it.name.into(),
                     is_dir: it.is_dir,
                     is_parent: false,
                     size: it.size,
                     mtime: it.mtime,
                 }));
-                self.marked = vec![false; rows.len()];
-                self.cursor = focus_name
-                    .and_then(|n| rows.iter().position(|r| r.name.as_ref() == n))
-                    .unwrap_or(0);
-                self.rows = rows;
+                self.all_rows = rows;
                 self.path = path;
                 self.error = None;
+                self.filter.clear();
+                self.apply_filter(focus_name);
             }
             Err(err) => {
                 self.error = Some(format!("Can't open this folder: {err}").into());
             }
         }
         self.load_time = started.elapsed();
+    }
+
+    fn apply_filter(&mut self, focus_name: Option<&str>) {
+        let needle = self.filter.to_lowercase();
+        self.rows = if needle.is_empty() {
+            self.all_rows.clone()
+        } else {
+            self.all_rows
+                .iter()
+                .filter(|r| r.is_parent || r.name.to_lowercase().contains(&needle))
+                .cloned()
+                .collect()
+        };
+        self.marked = vec![false; self.rows.len()];
+        self.cursor = focus_name
+            .and_then(|n| self.rows.iter().position(|r| r.name.as_ref() == n))
+            .unwrap_or(0);
         self.scroll
             .scroll_to_item(self.cursor, ScrollStrategy::Center);
     }
 
+    pub fn set_filter(&mut self, text: &str, cx: &mut Context<Self>) {
+        if self.filter == text {
+            return;
+        }
+        self.filter = text.to_string();
+        self.apply_filter(None);
+        cx.notify();
+    }
+
     pub fn navigate(&mut self, path: PathBuf, cx: &mut Context<Self>) {
-        let name = self.current_name();
-        self.history.push((self.path.clone(), name));
+        if path == self.path {
+            return;
+        }
+        self.back.push(self.path.clone());
+        self.forward.clear();
         self.load(path, None);
         cx.notify();
     }
 
-    fn current_name(&self) -> String {
-        self.rows
-            .get(self.cursor)
-            .map(|r| r.name.to_string())
-            .unwrap_or_default()
+    pub fn can_go_back(&self) -> bool {
+        !self.back.is_empty()
+    }
+
+    pub fn can_go_forward(&self) -> bool {
+        !self.forward.is_empty()
+    }
+
+    pub fn go_back(&mut self, cx: &mut Context<Self>) {
+        if let Some(prev) = self.back.pop() {
+            self.forward.push(self.path.clone());
+            self.load(prev, None);
+            cx.notify();
+        }
+    }
+
+    pub fn go_forward(&mut self, cx: &mut Context<Self>) {
+        if let Some(next) = self.forward.pop() {
+            self.back.push(self.path.clone());
+            self.load(next, None);
+            cx.notify();
+        }
     }
 
     pub fn title(&self) -> SharedString {
@@ -135,8 +186,11 @@ impl FilePane {
             .fold((0, 0), |(n, s), (_, r)| (n + 1, s + r.size.unwrap_or(0)))
     }
 
-    pub fn item_count(&self) -> usize {
-        self.rows.iter().filter(|r| !r.is_parent).count()
+    pub fn totals(&self) -> (usize, u64) {
+        self.rows
+            .iter()
+            .filter(|r| !r.is_parent)
+            .fold((0, 0), |(n, s), r| (n + 1, s + r.size.unwrap_or(0)))
     }
 
     fn set_cursor(&mut self, ix: usize, cx: &mut Context<Self>) {
@@ -209,18 +263,20 @@ impl FilePane {
             return;
         };
         if row.is_parent {
-            self.go_parent(&GoParent, cx);
+            self.go_parent(cx);
         } else if row.is_dir {
             let target = self.path.join(row.name.as_ref());
             self.navigate(target, cx);
         }
     }
 
-    fn go_parent(&mut self, _: &GoParent, cx: &mut Context<Self>) {
+    pub fn go_parent(&mut self, cx: &mut Context<Self>) {
         let Some(parent) = self.path.parent().map(Path::to_path_buf) else {
             return;
         };
         let from = self.title().to_string();
+        self.back.push(self.path.clone());
+        self.forward.clear();
         self.load(parent, Some(&from));
         cx.notify();
     }
@@ -230,55 +286,53 @@ impl FilePane {
             .flex()
             .flex_none()
             .items_center()
-            .h(px(28.0))
+            .gap(px(12.0))
+            .h(px(31.0))
             .px(px(16.0))
             .border_b_1()
             .border_color(p.divider)
-            .text_size(px(10.5))
+            .bg(white_alpha(0.02))
+            .text_size(px(11.0))
             .font_weight(FontWeight::SEMIBOLD)
             .text_color(p.text_muted)
             .child(div().flex_1().child("NAME"))
-            .child(div().w(px(170.0)).text_right().child("DATE MODIFIED"))
-            .child(div().w(px(84.0)).text_right().child("SIZE"))
+            .child(div().w(px(DATE_COL)).text_right().child("DATE MODIFIED"))
+            .child(div().w(px(SIZE_COL)).text_right().child("SIZE"))
     }
 
     fn render_row(
         &self,
         ix: usize,
-        focused: bool,
+        active: bool,
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
         let row = &self.rows[ix];
         let marked = self.marked.get(ix).copied().unwrap_or(false);
         let is_cursor = ix == self.cursor;
-        let (fg, muted) = if marked {
-            (p.on_accent, with_alpha(p.on_accent, 0.82))
+        let (name_color, meta_color) = if marked {
+            (p.on_accent, p.on_accent)
+        } else if is_cursor {
+            (p.text_strong, p.text_secondary)
         } else {
-            (p.text, p.text_muted)
+            (p.text, p.text_secondary)
         };
         let date = if row.is_parent {
-            "\u{2014}".to_string()
+            String::new()
         } else {
             row_date_text(&row.mtime)
         };
         let size = if row.is_parent {
-            String::new()
+            "\u{2014}".to_string()
         } else if row.is_dir {
             "<DIR>".to_string()
         } else {
             fmt_size(row.size)
         };
         let label = if row.is_parent {
-            format!(
-                "Parent folder, {}",
-                self.path
-                    .parent()
-                    .map(|x| x.display().to_string())
-                    .unwrap_or_default()
-            )
+            "Parent folder".to_string()
         } else if row.is_dir {
-            format!("Folder {}", row.name)
+            format!("Folder {}, modified {}", row.name, date)
         } else {
             format!("{}, {}, modified {}", row.name, size, date)
         };
@@ -290,20 +344,30 @@ impl FilePane {
             .aria_selected(marked || is_cursor)
             .flex()
             .items_center()
+            .gap(px(12.0))
             .w_full()
             .h(px(ROW_HEIGHT))
-            .px(px(12.0))
+            .px(px(16.0))
             .rounded(px(6.0))
-            .text_size(px(13.0))
-            .text_color(fg)
-            .when(marked, |d| d.bg(p.accent))
-            .when(!marked && is_cursor && focused, |d| {
-                d.bg(p.cursor_row)
-                    .border_1()
-                    .border_color(with_alpha(p.accent, 0.55))
+            .when(marked && is_cursor, |d| d.bg(p.accent_hover))
+            .when(marked && !is_cursor, |d| {
+                d.bg(p.accent).shadow(vec![BoxShadow {
+                    color: with_alpha(p.accent, 0.35),
+                    offset: point(px(0.0), px(2.0)),
+                    blur_radius: px(8.0),
+                    spread_radius: px(0.0),
+                    inset: false,
+                }])
             })
-            .when(!marked && is_cursor && !focused, |d| d.bg(p.hover))
-            .when(!marked && !is_cursor, |d| d.hover(|s| s.bg(p.hover)))
+            .when(!marked && is_cursor && active, |d| {
+                d.bg(p.accent_soft)
+                    .border_1()
+                    .border_color(with_alpha(p.accent, 0.45))
+            })
+            .when(!marked && is_cursor && !active, |d| d.bg(white_alpha(0.06)))
+            .when(!marked && !is_cursor, |d| {
+                d.hover(|s| s.bg(white_alpha(0.04)))
+            })
             .on_click(cx.listener(move |this, ev: &ClickEvent, window, cx| {
                 window.focus(&this.focus, cx);
                 this.set_cursor(ix, cx);
@@ -317,26 +381,28 @@ impl FilePane {
                     .flex_1()
                     .min_w_0()
                     .items_center()
-                    .gap(px(10.0))
-                    .child(kind_icon(row.kind, row.is_parent, marked, p))
+                    .gap(px(8.0))
+                    .text_size(px(13.0))
+                    .text_color(name_color)
+                    .child(file_icon(&row.name, row.is_dir, marked, p))
                     .child(div().truncate().child(row.name.clone())),
             )
             .child(
                 div()
-                    .w(px(170.0))
+                    .w(px(DATE_COL))
                     .flex_none()
                     .text_right()
                     .text_size(px(12.0))
-                    .text_color(muted)
+                    .text_color(meta_color)
                     .child(date),
             )
             .child(
                 div()
-                    .w(px(84.0))
+                    .w(px(SIZE_COL))
                     .flex_none()
                     .text_right()
                     .text_size(px(12.0))
-                    .text_color(muted)
+                    .text_color(meta_color)
                     .child(size),
             )
     }
@@ -377,43 +443,40 @@ impl Render for FilePane {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.bench_tick(window);
         let p = palette(cx);
-        let focused = self.focus.contains_focused(window, cx);
+        let active = self.focus.contains_focused(window, cx);
+        let highlight = active && self.dual;
         let count = self.rows.len();
+        let message = |text: SharedString| {
+            div()
+                .flex_1()
+                .flex()
+                .items_center()
+                .justify_center()
+                .text_size(px(13.0))
+                .text_color(p.text_muted)
+                .child(text)
+                .into_any_element()
+        };
         let body: AnyElement = if let Some(err) = &self.error {
-            div()
-                .flex_1()
-                .flex()
-                .items_center()
-                .justify_center()
-                .text_size(px(13.0))
-                .text_color(p.text_muted)
-                .child(err.clone())
-                .into_any_element()
+            message(err.clone())
+        } else if count <= 1 && !self.filter.is_empty() {
+            message(format!("Nothing here matches \u{201c}{}\u{201d}", self.filter).into())
         } else if count == 0 {
-            div()
-                .flex_1()
-                .flex()
-                .items_center()
-                .justify_center()
-                .text_size(px(13.0))
-                .text_color(p.text_muted)
-                .child("This folder is empty")
-                .into_any_element()
+            message("This folder is empty".into())
         } else {
             uniform_list(
                 "rows",
                 count,
                 cx.processor(move |this, range: std::ops::Range<usize>, window, cx| {
                     let p = palette(cx);
-                    let focused = this.focus.contains_focused(window, cx);
+                    let active = this.focus.contains_focused(window, cx);
                     range
-                        .map(|ix| this.render_row(ix, focused, &p, cx))
+                        .map(|ix| this.render_row(ix, active, &p, cx))
                         .collect::<Vec<_>>()
                 }),
             )
             .track_scroll(&self.scroll)
             .flex_1()
-            .p(px(4.0))
             .into_any_element()
         };
 
@@ -435,21 +498,46 @@ impl Render for FilePane {
             .on_action(cx.listener(Self::toggle_mark))
             .on_action(cx.listener(Self::mark_all))
             .on_action(cx.listener(Self::open_entry))
-            .on_action(cx.listener(|this, a: &GoParent, _, cx| this.go_parent(a, cx)))
+            .on_action(cx.listener(|this, _: &GoParent, _, cx| this.go_parent(cx)))
+            .on_action(cx.listener(|this, _: &GoBack, _, cx| this.go_back(cx)))
+            .on_action(cx.listener(|this, _: &GoForward, _, cx| this.go_forward(cx)))
             .flex()
             .flex_col()
             .flex_1()
             .min_w_0()
             .h_full()
-            .bg(p.pane)
+            .bg(p.card)
             .rounded(px(10.0))
             .border_1()
-            .border_color(if focused {
-                with_alpha(p.accent, 0.85)
-            } else {
-                p.card_border
-            })
             .overflow_hidden()
+            .when(highlight, |d| {
+                d.border_color(with_alpha(p.accent, 0.65)).shadow(vec![
+                    BoxShadow {
+                        color: with_alpha(p.accent, 0.3),
+                        offset: point(px(0.0), px(0.0)),
+                        blur_radius: px(0.0),
+                        spread_radius: px(1.0),
+                        inset: false,
+                    },
+                    BoxShadow {
+                        color: black_alpha(0.4),
+                        offset: point(px(0.0), px(8.0)),
+                        blur_radius: px(24.0),
+                        spread_radius: px(0.0),
+                        inset: false,
+                    },
+                ])
+            })
+            .when(!highlight, |d| {
+                d.border_color(p.card_border).shadow(vec![BoxShadow {
+                    color: black_alpha(0.25),
+                    offset: point(px(0.0), px(4.0)),
+                    blur_radius: px(20.0),
+                    spread_radius: px(0.0),
+                    inset: false,
+                }])
+            })
+            .when(self.dual && !active, |d| d.opacity(0.92))
             .child(self.render_header(&p))
             .child(body)
     }

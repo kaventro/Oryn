@@ -4,32 +4,39 @@ use gpui_kit::{App, Global, Hsla, Rgba, SharedString};
 pub struct Tray {
     pub name: &'static str,
     pub accent: u32,
+    pub accent_hover: u32,
 }
 
 pub const TRAYS: [Tray; 6] = [
     Tray {
         name: "Graphite Blue",
         accent: 0x0a84ff,
+        accent_hover: 0x0071e3,
     },
     Tray {
         name: "Ocean",
         accent: 0x00b4d8,
+        accent_hover: 0x0096c7,
     },
     Tray {
         name: "Ember",
         accent: 0xff9f0a,
+        accent_hover: 0xf0883e,
     },
     Tray {
         name: "Emerald",
         accent: 0x34c759,
+        accent_hover: 0x28a745,
     },
     Tray {
         name: "Purple",
         accent: 0xbf5af2,
+        accent_hover: 0xa838e0,
     },
     Tray {
         name: "Mono",
         accent: 0xd1d1d6,
+        accent_hover: 0xe5e5ea,
     },
 ];
 
@@ -59,33 +66,40 @@ pub fn white_alpha(a: f32) -> Hsla {
     .into()
 }
 
+pub fn black_alpha(a: f32) -> Hsla {
+    Rgba {
+        r: 0.0,
+        g: 0.0,
+        b: 0.0,
+        a,
+    }
+    .into()
+}
+
 pub fn with_alpha(c: Hsla, a: f32) -> Hsla {
     Hsla { a, ..c }
 }
 
 pub struct Palette {
     pub bg: Hsla,
-    pub sidebar: Hsla,
     pub card: Hsla,
-    pub pane: Hsla,
     pub divider: Hsla,
     pub card_border: Hsla,
-    pub hover: Hsla,
-    pub cursor_row: Hsla,
+    pub control: Hsla,
+    pub control_border: Hsla,
     pub text: Hsla,
+    pub text_strong: Hsla,
+    pub text_secondary: Hsla,
+    pub text_sidebar: Hsla,
+    pub text_crumb: Hsla,
     pub text_muted: Hsla,
+    pub text_dim: Hsla,
     pub text_faint: Hsla,
     pub accent: Hsla,
+    pub accent_hover: Hsla,
     pub on_accent: Hsla,
     pub accent_soft: Hsla,
-    pub red: Hsla,
-    pub yellow: Hsla,
-    pub green: Hsla,
-    pub purple: Hsla,
-    pub pink: Hsla,
-    pub cyan: Hsla,
     pub terminal_bg: Hsla,
-    pub tray_name: SharedString,
 }
 
 pub fn palette(cx: &App) -> Palette {
@@ -101,27 +115,24 @@ pub fn palette(cx: &App) -> Palette {
     };
     Palette {
         bg: hex(0x141416),
-        sidebar: hex(0x141416),
         card: hex(0x242428),
-        pane: hex(0x1a1a1d),
         divider: white_alpha(0.06),
         card_border: white_alpha(0.07),
-        hover: white_alpha(0.04),
-        cursor_row: white_alpha(0.08),
+        control: white_alpha(0.05),
+        control_border: white_alpha(0.08),
         text: hex(0xf5f5f7),
+        text_strong: hex(0xffffff),
+        text_secondary: hex(0xc4c4c8),
+        text_sidebar: hex(0xd1d1d6),
+        text_crumb: hex(0xa8a8ac),
         text_muted: hex(0x8e8e93),
+        text_dim: hex(0x727276),
         text_faint: hex(0x636366),
         accent,
+        accent_hover: hex(tray.accent_hover),
         on_accent,
-        accent_soft: with_alpha(accent, 0.16),
-        red: hex(0xff453a),
-        yellow: hex(0xffd60a),
-        green: hex(0x34c759),
-        purple: hex(0xbf5af2),
-        pink: hex(0xff375f),
-        cyan: hex(0x30b0c7),
+        accent_soft: with_alpha(accent, 0.22),
         terminal_bg: hex(0x111214),
-        tray_name: tray.name.into(),
     }
 }
 

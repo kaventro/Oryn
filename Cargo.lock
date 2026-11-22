@@ -4530,6 +4530,7 @@ dependencies = [
  "gpui-kit",
  "oryn-core",
  "portable-pty",
+ "rust-embed",
 ]
 
 [[package]]

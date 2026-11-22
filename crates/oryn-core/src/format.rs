@@ -28,47 +28,6 @@ pub fn row_date_text(mtime: &str) -> String {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FileKind {
-    Folder,
-    Image,
-    Video,
-    Audio,
-    Archive,
-    Pdf,
-    Markdown,
-    Code,
-    Text,
-    Other,
-}
-
-pub fn file_kind(name: &str, is_dir: bool) -> FileKind {
-    if is_dir {
-        return FileKind::Folder;
-    }
-    let ext = name
-        .rsplit_once('.')
-        .map(|(_, e)| e.to_ascii_lowercase())
-        .unwrap_or_default();
-    match ext.as_str() {
-        "png" | "jpg" | "jpeg" | "gif" | "webp" | "svg" | "bmp" | "ico" | "heic" | "tiff" => {
-            FileKind::Image
-        }
-        "mp4" | "mov" | "mkv" | "avi" | "webm" | "m4v" => FileKind::Video,
-        "mp3" | "wav" | "flac" | "aac" | "ogg" | "m4a" => FileKind::Audio,
-        "zip" | "tar" | "gz" | "tgz" | "bz2" | "xz" | "7z" | "rar" | "zst" | "dmg" => {
-            FileKind::Archive
-        }
-        "pdf" => FileKind::Pdf,
-        "md" | "markdown" | "mdx" => FileKind::Markdown,
-        "rs" | "ts" | "tsx" | "js" | "jsx" | "py" | "go" | "c" | "h" | "cpp" | "hpp" | "java"
-        | "kt" | "swift" | "rb" | "sh" | "toml" | "json" | "yaml" | "yml" | "css" | "html"
-        | "lock" => FileKind::Code,
-        "txt" | "log" | "csv" | "rtf" => FileKind::Text,
-        _ => FileKind::Other,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -85,14 +44,5 @@ mod tests {
     #[test]
     fn bad_dates_render_a_dash() {
         assert_eq!(row_date_text("not a date"), "\u{2014}");
-    }
-
-    #[test]
-    fn kinds_follow_extensions() {
-        assert_eq!(file_kind("Fonts", true), FileKind::Folder);
-        assert_eq!(file_kind("Frame 12.PNG", false), FileKind::Image);
-        assert_eq!(file_kind("notes.md", false), FileKind::Markdown);
-        assert_eq!(file_kind("main.rs", false), FileKind::Code);
-        assert_eq!(file_kind("README", false), FileKind::Other);
     }
 }
