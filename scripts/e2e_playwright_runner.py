@@ -151,10 +151,15 @@ def main():
             page.click("#btn-view-grid")
             page.wait_for_selector(".grid-mode", timeout=5000)
             page.wait_for_function("""() => {
-                // The fixture lists two images (banner.png, screenshot.jpg); a failed
-                // image is removed from the DOM, so require both to be present and loaded.
-                const thumbnails = [...document.querySelectorAll('.grid-mode img.row-thumbnail')];
-                return thumbnails.length >= 2 && thumbnails.every(img => img.complete && img.naturalWidth > 0);
+                // Every pane in Grid mode must show a loaded thumbnail for each fixture
+                // image. A failed image is removed from its row, so check rows by name.
+                const expected = ['banner.png', 'screenshot.jpg'];
+                const panes = [...document.querySelectorAll('.grid-mode')];
+                return panes.length > 0 && panes.every(pane => expected.every(name => {
+                    const row = [...pane.querySelectorAll('.row')].find(r => r.textContent.includes(name));
+                    const img = row && row.querySelector('img.row-thumbnail');
+                    return !!img && img.complete && img.naturalWidth > 0;
+                }));
             }""", timeout=10000)
             time.sleep(0.5)
             shot2 = os.path.join(ARTIFACT_DIR, "oryn_grid_view.png")
