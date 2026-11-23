@@ -407,7 +407,10 @@ impl ArchiveSearchExecutor {
             if entry_types == EntryTypes::Dirs && !is_dir {
                 continue;
             }
-            let entry_name = entry.name().to_owned();
+            let entry_name = match entry.name() {
+                Ok(name) => name.into_owned(),
+                Err(_) => continue,
+            };
             let base_name = Path::new(&entry_name)
                 .file_name()
                 .map(|name| name.to_string_lossy())
