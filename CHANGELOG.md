@@ -6,6 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.11] - 2026-11-23
+
+### Added
+- Quick View plays audio (mp3, flac, wav, ogg, m4a) with play/pause, a seek bar, the elapsed time and length, and the title, artist and album. Enter plays or pauses, and Shift+Left or Shift+Right skips 5 seconds.
+- Quick View shows video details (length, resolution, codecs) and a preview frame. Play or Enter opens the video in the default player.
+- A Folders on top setting: Always, Except by date, or Never.
+
+### Changed
+- Updated dirs to 7, ureq to 3, zip to 9, base64 to 0.23, codecov-action to 7 and upload-artifact to 7.
+- The Linux .deb now depends on libasound2 for audio.
+
+### Security
+- Fixed the open zip advisories: a header mismatch ("zip cloaking"), a symlink escape during extraction, denial of service from symlink targets and ZIP64 sizes, and an AES authentication bypass.
+
 ## [0.0.10] - 2026-11-23
 
 ### Fixed
