@@ -13,9 +13,10 @@ enum Toggle {
     UseTrash,
     Dual,
     Sidebar,
+    CheckUpdates,
 }
 
-const TOGGLES: [(Toggle, &str, &str); 5] = [
+const TOGGLES: [(Toggle, &str, &str); 6] = [
     (
         Toggle::ShowHidden,
         "Show hidden files",
@@ -40,6 +41,11 @@ const TOGGLES: [(Toggle, &str, &str); 5] = [
         Toggle::Sidebar,
         "Sidebar",
         "Show favourites, drives and tags on the left.",
+    ),
+    (
+        Toggle::CheckUpdates,
+        "Check for updates",
+        "Look for a newer Oryn release on GitHub when the app starts.",
     ),
 ];
 
@@ -68,6 +74,7 @@ impl Workspace {
             Toggle::UseTrash => self.settings.use_trash,
             Toggle::Dual => self.dual,
             Toggle::Sidebar => self.sidebar,
+            Toggle::CheckUpdates => self.settings.check_updates,
         }
     }
 
@@ -92,6 +99,14 @@ impl Workspace {
                 }
             }
             Toggle::Sidebar => self.toggle_sidebar(&ToggleSidebar, window, cx),
+            Toggle::CheckUpdates => {
+                self.settings.check_updates = !self.settings.check_updates;
+                if self.settings.check_updates {
+                    self.check_updates(cx);
+                } else {
+                    self.update = None;
+                }
+            }
         }
         self.persist(cx);
         cx.notify();
@@ -296,25 +311,38 @@ impl Workspace {
                         .child(section("Behaviour"))
                         .children(toggles)
                         .child(
-                            div().mt(px(16.0)).flex().justify_end().child(
-                                div()
-                                    .id("settings-done")
-                                    .role(Role::Button)
-                                    .aria_label("Done")
-                                    .px(px(16.0))
-                                    .py(px(6.0))
-                                    .rounded(px(7.0))
-                                    .bg(p.accent)
-                                    .text_size(px(13.0))
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .text_color(p.on_accent)
-                                    .cursor_pointer()
-                                    .hover(|s| s.bg(p.accent_hover))
-                                    .on_click(
-                                        cx.listener(|this, _, w, cx| this.close_settings(w, cx)),
-                                    )
-                                    .child("Done"),
-                            ),
+                            div()
+                                .mt(px(16.0))
+                                .flex()
+                                .items_center()
+                                .justify_between()
+                                .child(
+                                    div()
+                                        .text_size(px(11.5))
+                                        .text_color(p.text_muted)
+                                        .child(concat!("Oryn ", env!("CARGO_PKG_VERSION"))),
+                                )
+                                .child(
+                                    div()
+                                        .id("settings-done")
+                                        .role(Role::Button)
+                                        .aria_label("Done")
+                                        .px(px(16.0))
+                                        .py(px(6.0))
+                                        .rounded(px(7.0))
+                                        .bg(p.accent)
+                                        .text_size(px(13.0))
+                                        .font_weight(FontWeight::SEMIBOLD)
+                                        .text_color(p.on_accent)
+                                        .cursor_pointer()
+                                        .hover(|s| s.bg(p.accent_hover))
+                                        .on_click(
+                                            cx.listener(|this, _, w, cx| {
+                                                this.close_settings(w, cx)
+                                            }),
+                                        )
+                                        .child("Done"),
+                                ),
                         ),
                 )
                 .into_any_element(),

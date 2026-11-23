@@ -1,7 +1,5 @@
 ---
 exclude_paths:
   - "coverage/**"
-  - "desktop/gen/**"
-  - "desktop/target/**"
+  - "target/**"
   - "dist/**"
-  - "node_modules/**"

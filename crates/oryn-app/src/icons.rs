@@ -86,6 +86,8 @@ gpui_kit::assets::icon_assets!(
         Clipboard,
         Trash,
         ArchiveX,
+        FileArchive,
+        PackageOpen,
         FolderPlus,
         FilePlus,
         ListChecks,

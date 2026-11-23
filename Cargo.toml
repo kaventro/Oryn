@@ -4,7 +4,7 @@ members = ["crates/oryn-core", "crates/oryn-app"]
 exclude = ["desktop"]
 
 [workspace.package]
-version = "0.1.0-spike"
+version = "0.0.8"
 edition = "2024"
 license = "AGPL-3.0-only"
 repository = "https://github.com/kaventro/Oryn"
@@ -15,3 +15,4 @@ gpui-kit = "=0.10.0"
 
 [profile.release]
 opt-level = 3
+strip = "symbols"

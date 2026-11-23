@@ -267,6 +267,42 @@ impl Workspace {
         );
     }
 
+    pub(super) fn compress_zip(&mut self, _: &CompressZip, _: &mut Window, cx: &mut Context<Self>) {
+        let Some(sources) = self.sources(cx) else {
+            return;
+        };
+        let dir = self.active_pane().read(cx).op_dir();
+        self.start_batch(
+            BatchKind::Compress,
+            sources,
+            Some(dir),
+            OverwritePolicy::Skip,
+            cx,
+        );
+    }
+
+    pub(super) fn extract_here(&mut self, _: &ExtractHere, _: &mut Window, cx: &mut Context<Self>) {
+        let Some(sources) = self.sources(cx) else {
+            return;
+        };
+        let archives: Vec<_> = sources
+            .into_iter()
+            .filter(|s| batch::is_archive(s))
+            .collect();
+        if archives.is_empty() {
+            self.notify_active("Select a .zip, .tar or .tar.gz archive first.".into(), cx);
+            return;
+        }
+        let dir = self.active_pane().read(cx).op_dir();
+        self.start_batch(
+            BatchKind::Extract,
+            archives,
+            Some(dir),
+            OverwritePolicy::Skip,
+            cx,
+        );
+    }
+
     pub(super) fn refresh_panes(
         &mut self,
         _: &RefreshPanes,

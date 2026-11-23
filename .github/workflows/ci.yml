@@ -17,42 +17,9 @@ permissions:
   contents: read
 
 jobs:
-  frontend:
-    name: Frontend (Typecheck, Tests & Build)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: 'npm'
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Typecheck
-        run: npm run typecheck
-
-      - name: Run UI tests with coverage
-        run: npm run ui:test:coverage
-
-      - name: Build UI bundle
-        run: npm run ui:build
-
-      - name: Upload frontend coverage to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage/lcov.info
-          flags: frontend
-          fail_ci_if_error: false
-
-  backend:
-    name: Backend (Cargo Check, Tests & Coverage)
-    runs-on: ubuntu-22.04
+  coverage:
+    name: Rust (Tests & Coverage)
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -61,16 +28,16 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            build-essential \
-            curl \
-            wget \
-            file \
-            libayatana-appindicator3-dev \
-            libgtk-3-dev \
-            libssl-dev \
-            libwebkit2gtk-4.1-dev \
-            libxdo-dev \
-            librsvg2-dev
+            libxkbcommon-dev \
+            libxkbcommon-x11-dev \
+            libwayland-dev \
+            libvulkan-dev \
+            libx11-xcb-dev \
+            libxcb1-dev \
+            libfontconfig-dev \
+            libfreetype-dev \
+            libzstd-dev \
+            libssl-dev
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -79,81 +46,31 @@ jobs:
 
       - name: Rust Cache
         uses: swatinem/rust-cache@v2
-        with:
-          workspaces: |
-            desktop -> desktop/target
-            . -> target
 
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
 
-      - name: Cargo Check
-        run: cargo check --manifest-path desktop/Cargo.toml
+      - name: Test & Coverage
+        run: cargo llvm-cov --workspace --lcov --output-path rust-coverage.lcov
 
-      - name: Cargo Test & Coverage
-        run: cargo llvm-cov --manifest-path desktop/Cargo.toml --all-targets --lcov --output-path desktop-coverage.lcov
-
-      - name: oryn-core Test & Coverage
-        run: cargo llvm-cov -p oryn-core --lcov --output-path core-coverage.lcov
-
-      - name: Upload backend coverage to Codecov
+      - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./desktop-coverage.lcov,./core-coverage.lcov
-          flags: backend
+          files: ./rust-coverage.lcov
+          flags: rust
           fail_ci_if_error: false
-
-  e2e:
-    name: End-to-End Tests (Playwright Chromium)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: 'npm'
-
-      - name: Install Node dependencies
-        run: npm ci
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Install Playwright & Chromium
-        run: |
-          pip install playwright
-          python -m playwright install --with-deps chromium
-
-      - name: Run E2E Playwright Suite
-        env:
-          ARTIFACT_DIR: ./screenshots
-          PORT: 5179
-        run: python scripts/e2e_playwright_runner.py
-
-      - name: Upload E2E Screenshots
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: e2e-screenshots
-          path: ./screenshots/*.png
-          if-no-files-found: ignore
 
   ci-status:
     name: CI Status
-    needs: [frontend, backend, e2e]
+    needs: [coverage]
     runs-on: ubuntu-latest
     if: always()
     steps:
       - name: Verify all checks passed
         run: |
-          if [ "${{ needs.frontend.result }}" != "success" ] || [ "${{ needs.backend.result }}" != "success" ] || [ "${{ needs.e2e.result }}" != "success" ]; then
-            echo "CI pipeline failed: frontend=${{ needs.frontend.result }}, backend=${{ needs.backend.result }}, e2e=${{ needs.e2e.result }}"
+          if [ "${{ needs.coverage.result }}" != "success" ]; then
+            echo "CI pipeline failed: coverage=${{ needs.coverage.result }}"
             exit 1
           fi
-          echo "All frontend, backend, and E2E checks passed successfully."
+          echo "All checks passed."

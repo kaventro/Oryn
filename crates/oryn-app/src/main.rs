@@ -1,3 +1,5 @@
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+
 mod actions;
 mod icons;
 mod pane;
@@ -5,6 +7,9 @@ mod quick_view;
 mod terminal;
 mod theme;
 mod tools;
+#[cfg(test)]
+mod ui_tests;
+mod update;
 mod workspace;
 
 use std::path::PathBuf;
@@ -49,6 +54,7 @@ fn main() {
                 }),
                 window_decorations: Some(WindowDecorations::Client),
                 window_min_size: Some(size(px(900.0), px(560.0))),
+                app_id: Some("com.kaventro.Oryn".into()),
                 ..Default::default()
             };
             let (handle, ws) = gpui_kit::open_window(options, cx, |window, cx| {

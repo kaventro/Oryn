@@ -16,6 +16,7 @@ pub mod services;
 pub mod settings;
 pub mod tools;
 pub mod ui;
+pub mod update;
 pub mod vfs;
 pub mod zip_extract;
 

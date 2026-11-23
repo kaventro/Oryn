@@ -10,28 +10,15 @@ coverage:
       default:
         target: auto
         threshold: 2%
-      frontend:
-        flags:
-          - frontend
-        target: auto
-        threshold: 2%
-      backend:
-        flags:
-          - backend
-        target: auto
-        threshold: 2%
     patch:
       default:
         target: auto
         threshold: 5%
 
 flags:
-  frontend:
+  rust:
     paths:
-      - src/
-  backend:
-    paths:
-      - desktop/
+      - crates/
 
 comment:
   layout: "reach,diff,flags,tree"
@@ -39,11 +26,6 @@ comment:
   require_changes: false
 
 ignore:
-  - "desktop/build.rs"
-  - "desktop/gen/**"
-  - "desktop/target/**"
-  - "src/**/*.test.ts"
-  - "src/**/*.test.js"
-  - "node_modules/**"
+  - "crates/oryn-app/build.rs"
+  - "**/target/**"
   - "dist/**"
-  - "coverage/**"

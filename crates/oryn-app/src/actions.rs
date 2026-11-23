@@ -30,6 +30,8 @@ actions!(
         CopyToOther,
         MoveToOther,
         DuplicateItems,
+        CompressZip,
+        ExtractHere,
         NewFolder,
         NewFile,
         DeleteItems,

@@ -13,6 +13,7 @@ pub struct Settings {
     pub dual: bool,
     pub sidebar: bool,
     pub folders_first: bool,
+    pub check_updates: bool,
 }
 
 impl Default for Settings {
@@ -26,6 +27,7 @@ impl Default for Settings {
             dual: true,
             sidebar: true,
             folders_first: true,
+            check_updates: true,
         }
     }
 }

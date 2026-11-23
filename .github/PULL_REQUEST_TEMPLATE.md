@@ -13,11 +13,10 @@
 
 ## Checklist
 
-- [ ] I ran `cargo fmt` (from `desktop/`)
-- [ ] I ran `cargo clippy --all-targets -- -D warnings` (from `desktop/`)
-- [ ] I ran `cargo test` (from `desktop/`)
-- [ ] I ran `npm run ui:build` (from repo root)
-- [ ] I tested the change manually with `npm run dev`
+- [ ] I ran `cargo fmt -p oryn-app -p oryn-core`
+- [ ] I ran `cargo clippy --workspace --all-targets -- -D warnings`
+- [ ] I ran `cargo test --workspace`
+- [ ] I tested the change manually with `cargo run -p oryn-app`
 - [ ] I updated documentation if needed
 
 ## Screenshots / Demo
