@@ -200,6 +200,11 @@ fn favorites(cx: &mut TestAppContext, ws: &Entity<Workspace>) -> Vec<PathBuf> {
     cx.update(|cx| ws.read(cx).favorite_paths())
 }
 
+fn saved_favorites() -> oryn_core::favorites::Favorites {
+    let text = std::fs::read_to_string(data_dir().join("favorites.json")).unwrap();
+    serde_json::from_str(&text).unwrap()
+}
+
 #[gpui_kit::test]
 fn favourites_are_added_from_the_plus_and_the_menu_then_removed(cx: &mut TestAppContext) {
     let (_tmp, a, b) = dirs();
@@ -209,8 +214,7 @@ fn favourites_are_added_from_the_plus_and_the_menu_then_removed(cx: &mut TestApp
 
     click(cx, window, "favorites-add");
     assert!(favorites(cx, &ws).contains(&a));
-    let saved = std::fs::read_to_string(data_dir().join("favorites.json")).unwrap();
-    assert!(saved.contains(a.to_str().unwrap()));
+    assert!(saved_favorites().contains(&a));
 
     cursor_to(cx, &ws, "projects");
     send(cx, window, crate::actions::OpenContextMenu);
@@ -231,8 +235,7 @@ fn favourites_are_added_from_the_plus_and_the_menu_then_removed(cx: &mut TestApp
     let ix = favorites(cx, &ws).iter().position(|p| p == &a).unwrap();
     click(cx, window, leak(format!("fav-remove-{ix}")));
     assert!(!favorites(cx, &ws).contains(&a));
-    let saved = std::fs::read_to_string(data_dir().join("favorites.json")).unwrap();
-    assert!(!saved.contains(a.to_str().unwrap()));
+    assert!(!saved_favorites().contains(&a));
 }
 
 #[gpui_kit::test]

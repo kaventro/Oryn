@@ -41,7 +41,7 @@ pub(crate) enum RouteKind {
 }
 
 pub(crate) fn route_kind(path: &str) -> RouteKind {
-    let lower = path.to_lowercase();
+    let lower = path.to_lowercase().replace('\\', "/");
     if lower.contains(".zip/") || lower.ends_with(".zip") {
         RouteKind::Zip
     } else if is_tar_path(&lower) {
@@ -107,6 +107,8 @@ mod tests {
         assert_eq!(route_kind("/Users/me/Documents"), RouteKind::Local);
         assert_eq!(route_kind("/tmp/file.json"), RouteKind::Local);
         assert_eq!(route_kind("C:\\Users\\me"), RouteKind::Local);
+        assert_eq!(route_kind("C:\\me\\a.zip\\b.txt"), RouteKind::Zip);
+        assert_eq!(route_kind("C:\\me\\a.tar.gz\\b"), RouteKind::Tar);
     }
 
     #[test]
