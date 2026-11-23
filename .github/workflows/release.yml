@@ -46,7 +46,7 @@ jobs:
         run: |
           awk -v v="$VERSION" '
             /^## / { if (on) exit; if (index($0, "[" v "]") || index($0, " " v)) { on = 1; next } }
-            on { print }
+            on && !/^---$/ { print }
           ' CHANGELOG.md > notes.md
           if [ ! -s notes.md ]; then
             echo "Oryn $VERSION" > notes.md

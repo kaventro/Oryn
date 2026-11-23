@@ -1,4 +1,0 @@
-# cargo-audit configuration.
-
-[advisories]
-ignore = []

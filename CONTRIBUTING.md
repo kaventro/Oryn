@@ -7,11 +7,10 @@ Thanks for your interest in contributing! This guide will help you get started.
 ```bash
 git clone https://github.com/kaventro/Oryn.git
 cd Oryn
-npm install
-npm run dev
+cargo run -p oryn-app
 ```
 
-See [README.md](README.md#getting-started) for full prerequisites (Rust, Node.js, system libraries).
+See [README.md](README.md#run-from-source) for the Linux system libraries.
 
 ## Development Workflow
 
@@ -20,17 +19,9 @@ See [README.md](README.md#getting-started) for full prerequisites (Rust, Node.js
 3. Run the quality checks locally before pushing:
 
    ```bash
-   # Rust
-   cd desktop
-   cargo fmt --check
-   cargo clippy --all-targets -- -D warnings
-   cargo test
-
-   # Frontend & TypeScript
-   cd ..
-   npm run typecheck
-   npm run ui:test
-   npm run ui:build
+   cargo fmt -p oryn-app -p oryn-core --check
+   cargo clippy --workspace --all-targets -- -D warnings
+   cargo test --workspace
    ```
 
 4. Open a **Pull Request** against `main`.
@@ -39,25 +30,14 @@ See [README.md](README.md#getting-started) for full prerequisites (Rust, Node.js
 
 ### Rust
 
-- Run `cargo fmt` before committing.
+- Run `cargo fmt -p oryn-app -p oryn-core` before committing.
 - All Clippy warnings are treated as errors in CI (`-D warnings`).
-- Prefer `map_err` / `?` over `.unwrap()` in command handlers — panics crash the app.
+- Prefer `?` and error values over `.unwrap()`, because a panic closes the app.
 - Layering:
-  - `desktop/src/commands/` — Tauri invoke commands (IPC handlers, response serialization).
-  - `desktop/src/services/` — Core business logic (file transfers, duplicate finder, watchers, archives).
-  - `desktop/src/vfs/` — Virtual File System providers (local filesystem, archives like `.zip` and `.tar`).
-
-### TypeScript / Frontend
-
-- Vanilla TypeScript (TypeScript 7 + Vite) — zero UI framework overhead.
-- Controllers live in `src/modules/`; shared utilities in `src/modules/formatUtils.ts`.
-- Always use `escHtml()` when interpolating user-controlled strings into `innerHTML`.
-- Write unit tests for new controller and utility logic (`*.test.ts`).
-
-### CSS
-
-- Styles are modularized in `src/styles/**/*.css` and imported via `src/styles.css`.
-- Use CSS custom properties (`var(--…)`) instead of hardcoded colors.
+  - `crates/oryn-core` holds file services, the VFS, safe file operations and the logic behind search, Git, compare, find and replace, checksums, tags, previews and updates. Put testable logic here.
+  - `crates/oryn-app` holds the GPUI interface: the workspace, panes, dialogs, Quick View, the terminal and the tool sheets.
+- Run slow work off the UI thread with `cx.background_spawn` (see `tools::run_bg`).
+- Give every interactive element a role and an accessible label.
 
 ## What to Work On
 
@@ -71,7 +51,7 @@ Please use the [Bug Report](https://github.com/kaventro/Oryn/issues/new?template
 
 - Steps to reproduce
 - Expected vs. actual behavior
-- OS, Rust version, Node version
+- OS and Oryn version
 
 ## Suggesting Features
 

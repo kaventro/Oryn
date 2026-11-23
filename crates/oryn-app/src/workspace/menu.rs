@@ -52,7 +52,7 @@ fn danger(
     }
 }
 
-fn entries(on_item: bool) -> Vec<Entry> {
+fn entries(on_item: bool, archive: bool) -> Vec<Entry> {
     let mut v = Vec::new();
     if on_item {
         v.extend([
@@ -63,6 +63,12 @@ fn entries(on_item: bool) -> Vec<Entry> {
             item("copy-plus", "Duplicate", "\u{21e7}F5", DuplicateItems),
             item("pencil", "Rename", "F2", RenameItem),
             item("text-cursor-input", "Batch Rename\u{2026}", "", MultiRename),
+            item("file-archive", "Compress to ZIP", "", CompressZip),
+        ]);
+        if archive {
+            v.push(item("package-open", "Extract Here", "", ExtractHere));
+        }
+        v.extend([
             item("clipboard", "Copy Path", "", CopyPath),
             item("tag", "Tags\u{2026}", "", ShowTags),
             item("hash", "Checksums", "", ShowChecksums),
@@ -104,11 +110,16 @@ impl Workspace {
         }
         match event {
             PaneEvent::ContextMenu(position, on_item) => {
+                let archive = pane
+                    .read(cx)
+                    .targets()
+                    .iter()
+                    .any(|t| oryn_core::batch::is_archive(t));
                 let focus = cx.focus_handle();
                 window.focus(&focus, cx);
                 self.menu = Some(Menu {
                     position: *position,
-                    entries: entries(*on_item),
+                    entries: entries(*on_item, archive),
                     selected: None,
                     focus,
                 });

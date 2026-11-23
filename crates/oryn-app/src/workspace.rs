@@ -23,6 +23,7 @@ mod palette;
 mod quick;
 mod settings_view;
 mod tool_sheet;
+mod watch;
 
 use dialog::Dialog;
 use jobs::Job;
@@ -54,6 +55,7 @@ pub struct Workspace {
     placeholder_for: SharedString,
     update: Option<oryn_core::update::Release>,
     _update_task: Option<Task<()>>,
+    watch: Option<watch::Watch>,
 }
 
 struct Place {
@@ -184,11 +186,31 @@ impl Workspace {
             placeholder_for: SharedString::default(),
             update: None,
             _update_task: None,
+            watch: None,
         };
+        if std::env::var_os("ORYN_NO_WATCH").is_none() {
+            this.watch = Some(Self::start_watch(cx));
+        }
         if check {
             this.check_updates(cx);
         }
         this
+    }
+
+    #[cfg(test)]
+    pub fn open_overlays(&self) -> Vec<&'static str> {
+        [
+            ("settings", self.settings_open.is_some()),
+            ("palette", self.palette.is_some()),
+            ("tool", self.tool.is_some()),
+            ("quick", self.quick.is_some()),
+            ("menu", self.menu.is_some()),
+            ("terminal", self.show_terminal),
+        ]
+        .into_iter()
+        .filter(|(_, on)| *on)
+        .map(|(n, _)| n)
+        .collect()
     }
 
     fn check_updates(&mut self, cx: &mut Context<Self>) {
@@ -1404,6 +1426,8 @@ impl Render for Workspace {
             .on_action(cx.listener(Self::copy_to_other))
             .on_action(cx.listener(Self::move_to_other))
             .on_action(cx.listener(Self::duplicate_items))
+            .on_action(cx.listener(Self::compress_zip))
+            .on_action(cx.listener(Self::extract_here))
             .on_action(cx.listener(Self::new_folder))
             .on_action(cx.listener(Self::new_file))
             .on_action(cx.listener(Self::delete_items))

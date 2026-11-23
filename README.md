@@ -64,27 +64,42 @@ Git status appears beside files and folders. Open the Git panel to inspect the c
 
 See [the feature guide](docs/FEATURES.md) for the full list and [keyboard shortcuts](docs/SHORTCUTS.md) for the keymap. For a quick start: `Tab` switches panes, `F5` copies to the other pane, `F6` moves, and `F9` toggles the terminal.
 
+## Install
+
+Download the latest build from [Releases](https://github.com/kaventro/Oryn/releases/latest):
+
+- macOS (Apple silicon): `Oryn_<version>_aarch64.dmg`
+- Windows: `Oryn_<version>_x64-setup.exe`, or the portable `.exe`
+- Linux: `oryn_<version>_amd64.deb`, or the `.tar.gz`
+
+Oryn checks GitHub for a newer release when it starts and shows an Update button in the header. You can turn this off in Settings.
+
 ## Run from source
 
-You need Node.js 20 or newer, Rust, and the [Tauri system prerequisites](https://v2.tauri.app/start/prerequisites/) for your operating system.
+Oryn is a native Rust app built on [GPUI Kit](https://crates.io/crates/gpui-kit), with no WebView. You need a recent stable Rust toolchain. On Linux, install the GPU and windowing libraries first:
+
+```sh
+sudo apt-get install libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev libvulkan-dev \
+  libx11-xcb-dev libxcb1-dev libfontconfig-dev libfreetype-dev libzstd-dev libssl-dev
+```
+
+Then:
 
 ```sh
 git clone https://github.com/kaventro/Oryn.git
 cd Oryn
-npm install
-npm run dev
+cargo run -p oryn-app --release
 ```
 
-Build the desktop app with `npm run build`. To check a local change:
+To check a local change:
 
 ```sh
-npm run typecheck
-npm run ui:test
-npm run ui:build
-cargo test --manifest-path desktop/Cargo.toml
+cargo fmt -p oryn-app -p oryn-core --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
 ```
 
-The TypeScript and Vite interface lives in `src/`; Tauri commands and Rust services live in `desktop/`. See [architecture](docs/ARCHITECTURE.md) and [contributing](CONTRIBUTING.md) for the repository layout and development conventions.
+`scripts/package.sh` builds the installers for the platform it runs on into `dist/`. The interface lives in `crates/oryn-app`; file services, the VFS and the logic behind every tool live in `crates/oryn-core`. See [architecture](docs/ARCHITECTURE.md) and [contributing](CONTRIBUTING.md) for the repository layout and development conventions.
 
 ## License
 

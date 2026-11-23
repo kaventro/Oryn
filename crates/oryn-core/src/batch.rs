@@ -14,6 +14,8 @@ pub enum BatchKind {
     Move,
     Trash,
     Delete,
+    Compress,
+    Extract,
 }
 
 impl BatchKind {
@@ -23,6 +25,8 @@ impl BatchKind {
             BatchKind::Move => "Moving",
             BatchKind::Trash => "Moving to Trash",
             BatchKind::Delete => "Deleting",
+            BatchKind::Compress => "Compressing",
+            BatchKind::Extract => "Extracting",
         }
     }
 
@@ -32,6 +36,8 @@ impl BatchKind {
             BatchKind::Move => "Moved",
             BatchKind::Trash => "Moved to Trash",
             BatchKind::Delete => "Deleted",
+            BatchKind::Compress => "Compressed",
+            BatchKind::Extract => "Extracted",
         }
     }
 }
@@ -152,6 +158,9 @@ pub fn run(
     policy: OverwritePolicy,
     progress: &Progress,
 ) -> BatchReport {
+    if kind == BatchKind::Compress {
+        return compress(sources, dest_dir, progress);
+    }
     let summaries: Vec<_> = sources.iter().map(|s| path_size(s)).collect();
     let sizes: Vec<u64> = summaries.iter().map(|s| s.files.max(1)).collect();
     if matches!(kind, BatchKind::Copy | BatchKind::Move) {
@@ -184,7 +193,16 @@ pub fn run(
                     Ok(Some(move_path(progress, src, &dst, policy)))
                 }
             }
-            (BatchKind::Copy | BatchKind::Move, None) => Err("no destination".into()),
+            (BatchKind::Copy | BatchKind::Move | BatchKind::Extract, None) => {
+                Err("no destination".into())
+            }
+            (BatchKind::Extract, Some(dir)) => {
+                let out = extract_target(src, dir);
+                crate::services::fs_archive::extract_archive(src, &out)
+                    .map(|_| None)
+                    .map_err(|e| e.to_string())
+            }
+            (BatchKind::Compress, _) => Ok(None),
             (BatchKind::Trash | BatchKind::Delete, _) => {
                 delete_path(&src.to_string_lossy(), kind == BatchKind::Trash, None)
                     .map(|_| None)
@@ -215,6 +233,84 @@ pub fn run(
             .bytes_finished
             .fetch_max(bytes_before + summary_bytes, Ordering::Relaxed);
     }
+    report
+}
+
+pub fn is_archive(path: &Path) -> bool {
+    let name = path.to_string_lossy().to_lowercase();
+    [".zip", ".tar", ".tar.gz", ".tgz"]
+        .iter()
+        .any(|e| name.ends_with(e))
+}
+
+fn unique(dir: &Path, stem: &str, ext: &str) -> PathBuf {
+    let mut n = 1;
+    loop {
+        let name = if n == 1 {
+            format!("{stem}{ext}")
+        } else {
+            format!("{stem} {n}{ext}")
+        };
+        let p = dir.join(name);
+        if p.symlink_metadata().is_err() {
+            return p;
+        }
+        n += 1;
+    }
+}
+
+fn archive_stem(path: &Path) -> String {
+    let name = name_of(path);
+    let lower = name.to_lowercase();
+    for ext in [".tar.gz", ".tgz", ".tar", ".zip"] {
+        if lower.ends_with(ext) {
+            return name[..name.len() - ext.len()].to_string();
+        }
+    }
+    name
+}
+
+pub fn extract_target(archive: &Path, dir: &Path) -> PathBuf {
+    unique(dir, &archive_stem(archive), "")
+}
+
+pub fn archive_target(sources: &[PathBuf], dir: &Path) -> PathBuf {
+    let stem = match sources {
+        [one] => {
+            let name = name_of(one);
+            if one.is_dir() {
+                name
+            } else {
+                match name.rfind('.') {
+                    Some(i) if i > 0 => name[..i].to_string(),
+                    _ => name,
+                }
+            }
+        }
+        _ => "Archive".to_string(),
+    };
+    unique(dir, &stem, ".zip")
+}
+
+fn compress(sources: &[PathBuf], dest_dir: Option<&Path>, progress: &Progress) -> BatchReport {
+    let mut report = BatchReport::default();
+    progress.total.store(1, Ordering::Relaxed);
+    let Some(dir) = dest_dir.or_else(|| sources.first().and_then(|s| s.parent())) else {
+        report
+            .failed
+            .push(("archive".into(), "no destination".into()));
+        return report;
+    };
+    let target = archive_target(sources, dir);
+    progress.set_current(&name_of(&target));
+    match crate::services::fs_archive::compress_zip(sources, &target) {
+        Ok(()) => report.done = sources.len(),
+        Err(e) => {
+            let _ = std::fs::remove_file(&target);
+            report.failed.push((name_of(&target), e.to_string()));
+        }
+    }
+    progress.done.store(1, Ordering::Relaxed);
     report
 }
 
@@ -367,5 +463,43 @@ mod tests {
         p.emit(serde_json::json!({"type": "done", "path": "z"}));
         assert_eq!(p.bytes_done(), 50);
         assert_eq!(*p.current.lock(), "z");
+    }
+
+    #[test]
+    fn compress_then_extract_round_trips() {
+        let (_tmp, src, dst) = tree();
+        let p = Progress::default();
+        let sources = vec![src.join("a.txt"), src.join("folder")];
+        let r = run(
+            BatchKind::Compress,
+            &sources,
+            Some(&dst),
+            OverwritePolicy::Skip,
+            &p,
+        );
+        assert_eq!(r.done, 2);
+        let zip = dst.join("Archive.zip");
+        assert!(zip.is_file());
+        assert_eq!(archive_target(&sources, &dst), dst.join("Archive 2.zip"));
+        assert!(is_archive(&zip));
+        let r = run(
+            BatchKind::Extract,
+            std::slice::from_ref(&zip),
+            Some(&dst),
+            OverwritePolicy::Skip,
+            &p,
+        );
+        assert_eq!(r.done, 1, "{:?}", r.failed);
+        let out = dst.join("Archive");
+        assert_eq!(fs::read_to_string(out.join("a.txt")).unwrap(), "a");
+        assert_eq!(
+            fs::read_to_string(out.join("folder/inner/c.txt")).unwrap(),
+            "ccc"
+        );
+        assert_eq!(extract_target(&zip, &dst), dst.join("Archive 2"));
+        assert_eq!(
+            archive_target(&[src.join("a.txt")], &dst),
+            dst.join("a.zip")
+        );
     }
 }

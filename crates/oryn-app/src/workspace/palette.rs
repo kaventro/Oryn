@@ -37,6 +37,10 @@ pub const COMMANDS: &[(&str, &str, &str, Make)] = &[
     ("archive-x", "Delete Permanently", "Shift+Del", || {
         Box::new(DeletePermanently)
     }),
+    ("file-archive", "Compress to ZIP", "", || {
+        Box::new(CompressZip)
+    }),
+    ("package-open", "Extract Here", "", || Box::new(ExtractHere)),
     ("clipboard", "Copy Path", "", || Box::new(CopyPath)),
     ("refresh-cw", "Refresh", "Ctrl+R", || Box::new(RefreshPanes)),
     ("list-checks", "Select by Mask", "Alt+S", || {

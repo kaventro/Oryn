@@ -7,6 +7,8 @@ mod quick_view;
 mod terminal;
 mod theme;
 mod tools;
+#[cfg(test)]
+mod ui_tests;
 mod update;
 mod workspace;
 

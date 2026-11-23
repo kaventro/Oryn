@@ -22,9 +22,8 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# Rust / Tauri
+# Rust
 **/target/
-desktop/target/
 **/*.rs.bk
 *.pdb
 Cargo.lock.orig
