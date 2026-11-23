@@ -335,10 +335,18 @@ impl Workspace {
             return;
         }
         let cwd = self.active_pane().read(cx).path.clone();
+        if self
+            .terminal
+            .as_ref()
+            .is_some_and(|t| t.read(cx).has_exited())
+        {
+            self.terminal = None;
+        }
         let term = self
             .terminal
             .get_or_insert_with(|| cx.new(|cx| TerminalView::new(&cwd, cx)))
             .clone();
+        term.update(cx, |t, _| t.follow(&cwd));
         self.show_terminal = true;
         let f = term.read(cx).focus.clone();
         window.focus(&f, cx);
