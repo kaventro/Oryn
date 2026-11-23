@@ -331,7 +331,6 @@ impl Workspace {
 #[cfg(test)]
 mod tests {
     use super::expand;
-    use std::path::PathBuf;
 
     #[test]
     fn expands_home_and_absolute_paths() {
