@@ -63,3 +63,9 @@ jobs:
 
       - name: Build release
         run: cargo build --release -p oryn-app
+
+      - name: Package
+        shell: bash
+        env:
+          SKIP_BUILD: "1"
+        run: scripts/package.sh

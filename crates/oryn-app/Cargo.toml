@@ -19,3 +19,7 @@ futures = "0.3"
 parking_lot = "0.12"
 open = "5"
 rust-embed = "8"
+ureq = "2"
+
+[build-dependencies]
+winresource = "0.1"

@@ -52,6 +52,8 @@ pub struct Workspace {
     tool: Option<tool_sheet::ToolHost>,
     quick: Option<(Entity<crate::quick_view::QuickView>, Subscription)>,
     placeholder_for: SharedString,
+    update: Option<oryn_core::update::Release>,
+    _update_task: Option<Task<()>>,
 }
 
 struct Place {
@@ -156,7 +158,8 @@ impl Workspace {
         .detach();
         let focus = l.read(cx).focus.clone();
         window.focus(&focus, cx);
-        Self {
+        let check = settings.check_updates;
+        let mut this = Self {
             tabs: [vec![l], vec![r]],
             tab_ix: [0, 0],
             view,
@@ -179,7 +182,27 @@ impl Workspace {
             tool: None,
             quick: None,
             placeholder_for: SharedString::default(),
+            update: None,
+            _update_task: None,
+        };
+        if check {
+            this.check_updates(cx);
         }
+        this
+    }
+
+    fn check_updates(&mut self, cx: &mut Context<Self>) {
+        if std::env::var_os("ORYN_NO_UPDATE_CHECK").is_some() {
+            return;
+        }
+        let task = cx.background_spawn(async move { crate::update::latest() });
+        self._update_task = Some(cx.spawn(async move |this, cx| {
+            let found = task.await;
+            let _ = this.update(cx, |this, cx| {
+                this.update = found;
+                cx.notify();
+            });
+        }));
     }
 
     fn spawn_pane(
@@ -722,6 +745,32 @@ impl Workspace {
                     .child(title.clone()),
             )
             .child(self.render_tabs(p, cx))
+            .when_some(self.update.clone(), |d, rel| {
+                d.child(
+                    div()
+                        .id("update-pill")
+                        .role(Role::Link)
+                        .aria_label(format!("Oryn {} is available", rel.version))
+                        .flex()
+                        .items_center()
+                        .gap(px(6.0))
+                        .h(px(26.0))
+                        .px(px(10.0))
+                        .rounded(px(13.0))
+                        .bg(with_alpha(p.accent, 0.18))
+                        .border_1()
+                        .border_color(with_alpha(p.accent, 0.5))
+                        .text_size(px(12.0))
+                        .text_color(p.text_strong)
+                        .cursor_pointer()
+                        .hover(|s| s.bg(with_alpha(p.accent, 0.28)))
+                        .on_click(move |_, _, _| {
+                            let _ = open::that_detached(&rel.url);
+                        })
+                        .child(icon("download", 13.0, p.accent))
+                        .child(format!("Update {}", rel.version)),
+                )
+            })
             .child(
                 div()
                     .flex()
@@ -743,13 +792,11 @@ impl Workspace {
                             cx.listener(|this, _, w, cx| this.toggle_panes(&TogglePanes, w, cx)),
                         ),
                     )
-                    .child(Self::icon_button(
-                        "remote",
-                        "remote",
-                        "Remote servers",
-                        false,
-                        p,
-                    ))
+                    .child(
+                        Self::icon_button("remote", "remote", "Remote servers", false, p).on_click(
+                            cx.listener(|this, _, w, cx| this.open_tool(ToolKind::Sftp, w, cx)),
+                        ),
+                    )
                     .child(
                         Self::icon_button(
                             "terminal",

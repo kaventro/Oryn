@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Oryn
+GenericName=File Manager
+Comment=Fast dual-pane file manager
+Exec=oryn %F
+Icon=com.kaventro.Oryn
+Terminal=false
+Categories=System;FileTools;FileManager;Utility;
+MimeType=inode/directory;
+StartupWMClass=com.kaventro.Oryn
