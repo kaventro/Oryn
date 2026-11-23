@@ -46,7 +46,7 @@ graph TD
 
 ## Packaging and releases
 
-`scripts/package.sh` builds the release binary and wraps it for the platform it runs on: an `.app` inside a `.dmg` on macOS, an NSIS installer and a portable `.exe` on Windows, and a `.deb` and `.tar.gz` on Linux. `.github/workflows/release.yml` runs it on all three platforms and uploads the results to a draft GitHub release named after the version in `Cargo.toml`. Run the workflow with `publish` on, or push a `v*` tag, to publish it. The macOS app is signed ad hoc. To sign it with a Developer ID, import the certificate into the runner's keychain and set the `MACOS_SIGNING_IDENTITY` secret.
+`scripts/package.sh` builds the release binary and wraps it for the platform it runs on: an `.app` inside a `.dmg` on macOS, an NSIS installer and a portable `.exe` on Windows, and a `.deb` and `.tar.gz` on Linux. `.github/workflows/release.yml` runs it on all three platforms and uploads the results to a draft GitHub release named after the version in `Cargo.toml`. Run the workflow with `publish` on, or push a `v*` tag, to publish it. The macOS app is signed ad hoc unless the Developer ID secrets are set: `MACOS_CERTIFICATE_P12` (base64 of the .p12), `MACOS_CERTIFICATE_PASSWORD` and `MACOS_SIGNING_IDENTITY` sign it, and `APPLE_API_KEY_P8`, `APPLE_API_KEY_ID` and `APPLE_API_ISSUER` (an App Store Connect API key) notarize and staple the app and the `.dmg`. The script stops if the binary links to a library under `/opt/homebrew` or `/usr/local`, because users do not have it. SFTP uses `ssh2` with OpenSSL built in on macOS for the same reason.
 
 ## Performance (Linux, 2026-11-22)
 

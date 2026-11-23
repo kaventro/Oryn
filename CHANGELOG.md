@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Fixed
+- Oryn for macOS no longer quits at launch with "Library not loaded: libssl". OpenSSL is now built into the app.
+- The macOS app and `.dmg` are signed with a Developer ID and notarized, so Gatekeeper opens them without a warning.
+
 ## [0.0.9] - 2026-11-23
 
 ### Added
