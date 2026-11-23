@@ -11,7 +11,7 @@ base64 = "0.22"
 cap-std = "4.0.3"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 diffy = "0.5"
-dirs = "6"
+dirs = "7"
 filetime = "0.2"
 flate2 = "1.1.9"
 hex = "0.4"
