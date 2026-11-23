@@ -124,7 +124,13 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.prepare.outputs.tag }}
-        run: gh release upload "$TAG" dist/Oryn* dist/oryn* dist/SHA256SUMS-* --clobber --repo "$GITHUB_REPOSITORY"
+        run: |
+          shopt -s nullglob
+          files=(dist/*.dmg dist/*.zip dist/*.exe dist/*.deb dist/*.tar.gz dist/SHA256SUMS-*)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "::error::nothing to upload"; ls -la dist; exit 1
+          fi
+          gh release upload "$TAG" "${files[@]}" --clobber --repo "$GITHUB_REPOSITORY"
 
       - name: Keep build artifacts
         uses: actions/upload-artifact@v4
