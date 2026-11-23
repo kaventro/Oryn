@@ -17,6 +17,42 @@ pub fn oryn_icon(name: &str, size: f32, color: Hsla) -> Svg {
     icon(&format!("oryn/{name}"), size, color)
 }
 
+pub fn thumbnail(
+    path: &std::path::Path,
+    name: &str,
+    is_dir: bool,
+    on_accent: bool,
+    size: f32,
+    image: f32,
+    p: &Palette,
+) -> AnyElement {
+    let raster = matches!(
+        oryn_core::preview::extension(path).as_str(),
+        "png" | "jpg" | "jpeg" | "gif" | "webp" | "bmp"
+    );
+    let small = raster && std::fs::metadata(path).is_ok_and(|m| m.len() < 40 * 1024 * 1024);
+    if is_dir || !small {
+        return file_icon(name, is_dir, on_accent, p)
+            .size(px(size))
+            .into_any_element();
+    }
+    let fallback = {
+        let name = name.to_string();
+        let p = *p;
+        move || {
+            file_icon(&name, false, on_accent, &p)
+                .size(px(size))
+                .into_any_element()
+        }
+    };
+    img(path.to_path_buf())
+        .size(px(image))
+        .rounded(px(4.0))
+        .object_fit(ObjectFit::Contain)
+        .with_fallback(fallback)
+        .into_any_element()
+}
+
 pub fn file_icon(name: &str, is_dir: bool, on_accent: bool, p: &Palette) -> Svg {
     let key = icon_key(name, is_dir);
     let color = if on_accent {
