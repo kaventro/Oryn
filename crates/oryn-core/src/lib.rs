@@ -4,6 +4,7 @@ pub mod archive;
 pub mod batch;
 pub mod compare;
 pub mod events;
+pub mod favorites;
 pub mod format;
 pub mod fs_safe;
 pub mod git;

@@ -52,6 +52,9 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self.read_only(cx) {
+            return;
+        }
         let targets = self.active_pane().read(cx).targets();
         let Some(dir) = targets.first().and_then(|p| p.parent()).map(PathBuf::from) else {
             self.active_pane().clone().update(cx, |p, cx| {

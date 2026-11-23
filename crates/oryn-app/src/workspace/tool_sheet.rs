@@ -14,6 +14,13 @@ pub struct ToolHost {
     _sub: Subscription,
 }
 
+impl ToolHost {
+    #[cfg(test)]
+    pub fn kind(&self) -> ToolKind {
+        self.kind
+    }
+}
+
 impl Workspace {
     fn host<T: Render + Focusable + EventEmitter<ToolEvent>>(
         &mut self,
@@ -100,7 +107,13 @@ impl Workspace {
     }
 
     fn close_tool(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.tool = None;
+        let was = self.tool.take().map(|t| t.kind);
+        if was == Some(ToolKind::Sftp) {
+            self.reload_profiles();
+        }
+        if was == Some(ToolKind::Tags) {
+            self.refresh_all(None, cx);
+        }
         self.focus_pane(self.active, window, cx);
     }
 
@@ -117,7 +130,10 @@ impl Workspace {
                 self.close_tool(window, cx);
                 self.go_to(dir.clone(), window, cx);
             }
-            ToolEvent::Changed => self.refresh_all(None, cx),
+            ToolEvent::Changed => {
+                self.reload_profiles();
+                self.refresh_all(None, cx);
+            }
         }
     }
 

@@ -81,10 +81,41 @@ pub fn short_extension(base: &str, is_dir: bool) -> String {
     }
 }
 
+pub fn natural_cmp(a: &str, b: &str) -> Ordering {
+    let (la, lb) = (a.to_lowercase(), b.to_lowercase());
+    let (mut x, mut y) = (la.as_str(), lb.as_str());
+    loop {
+        match (x.chars().next(), y.chars().next()) {
+            (None, None) => return Ordering::Equal,
+            (None, Some(_)) => return Ordering::Less,
+            (Some(_), None) => return Ordering::Greater,
+            (Some(c), Some(d)) if c.is_ascii_digit() && d.is_ascii_digit() => {
+                let ex = x.find(|ch: char| !ch.is_ascii_digit()).unwrap_or(x.len());
+                let ey = y.find(|ch: char| !ch.is_ascii_digit()).unwrap_or(y.len());
+                let (nx, ny) = (
+                    x[..ex].trim_start_matches('0'),
+                    y[..ey].trim_start_matches('0'),
+                );
+                let ord = nx.len().cmp(&ny.len()).then_with(|| nx.cmp(ny));
+                if ord != Ordering::Equal {
+                    return ord;
+                }
+                x = &x[ex..];
+                y = &y[ey..];
+            }
+            (Some(c), Some(d)) => {
+                if c != d {
+                    return c.cmp(&d);
+                }
+                x = &x[c.len_utf8()..];
+                y = &y[d.len_utf8()..];
+            }
+        }
+    }
+}
+
 fn name_cmp(a: &str, b: &str) -> Ordering {
-    a.to_lowercase()
-        .cmp(&b.to_lowercase())
-        .then_with(|| a.cmp(b))
+    natural_cmp(a, b).then_with(|| a.cmp(b))
 }
 
 pub fn arrange<E: ArrangeEntry>(items: &[E], filter: &str, order: SortOrder) -> Vec<usize> {
@@ -138,6 +169,13 @@ pub fn arrange<E: ArrangeEntry>(items: &[E], filter: &str, order: SortOrder) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn natural_order_puts_numbers_in_sequence() {
+        let mut v = vec!["file10.txt", "File2.txt", "file1.txt", "file02b", "a"];
+        v.sort_by(|a, b| natural_cmp(a, b));
+        assert_eq!(v, ["a", "file1.txt", "File2.txt", "file02b", "file10.txt"]);
+    }
 
     struct It(&'static str, bool, u64, i64);
 

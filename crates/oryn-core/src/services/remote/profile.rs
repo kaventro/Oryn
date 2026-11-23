@@ -52,8 +52,14 @@ impl Default for RemoteProfile {
 }
 
 pub fn get_profiles_file_path() -> Result<PathBuf> {
-    let mut config_dir = dirs::config_dir().context("Failed to find system config directory")?;
-    config_dir.push("Oryn");
+    let mut config_dir = match std::env::var_os("ORYN_DATA_DIR") {
+        Some(custom) => PathBuf::from(custom),
+        None => {
+            let mut d = dirs::config_dir().context("Failed to find system config directory")?;
+            d.push("Oryn");
+            d
+        }
+    };
     if !config_dir.exists() {
         fs::create_dir_all(&config_dir).context("Failed to create Oryn config directory")?;
     }

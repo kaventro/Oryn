@@ -6,6 +6,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.9] - 2026-11-23
+
+### Added
+- Add any folder to Favourites with the + next to FAVORITES, the context menu, the More menu or Ctrl+D. Remove one with the × that appears on hover. Favourites are saved.
+- Saved SFTP servers are listed in the sidebar and connect from there.
+- Enter and double-click open files in their default app. A `.zip` or `.tar` archive opens like a folder; files inside can be previewed, opened and copied out.
+- Git status letters and tag colours next to each file in the list.
+- The More menu (…) in the toolbar: view, sort, hidden files, new file and folder, favourites, terminal, properties, disk space, duplicates, swap panes and go to folder.
+- Properties (Alt+Enter or Ctrl+I) with location, kind, size, date and permissions. Folder sizes are counted in the background.
+- Cut, Copy and Paste (Ctrl+X, Ctrl+C, Ctrl+V), Swap Panes (Ctrl+U), Open in Terminal, Show Hidden Files (Ctrl+H, Cmd+Shift+. on macOS) and Go to Folder (Ctrl+L, or the pencil in the path bar).
+- Sidebar sections collapse when you click their titles, and stay that way.
+- Oryn reopens the folders you had open last time.
+- UI tests that click through favourites, opening files, archives, the toolbar, the sidebar and the new commands.
+
+### Changed
+- Names sort naturally, so file2 comes before file10.
+- The search box shows a clear button instead of an unused filter icon.
+- Clicking a sidebar tag tags the marked files, then lists everything with that tag.
+
+### Fixed
+- The + buttons, section arrows, More button and path pencil did nothing.
+- A failed Git commit no longer clears the commit message.
+
 ## [0.0.8] - 2026-11-23
 
 Oryn is now a native Rust app. The Tauri, TypeScript and Vite app is gone, and so is the WebView: the whole interface is drawn on the GPU with GPUI Kit, using the same layout, colours and icons as before.

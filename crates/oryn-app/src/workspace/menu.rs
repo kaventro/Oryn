@@ -6,8 +6,9 @@ use super::Workspace;
 use super::dialog::{Choice, Dialog};
 use crate::actions::*;
 use crate::icons::icon;
-use crate::pane::{FilePane, PaneEvent};
+use crate::pane::{FilePane, PaneEvent, ViewMode};
 use crate::theme::{Palette, black_alpha, hex, white_alpha, with_alpha};
+use oryn_core::ui::arrange::SortField;
 
 pub struct Menu {
     position: Point<Pixels>,
@@ -52,40 +53,105 @@ fn danger(
     }
 }
 
-fn entries(on_item: bool, archive: bool) -> Vec<Entry> {
+pub(super) struct MenuCtx {
+    pub on_item: bool,
+    pub on_dir: bool,
+    pub archive: bool,
+    pub inside_archive: bool,
+    pub favorite: bool,
+    pub can_paste: bool,
+}
+
+fn entries(m: &MenuCtx) -> Vec<Entry> {
     let mut v = Vec::new();
-    if on_item {
-        v.extend([
-            item("folder-open", "Open", "Enter", OpenEntry),
-            Entry::Separator,
-            item("copy", "Copy to Other Pane", "F5", CopyToOther),
-            item("folder-input", "Move to Other Pane", "F6", MoveToOther),
-            item("copy-plus", "Duplicate", "\u{21e7}F5", DuplicateItems),
-            item("pencil", "Rename", "F2", RenameItem),
-            item("text-cursor-input", "Batch Rename\u{2026}", "", MultiRename),
-            item("file-archive", "Compress to ZIP", "", CompressZip),
-        ]);
-        if archive {
-            v.push(item("package-open", "Extract Here", "", ExtractHere));
+    if m.on_item {
+        v.push(item("folder-open", "Open", "Enter", OpenEntry));
+        if m.on_dir && !m.inside_archive {
+            v.push(if m.favorite {
+                item("star-off", "Remove from Favourites", "", AddFavorite)
+            } else {
+                item("star", "Add to Favourites", "", AddFavorite)
+            });
+            v.push(item(
+                "square-terminal",
+                "Open in Terminal",
+                "",
+                OpenInTerminal,
+            ));
         }
+        v.push(Entry::Separator);
+        if m.inside_archive {
+            v.extend([
+                item("copy", "Copy to Other Pane", "F5", CopyToOther),
+                item("copy", "Copy", "", CopyItems),
+                item("clipboard", "Copy Path", "", CopyPath),
+                Entry::Separator,
+            ]);
+        } else {
+            v.extend([
+                item("scissors", "Cut", "", CutItems),
+                item("copy", "Copy", "", CopyItems),
+            ]);
+            if m.can_paste {
+                v.push(item("clipboard-paste", "Paste", "", PasteItems));
+            }
+            v.extend([
+                Entry::Separator,
+                item("copy", "Copy to Other Pane", "F5", CopyToOther),
+                item("folder-input", "Move to Other Pane", "F6", MoveToOther),
+                item("copy-plus", "Duplicate", "\u{21e7}F5", DuplicateItems),
+                item("pencil", "Rename", "F2", RenameItem),
+                item("text-cursor-input", "Batch Rename\u{2026}", "", MultiRename),
+                item("file-archive", "Compress to ZIP", "", CompressZip),
+            ]);
+            if m.archive {
+                v.push(item("package-open", "Extract Here", "", ExtractHere));
+            }
+            v.extend([
+                item("clipboard", "Copy Path", "", CopyPath),
+                item("tag", "Tags\u{2026}", "", ShowTags),
+                item("hash", "Checksums", "", ShowChecksums),
+                item("info", "Properties", "Alt+Enter", ShowProperties),
+                Entry::Separator,
+                danger("trash", "Move to Trash", "F8", DeleteItems),
+                danger(
+                    "archive-x",
+                    "Delete Permanently",
+                    "\u{21e7}Del",
+                    DeletePermanently,
+                ),
+                Entry::Separator,
+            ]);
+        }
+    }
+    if !m.inside_archive {
         v.extend([
-            item("clipboard", "Copy Path", "", CopyPath),
-            item("tag", "Tags\u{2026}", "", ShowTags),
-            item("hash", "Checksums", "", ShowChecksums),
-            Entry::Separator,
-            danger("trash", "Move to Trash", "F8", DeleteItems),
-            danger(
-                "archive-x",
-                "Delete Permanently",
-                "\u{21e7}Del",
-                DeletePermanently,
-            ),
-            Entry::Separator,
+            item("folder-plus", "New Folder", "F7", NewFolder),
+            item("file-plus", "New File", "\u{21e7}F7", NewFile),
         ]);
+        if m.can_paste && !m.on_item {
+            v.push(item("clipboard-paste", "Paste", "", PasteItems));
+        }
+        if !m.on_item {
+            v.push(if m.favorite {
+                item(
+                    "star-off",
+                    "Remove Folder from Favourites",
+                    "",
+                    FavoriteThisFolder,
+                )
+            } else {
+                item("star", "Add Folder to Favourites", "", FavoriteThisFolder)
+            });
+            v.push(item(
+                "square-terminal",
+                "Open in Terminal",
+                "",
+                OpenInTerminal,
+            ));
+        }
     }
     v.extend([
-        item("folder-plus", "New Folder", "F7", NewFolder),
-        item("file-plus", "New File", "\u{21e7}F7", NewFile),
         item(
             "list-checks",
             "Select by Mask\u{2026}",
@@ -95,6 +161,83 @@ fn entries(on_item: bool, archive: bool) -> Vec<Entry> {
         item("refresh-cw", "Refresh", "", RefreshPanes),
     ]);
     v
+}
+
+pub(super) struct MoreCtx {
+    pub view: ViewMode,
+    pub sort: SortField,
+    pub hidden: bool,
+    pub favorite: bool,
+}
+
+fn more_entries(m: &MoreCtx) -> Vec<Entry> {
+    let mark = |on: bool, icon: &'static str| if on { "check" } else { icon };
+    vec![
+        item(
+            mark(m.view == ViewMode::List, "files"),
+            "List View",
+            "",
+            ViewList,
+        ),
+        item(
+            mark(m.view == ViewMode::Grid, "files"),
+            "Grid View",
+            "",
+            ViewGrid,
+        ),
+        item(
+            mark(m.view == ViewMode::Columns, "files"),
+            "Column View",
+            "",
+            ViewColumns,
+        ),
+        Entry::Separator,
+        item(
+            mark(m.sort == SortField::Name, "arrow-up-down"),
+            "Sort by Name",
+            "",
+            SortByName,
+        ),
+        item(
+            mark(m.sort == SortField::Date, "arrow-up-down"),
+            "Sort by Date Modified",
+            "",
+            SortByDate,
+        ),
+        item(
+            mark(m.sort == SortField::Size, "arrow-up-down"),
+            "Sort by Size",
+            "",
+            SortBySize,
+        ),
+        item(
+            mark(m.hidden, "eye-off"),
+            "Show Hidden Files",
+            "",
+            ToggleHidden,
+        ),
+        Entry::Separator,
+        item("folder-plus", "New Folder", "F7", NewFolder),
+        item("file-plus", "New File", "\u{21e7}F7", NewFile),
+        if m.favorite {
+            item(
+                "star-off",
+                "Remove Folder from Favourites",
+                "",
+                FavoriteThisFolder,
+            )
+        } else {
+            item("star", "Add Folder to Favourites", "", FavoriteThisFolder)
+        },
+        item("square-terminal", "Open in Terminal", "", OpenInTerminal),
+        item("info", "Properties", "", ShowProperties),
+        item("clipboard", "Copy Path", "", CopyPath),
+        Entry::Separator,
+        item("chart-pie", "Disk Space\u{2026}", "", ShowDiskSpace),
+        item("files", "Find Duplicates\u{2026}", "", ShowDuplicates),
+        item("arrow-left-right", "Swap Panes", "Ctrl+U", SwapPanes),
+        item("folder-open", "Go to Folder\u{2026}", "Ctrl+L", GoToPath),
+    ]
 }
 
 impl Workspace {
@@ -110,20 +253,8 @@ impl Workspace {
         }
         match event {
             PaneEvent::ContextMenu(position, on_item) => {
-                let archive = pane
-                    .read(cx)
-                    .targets()
-                    .iter()
-                    .any(|t| oryn_core::batch::is_archive(t));
-                let focus = cx.focus_handle();
-                window.focus(&focus, cx);
-                self.menu = Some(Menu {
-                    position: *position,
-                    entries: entries(*on_item, archive),
-                    selected: None,
-                    focus,
-                });
-                cx.notify();
+                let ctx = self.menu_ctx(pane, *on_item, cx);
+                self.show_menu(*position, entries(&ctx), window, cx);
             }
             PaneEvent::Drop { paths, dir } => {
                 if self.job.is_some() {
@@ -156,6 +287,65 @@ impl Workspace {
                 self.choose(Choice::Confirm, window, cx);
             }
         }
+    }
+
+    fn menu_ctx(&self, pane: &Entity<FilePane>, on_item: bool, cx: &App) -> MenuCtx {
+        let pane = pane.read(cx);
+        let inside_archive = pane.in_archive();
+        let cursor = pane.cursor_entry();
+        let on_dir = on_item && cursor.as_ref().is_some_and(|(_, d)| *d);
+        let fav_target = if on_dir {
+            cursor.map(|(n, _)| pane.op_dir().join(n))
+        } else if on_item {
+            None
+        } else {
+            Some(pane.path.clone())
+        };
+        MenuCtx {
+            on_item,
+            on_dir,
+            archive: pane
+                .targets()
+                .iter()
+                .any(|t| oryn_core::batch::is_archive(t)),
+            inside_archive,
+            favorite: fav_target.is_some_and(|p| self.favorites.contains(&p)),
+            can_paste: self.clipboard.is_some(),
+        }
+    }
+
+    fn show_menu(
+        &mut self,
+        position: Point<Pixels>,
+        entries: Vec<Entry>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let focus = cx.focus_handle();
+        window.focus(&focus, cx);
+        self.menu = Some(Menu {
+            position,
+            entries,
+            selected: None,
+            focus,
+        });
+        cx.notify();
+    }
+
+    pub(super) fn open_more_menu(
+        &mut self,
+        position: Point<Pixels>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let pane = self.active_pane().read(cx);
+        let ctx = MoreCtx {
+            view: self.view,
+            sort: pane.order.field,
+            hidden: self.settings.show_hidden,
+            favorite: self.favorites.contains(&pane.path),
+        };
+        self.show_menu(position, more_entries(&ctx), window, cx);
     }
 
     pub(super) fn open_context_menu(
@@ -243,6 +433,15 @@ impl Workspace {
         });
     }
 
+    #[cfg(test)]
+    pub(super) fn has_menu_item(&self, label: &str) -> bool {
+        self.menu.as_ref().is_some_and(|m| {
+            m.entries
+                .iter()
+                .any(|e| matches!(e, Entry::Item { label: l, .. } if *l == label))
+        })
+    }
+
     pub(super) fn render_menu(&self, p: &Palette, cx: &mut Context<Self>) -> Option<AnyElement> {
         let menu = self.menu.as_ref()?;
         let rows = menu
@@ -268,6 +467,7 @@ impl Workspace {
                     let base = if *danger { hex(0xff6961) } else { p.text };
                     div()
                         .id(("menu-item", ix))
+                        .debug_selector(|| format!("menu-{label}"))
                         .role(Role::MenuItem)
                         .aria_label(*label)
                         .flex()

@@ -21,6 +21,9 @@ impl Workspace {
             });
             return;
         };
+        let Some(path) = crate::pane::materialize(&path) else {
+            return;
+        };
         let view = cx.new(|cx| QuickView::new(path, cx));
         let sub = cx.subscribe_in(
             &view,
@@ -33,7 +36,7 @@ impl Workspace {
                         .active_pane()
                         .clone()
                         .update(cx, |p, cx| p.step_file(d, cx));
-                    if let Some(path) = next {
+                    if let Some(path) = next.and_then(|p| crate::pane::materialize(&p)) {
                         view.update(cx, |v, cx| {
                             v.load(path);
                             cx.notify();

@@ -41,7 +41,7 @@ pub(crate) enum RouteKind {
 }
 
 pub(crate) fn route_kind(path: &str) -> RouteKind {
-    let lower = path.to_lowercase();
+    let lower = path.to_lowercase().replace('\\', "/");
     if lower.contains(".zip/") || lower.ends_with(".zip") {
         RouteKind::Zip
     } else if is_tar_path(&lower) {
@@ -65,6 +65,18 @@ fn is_tar_path(lower: &str) -> bool {
         || tar_ends.iter().any(|ext| lower.ends_with(ext))
 }
 
+pub fn is_virtual(path: &std::path::Path) -> bool {
+    route_kind(&path.to_string_lossy()) != RouteKind::Local
+        && path.symlink_metadata().is_err()
+        && path.ancestors().skip(1).any(is_archive_file)
+}
+
+pub fn is_archive_file(path: &std::path::Path) -> bool {
+    path.file_name()
+        .is_some_and(|n| route_kind(&n.to_string_lossy()) != RouteKind::Local)
+        && path.is_file()
+}
+
 impl VirtualFileSystem for VfsRouter {
     fn read_dir(&self, path: &str) -> Result<Vec<FileItem>> {
         self.provider(path).read_dir(path)
@@ -77,13 +89,34 @@ impl VirtualFileSystem for VfsRouter {
 
 #[cfg(test)]
 mod tests {
-    use super::{route_kind, RouteKind};
+    use super::{is_archive_file, is_virtual, route_kind, RouteKind};
+
+    #[test]
+    fn real_folders_with_archive_names_stay_local() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().join("photos.zip");
+        std::fs::create_dir(&dir).unwrap();
+        assert!(!is_virtual(&dir));
+        assert!(!is_archive_file(&dir));
+        let file = tmp.path().join("real.zip");
+        std::fs::write(&file, b"x").unwrap();
+        assert!(is_archive_file(&file));
+        assert!(!is_virtual(&file));
+        assert!(is_virtual(&file.join("inner")));
+        assert!(!is_virtual(tmp.path()));
+        let inside = dir.join("notes.txt");
+        std::fs::write(&inside, b"x").unwrap();
+        assert!(!is_archive_file(&inside));
+        assert!(!is_virtual(&dir.join("missing.txt")));
+    }
 
     #[test]
     fn plain_paths_are_local() {
         assert_eq!(route_kind("/Users/me/Documents"), RouteKind::Local);
         assert_eq!(route_kind("/tmp/file.json"), RouteKind::Local);
         assert_eq!(route_kind("C:\\Users\\me"), RouteKind::Local);
+        assert_eq!(route_kind("C:\\me\\a.zip\\b.txt"), RouteKind::Zip);
+        assert_eq!(route_kind("C:\\me\\a.tar.gz\\b"), RouteKind::Tar);
     }
 
     #[test]

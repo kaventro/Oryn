@@ -28,3 +28,4 @@ winresource = "0.1"
 [dev-dependencies]
 gpui-kit = { workspace = true, features = ["test-support"] }
 tempfile = "3"
+zip = { version = "8", default-features = false, features = ["deflate"] }

@@ -5305,7 +5305,7 @@ dependencies = [
 
 [[package]]
 name = "oryn-app"
-version = "0.0.8"
+version = "0.0.9"
 dependencies = [
  "alacritty_terminal",
  "anyhow",
@@ -5320,11 +5320,12 @@ dependencies = [
  "tempfile",
  "ureq",
  "winresource",
+ "zip",
 ]
 
 [[package]]
 name = "oryn-core"
-version = "0.0.8"
+version = "0.0.9"
 dependencies = [
  "anyhow",
  "base64 0.22.1",

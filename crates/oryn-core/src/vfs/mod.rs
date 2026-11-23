@@ -6,5 +6,5 @@ mod providers {
     pub mod zip;
 }
 
-pub use router::VfsRouter;
+pub use router::{is_archive_file, is_virtual, VfsRouter};
 pub use types::{FileItem, VirtualFileSystem};
