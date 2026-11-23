@@ -11,6 +11,7 @@ pub mod paths;
 pub mod replace;
 pub mod search;
 pub mod services;
+pub mod ui;
 pub mod vfs;
 pub mod zip_extract;
 
