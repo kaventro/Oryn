@@ -21,6 +21,10 @@ actions!(
         ToggleTerminal,
         FocusSearch,
         CycleTray,
+        NewTab,
+        CloseTab,
+        NextTab,
+        PrevTab,
         Quit,
     ]
 );
@@ -48,6 +52,10 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("ctrl-`", ToggleTerminal, None),
         KeyBinding::new("f9", ToggleTerminal, None),
         KeyBinding::new(sec(","), CycleTray, None),
+        KeyBinding::new(sec("t"), NewTab, None),
+        KeyBinding::new(sec("w"), CloseTab, None),
+        KeyBinding::new("ctrl-tab", NextTab, None),
+        KeyBinding::new("ctrl-shift-tab", PrevTab, None),
         KeyBinding::new(sec("q"), Quit, None),
     ]);
 }
