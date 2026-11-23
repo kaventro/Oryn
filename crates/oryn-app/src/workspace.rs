@@ -123,6 +123,7 @@ impl Workspace {
         for pane in [&l, &r] {
             pane.update(cx, |p, cx| {
                 p.set_view(view);
+                p.set_folders_on_top(settings.folders_on_top, cx);
                 if !settings.show_hidden {
                     p.show_hidden = false;
                     p.refresh(None, cx);
@@ -261,8 +262,10 @@ impl Workspace {
         let pane = Self::spawn_pane(path, self.dual, window, cx);
         let view = self.view;
         let hidden = self.settings.show_hidden;
+        let folders = self.settings.folders_on_top;
         pane.update(cx, |p, cx| {
             p.set_view(view);
+            p.set_folders_on_top(folders, cx);
             if !hidden {
                 p.show_hidden = false;
                 p.refresh(None, cx);
