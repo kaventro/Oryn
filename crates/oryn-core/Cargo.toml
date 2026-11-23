@@ -7,7 +7,7 @@ repository.workspace = true
 
 [dependencies]
 anyhow.workspace = true
-base64 = "0.22"
+base64 = "0.23"
 cap-std = "4.0.3"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 diffy = "0.5"
