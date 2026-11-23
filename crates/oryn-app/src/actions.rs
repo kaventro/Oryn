@@ -5,6 +5,11 @@ actions!(
     [
         MoveUp,
         MoveDown,
+        MoveLeft,
+        MoveRight,
+        ViewList,
+        ViewGrid,
+        ViewColumns,
         PageUp,
         PageDown,
         MoveHome,
@@ -33,6 +38,11 @@ pub fn bind_keys(cx: &mut App) {
     cx.bind_keys([
         KeyBinding::new("up", MoveUp, Some("FilePane")),
         KeyBinding::new("down", MoveDown, Some("FilePane")),
+        KeyBinding::new("left", MoveLeft, Some("FilePane")),
+        KeyBinding::new("right", MoveRight, Some("FilePane")),
+        KeyBinding::new(sec("1"), ViewList, None),
+        KeyBinding::new(sec("2"), ViewGrid, None),
+        KeyBinding::new(sec("3"), ViewColumns, None),
         KeyBinding::new("pageup", PageUp, Some("FilePane")),
         KeyBinding::new("pagedown", PageDown, Some("FilePane")),
         KeyBinding::new("home", MoveHome, Some("FilePane")),

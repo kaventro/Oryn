@@ -12,6 +12,18 @@ use crate::icons::file_icon;
 use crate::theme::{Palette, black_alpha, palette, white_alpha, with_alpha};
 
 pub const ROW_HEIGHT: f32 = 30.0;
+const TILE_MIN: f32 = 96.0;
+const TILE_HEIGHT: f32 = 88.0;
+const TILE_GAP: f32 = 6.0;
+const GRID_PAD: f32 = 10.0;
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ViewMode {
+    #[default]
+    List,
+    Grid,
+    Columns,
+}
 const DATE_COL: f32 = 180.0;
 const SIZE_COL: f32 = 85.0;
 
@@ -63,6 +75,8 @@ pub struct FilePane {
     pub error: Option<SharedString>,
     pub load_time: Duration,
     pub dual: bool,
+    pub view: ViewMode,
+    grid_width: f32,
     filter: String,
     scroll: UniformListScrollHandle,
     back: Vec<PathBuf>,
@@ -88,6 +102,8 @@ impl FilePane {
             error: None,
             load_time: Duration::ZERO,
             dual: true,
+            view: ViewMode::List,
+            grid_width: 0.0,
             filter: String::new(),
             scroll: UniformListScrollHandle::new(),
             back: Vec::new(),
@@ -153,7 +169,7 @@ impl FilePane {
             .and_then(|n| self.rows.iter().position(|r| r.name.as_ref() == n))
             .unwrap_or(0);
         self.scroll
-            .scroll_to_item(self.cursor, ScrollStrategy::Center);
+            .scroll_to_item(self.scroll_target(), ScrollStrategy::Center);
     }
 
     pub fn sort_by(&mut self, field: SortField, cx: &mut Context<Self>) {
@@ -238,7 +254,7 @@ impl FilePane {
         }
         self.cursor = ix.min(self.rows.len() - 1);
         self.scroll
-            .scroll_to_item(self.cursor, ScrollStrategy::Nearest);
+            .scroll_to_item(self.scroll_target(), ScrollStrategy::Nearest);
         cx.notify();
     }
 
@@ -246,12 +262,51 @@ impl FilePane {
         ((window.viewport_size().height.as_f32() - 260.0) / ROW_HEIGHT).max(5.0) as usize
     }
 
+    fn grid_cols(&self) -> usize {
+        let inner = (self.grid_width - GRID_PAD * 2.0 + TILE_GAP).max(0.0);
+        ((inner / (TILE_MIN + TILE_GAP)).floor() as usize).max(1)
+    }
+
+    fn vertical_step(&self) -> usize {
+        if self.view == ViewMode::Grid {
+            self.grid_cols()
+        } else {
+            1
+        }
+    }
+
+    fn scroll_target(&self) -> usize {
+        if self.view == ViewMode::Grid {
+            self.cursor / self.grid_cols()
+        } else {
+            self.cursor
+        }
+    }
+
     fn move_up(&mut self, _: &MoveUp, _: &mut Window, cx: &mut Context<Self>) {
-        self.set_cursor(self.cursor.saturating_sub(1), cx);
+        let step = self.vertical_step();
+        if self.cursor >= step {
+            self.set_cursor(self.cursor - step, cx);
+        }
     }
 
     fn move_down(&mut self, _: &MoveDown, _: &mut Window, cx: &mut Context<Self>) {
-        self.set_cursor(self.cursor + 1, cx);
+        let step = self.vertical_step();
+        if self.cursor + step < self.rows.len() {
+            self.set_cursor(self.cursor + step, cx);
+        }
+    }
+
+    fn move_left(&mut self, _: &MoveLeft, _: &mut Window, cx: &mut Context<Self>) {
+        if self.view == ViewMode::Grid {
+            self.set_cursor(self.cursor.saturating_sub(1), cx);
+        }
+    }
+
+    fn move_right(&mut self, _: &MoveRight, _: &mut Window, cx: &mut Context<Self>) {
+        if self.view == ViewMode::Grid {
+            self.set_cursor(self.cursor + 1, cx);
+        }
     }
 
     fn page_up(&mut self, _: &PageUp, window: &mut Window, cx: &mut Context<Self>) {
@@ -388,6 +443,131 @@ impl FilePane {
             )
     }
 
+    fn render_tile(
+        &self,
+        ix: usize,
+        width: f32,
+        active: bool,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> Stateful<Div> {
+        let row = &self.rows[ix];
+        let marked = self.is_marked(ix);
+        let is_cursor = ix == self.cursor;
+        div()
+            .id(ix)
+            .role(Role::ListItem)
+            .aria_label(SharedString::from(if row.is_parent {
+                "Parent folder".to_string()
+            } else {
+                row.name.to_string()
+            }))
+            .aria_selected(marked || is_cursor)
+            .flex()
+            .flex_col()
+            .flex_none()
+            .items_center()
+            .justify_center()
+            .gap(px(6.0))
+            .w(px(width))
+            .h(px(TILE_HEIGHT))
+            .px(px(6.0))
+            .pt(px(10.0))
+            .pb(px(8.0))
+            .rounded(px(10.0))
+            .when(marked, |d| d.bg(p.accent))
+            .when(!marked && is_cursor && active, |d| {
+                d.bg(p.accent_soft)
+                    .border_1()
+                    .border_color(with_alpha(p.accent, 0.45))
+            })
+            .when(!marked && is_cursor && !active, |d| d.bg(white_alpha(0.08)))
+            .when(!marked && !is_cursor, |d| {
+                d.hover(|s| s.bg(white_alpha(0.06)))
+            })
+            .on_click(cx.listener(move |this, ev: &ClickEvent, window, cx| {
+                window.focus(&this.focus, cx);
+                this.set_cursor(ix, cx);
+                if ev.click_count() >= 2 {
+                    this.open_at(ix, cx);
+                }
+            }))
+            .child(file_icon(&row.name, row.is_dir, marked, p).size(px(36.0)))
+            .child(
+                div()
+                    .w_full()
+                    .max_w(px(90.0))
+                    .h(px(30.0))
+                    .overflow_hidden()
+                    .text_center()
+                    .text_size(px(11.0))
+                    .line_height(px(14.3))
+                    .text_color(if marked { p.on_accent } else { p.text })
+                    .child(row.name.clone()),
+            )
+    }
+
+    fn render_grid(&self, cx: &mut Context<Self>) -> AnyElement {
+        let cols = self.grid_cols();
+        let count = self.rows.len();
+        let lines = count.div_ceil(cols);
+        let width = self.grid_width;
+        let tile_w =
+            ((width - GRID_PAD * 2.0 - TILE_GAP * (cols as f32 - 1.0)) / cols as f32).max(TILE_MIN);
+        let this = cx.entity().downgrade();
+        div()
+            .relative()
+            .flex_1()
+            .min_h_0()
+            .child(
+                canvas(
+                    move |bounds, _, cx| {
+                        let w = bounds.size.width.as_f32();
+                        if let Some(this) = this.upgrade() {
+                            this.update(cx, |pane, cx| {
+                                if (pane.grid_width - w).abs() > 0.5 {
+                                    pane.grid_width = w;
+                                    cx.notify();
+                                }
+                            });
+                        }
+                    },
+                    |_, _, _, _| {},
+                )
+                .absolute()
+                .size_full(),
+            )
+            .child(
+                uniform_list(
+                    "tiles",
+                    lines,
+                    cx.processor(move |this, range: std::ops::Range<usize>, window, cx| {
+                        let p = palette(cx);
+                        let active = this.focus.contains_focused(window, cx);
+                        range
+                            .map(|line| {
+                                let start = line * cols;
+                                let end = (start + cols).min(this.rows.len());
+                                div()
+                                    .flex()
+                                    .gap(px(TILE_GAP))
+                                    .px(px(GRID_PAD))
+                                    .pb(px(TILE_GAP))
+                                    .when(line == 0, |d| d.pt(px(GRID_PAD)))
+                                    .children(
+                                        (start..end)
+                                            .map(|ix| this.render_tile(ix, tile_w, active, &p, cx)),
+                                    )
+                            })
+                            .collect::<Vec<_>>()
+                    }),
+                )
+                .track_scroll(&self.scroll)
+                .size_full(),
+            )
+            .into_any_element()
+    }
+
     fn render_row(
         &self,
         ix: usize,
@@ -522,7 +702,7 @@ impl FilePane {
         }
         self.cursor = (self.cursor + 173).min(self.rows.len() - 1);
         self.scroll
-            .scroll_to_item(self.cursor, ScrollStrategy::Center);
+            .scroll_to_item(self.scroll_target(), ScrollStrategy::Center);
         window.request_animation_frame();
     }
 }
@@ -551,6 +731,8 @@ impl Render for FilePane {
             message(format!("Nothing here matches \u{201c}{}\u{201d}", self.filter).into())
         } else if count == 0 {
             message("This folder is empty".into())
+        } else if self.view == ViewMode::Grid {
+            self.render_grid(cx)
         } else {
             uniform_list(
                 "rows",
@@ -579,6 +761,8 @@ impl Render for FilePane {
             )))
             .on_action(cx.listener(Self::move_up))
             .on_action(cx.listener(Self::move_down))
+            .on_action(cx.listener(Self::move_left))
+            .on_action(cx.listener(Self::move_right))
             .on_action(cx.listener(Self::page_up))
             .on_action(cx.listener(Self::page_down))
             .on_action(cx.listener(Self::home))
@@ -626,7 +810,9 @@ impl Render for FilePane {
                 }])
             })
             .when(self.dual && !active, |d| d.opacity(0.92))
-            .child(self.render_header(&p, cx))
+            .when(self.view != ViewMode::Grid, |d| {
+                d.child(self.render_header(&p, cx))
+            })
             .child(body)
     }
 }

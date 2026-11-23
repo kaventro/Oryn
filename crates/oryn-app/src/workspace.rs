@@ -7,7 +7,7 @@ use oryn_core::format::fmt_size;
 
 use crate::actions::*;
 use crate::icons::{icon, oryn_icon};
-use crate::pane::FilePane;
+use crate::pane::{FilePane, ViewMode};
 use crate::terminal::TerminalView;
 use crate::theme::{
     OrynTheme, Palette, TRAYS, black_alpha, hex, palette, ui_font, white_alpha, with_alpha,
@@ -18,6 +18,7 @@ const TRAFFIC_LIGHTS: f32 = 78.0;
 pub struct Workspace {
     tabs: [Vec<Entity<FilePane>>; 2],
     tab_ix: [usize; 2],
+    view: ViewMode,
     active: usize,
     dual: bool,
     sidebar: bool,
@@ -106,6 +107,7 @@ impl Workspace {
         Self {
             tabs: [vec![l], vec![r]],
             tab_ix: [0, 0],
+            view: ViewMode::List,
             active: 0,
             dual: true,
             sidebar: true,
@@ -142,9 +144,22 @@ impl Workspace {
         let side = self.active;
         let path = self.active_pane().read(cx).path.clone();
         let pane = Self::spawn_pane(path, self.dual, cx);
+        let view = self.view;
+        pane.update(cx, |p, _| p.view = view);
         self.tabs[side].push(pane);
         self.tab_ix[side] = self.tabs[side].len() - 1;
         self.focus_pane(side, window, cx);
+    }
+
+    fn set_view(&mut self, view: ViewMode, window: &mut Window, cx: &mut Context<Self>) {
+        self.view = view;
+        for pane in self.tabs.iter().flatten().cloned().collect::<Vec<_>>() {
+            pane.update(cx, |p, cx| {
+                p.view = view;
+                cx.notify();
+            });
+        }
+        self.focus_pane(self.active, window, cx);
     }
 
     fn close_tab_at(
@@ -926,33 +941,48 @@ impl Workspace {
             )
             .child(
                 Self::group(p)
-                    .child(Self::tool(
-                        "view-list",
-                        "view-list",
-                        None,
-                        "List view",
-                        false,
-                        true,
-                        p,
-                    ))
-                    .child(Self::tool(
-                        "view-grid",
-                        "view-grid",
-                        None,
-                        "Grid view",
-                        false,
-                        false,
-                        p,
-                    ))
-                    .child(Self::tool(
-                        "view-columns",
-                        "view-columns",
-                        None,
-                        "Columns view",
-                        true,
-                        false,
-                        p,
-                    )),
+                    .child(
+                        Self::tool(
+                            "view-list",
+                            "view-list",
+                            None,
+                            "List view",
+                            false,
+                            self.view == ViewMode::List,
+                            p,
+                        )
+                        .on_click(
+                            cx.listener(|this, _, w, cx| this.set_view(ViewMode::List, w, cx)),
+                        ),
+                    )
+                    .child(
+                        Self::tool(
+                            "view-grid",
+                            "view-grid",
+                            None,
+                            "Grid view",
+                            false,
+                            self.view == ViewMode::Grid,
+                            p,
+                        )
+                        .on_click(
+                            cx.listener(|this, _, w, cx| this.set_view(ViewMode::Grid, w, cx)),
+                        ),
+                    )
+                    .child(
+                        Self::tool(
+                            "view-columns",
+                            "view-columns",
+                            None,
+                            "Columns view",
+                            true,
+                            self.view == ViewMode::Columns,
+                            p,
+                        )
+                        .on_click(
+                            cx.listener(|this, _, w, cx| this.set_view(ViewMode::Columns, w, cx)),
+                        ),
+                    ),
             )
             .child(Self::group(p).child(Self::tool(
                 "more",
@@ -1160,6 +1190,15 @@ impl Render for Workspace {
             .aria_label("Oryn")
             .on_action(cx.listener(Self::switch_pane))
             .on_action(cx.listener(Self::toggle_panes))
+            .on_action(
+                cx.listener(|this, _: &ViewList, w, cx| this.set_view(ViewMode::List, w, cx)),
+            )
+            .on_action(
+                cx.listener(|this, _: &ViewGrid, w, cx| this.set_view(ViewMode::Grid, w, cx)),
+            )
+            .on_action(
+                cx.listener(|this, _: &ViewColumns, w, cx| this.set_view(ViewMode::Columns, w, cx)),
+            )
             .on_action(cx.listener(Self::new_tab))
             .on_action(cx.listener(Self::close_tab))
             .on_action(cx.listener(Self::next_tab))
