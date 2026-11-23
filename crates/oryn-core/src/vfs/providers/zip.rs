@@ -58,7 +58,7 @@ impl VirtualFileSystem for ZipProvider {
 
         for index in 0..archive.len() {
             let file = archive.by_index(index)?;
-            let name = file.name().to_string();
+            let name = file.name()?.to_string();
 
             if name.starts_with(&inner_prefix) && name != inner_prefix {
                 let remainder = &name[inner_prefix.len()..];

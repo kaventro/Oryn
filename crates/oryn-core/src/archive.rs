@@ -270,7 +270,7 @@ fn extract_archive_impl(input: ExtractArchiveIn) -> Result<Value> {
                 Err(e) => return Err(anyhow!("Failed reading zip entry: {}", e)),
             };
 
-            let name = zip_file.name().to_string();
+            let name = zip_file.name()?.to_string();
             let out_path = safe_resolve_path(&canonical_dest, Path::new(&name))?;
 
             if zip_file.is_dir() || name.ends_with('/') {
@@ -348,7 +348,7 @@ fn list_archive_entries_impl(input: ListArchiveIn) -> Result<Value> {
         let mut archive = ZipArchive::new(f)?;
         for i in 0..archive.len() {
             let file = archive.by_index_raw(i)?;
-            let name = file.name().to_string();
+            let name = file.name()?.to_string();
             let is_dir = file.is_dir() || name.ends_with('/');
             entries.push(ArchiveEntryInfo {
                 name,

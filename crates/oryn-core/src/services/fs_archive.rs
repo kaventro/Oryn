@@ -114,7 +114,7 @@ pub fn extract_archive(archive_path: &Path, destination_dir: &Path) -> Result<()
                 None => continue,
             };
 
-            if file.is_dir() || file.name().ends_with('/') {
+            if file.is_dir() || file.name().is_ok_and(|n| n.ends_with('/')) {
                 root.create_dir_all(&rel)?;
             } else {
                 #[cfg(unix)]
