@@ -193,6 +193,11 @@ impl Workspace {
     }
 
     #[cfg(test)]
+    pub fn quick_view(&self) -> Option<Entity<crate::quick_view::QuickView>> {
+        self.quick.as_ref().map(|(v, _)| v.clone())
+    }
+
+    #[cfg(test)]
     pub fn open_overlays(&self) -> Vec<&'static str> {
         [
             ("settings", self.settings_open.is_some()),

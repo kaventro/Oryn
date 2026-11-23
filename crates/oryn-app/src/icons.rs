@@ -120,7 +120,10 @@ gpui_kit::assets::icon_assets!(
         EyeOff,
         ArrowUpDown,
         SquareTerminal,
-        Check
+        Check,
+        Music,
+        Play,
+        Pause
     ]
 );
 

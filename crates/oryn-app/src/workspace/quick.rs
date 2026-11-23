@@ -38,7 +38,7 @@ impl Workspace {
                         .update(cx, |p, cx| p.step_file(d, cx));
                     if let Some(path) = next.and_then(|p| crate::pane::materialize(&p)) {
                         view.update(cx, |v, cx| {
-                            v.load(path);
+                            v.load(path, cx);
                             cx.notify();
                         });
                     }

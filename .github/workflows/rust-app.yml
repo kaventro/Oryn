@@ -42,6 +42,7 @@ jobs:
             libfontconfig-dev \
             libfreetype-dev \
             libzstd-dev \
+            libasound2-dev \
             libssl-dev
 
       - name: Install Rust stable

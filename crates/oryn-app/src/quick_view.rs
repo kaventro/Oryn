@@ -9,6 +9,7 @@ use oryn_core::services::fs_office::{OfficeDoc, read_office};
 
 use crate::actions::*;
 use crate::icons::{file_icon, icon};
+use crate::media::{AudioPanel, MediaServices, VideoPanel};
 use crate::theme::{Palette, black_alpha, hex, mono_font, palette, white_alpha, with_alpha};
 
 const MAX_TEXT: usize = 2 * 1024 * 1024;
@@ -27,6 +28,8 @@ enum Body {
     },
     Markdown(Vec<Block>),
     Office(OfficeDoc),
+    Audio(Entity<AudioPanel>),
+    Video(Entity<VideoPanel>),
     Media,
     Error(String),
 }
@@ -39,6 +42,7 @@ pub struct QuickView {
     body: Body,
     hex: bool,
     highlights: Vec<Vec<(Range<usize>, HighlightStyle)>>,
+    services: MediaServices,
     pub focus: FocusHandle,
 }
 
@@ -70,13 +74,14 @@ impl QuickView {
             body: Body::Media,
             hex: false,
             highlights: Vec::new(),
+            services: MediaServices::from_app(cx),
             focus: cx.focus_handle(),
         };
-        view.load(path);
+        view.load(path, cx);
         view
     }
 
-    pub fn load(&mut self, path: PathBuf) {
+    pub fn load(&mut self, path: PathBuf, cx: &mut Context<Self>) {
         let meta = std::fs::metadata(&path).ok();
         self.size = meta.as_ref().map(|m| m.len()).unwrap_or(0);
         self.modified = meta
@@ -108,7 +113,17 @@ impl QuickView {
                 Ok(doc) => Body::Office(doc),
                 Err(e) => Body::Error(e.to_string()),
             },
-            Kind::Audio | Kind::Video | Kind::Pdf | Kind::Binary => Body::Media,
+            Kind::Audio => {
+                let services = self.services.clone();
+                let target = path.clone();
+                Body::Audio(cx.new(|cx| AudioPanel::new(target, services, cx)))
+            }
+            Kind::Video => {
+                let services = self.services.clone();
+                let target = path.clone();
+                Body::Video(cx.new(|cx| VideoPanel::new(target, services, cx)))
+            }
+            Kind::Pdf | Kind::Binary => Body::Media,
         };
         if let Body::Lines {
             lines,
@@ -459,6 +474,52 @@ impl QuickView {
         .into_any_element()
     }
 
+    #[cfg(test)]
+    pub fn audio(&self) -> Option<&Entity<AudioPanel>> {
+        match &self.body {
+            Body::Audio(panel) => Some(panel),
+            _ => None,
+        }
+    }
+
+    #[cfg(test)]
+    pub fn video(&self) -> Option<&Entity<VideoPanel>> {
+        match &self.body {
+            Body::Video(panel) => Some(panel),
+            _ => None,
+        }
+    }
+
+    fn toggle_playback(&mut self, cx: &mut Context<Self>) {
+        match &self.body {
+            Body::Audio(panel) => panel.update(cx, |p, cx| p.toggle(cx)),
+            Body::Video(panel) => panel.read(cx).play(),
+            _ => {}
+        }
+    }
+
+    fn seek_step(&mut self, forward: bool, cx: &mut Context<Self>) {
+        if let Body::Audio(panel) = &self.body {
+            panel.update(cx, |p, cx| p.step(forward, cx));
+        }
+    }
+
+    fn footer(&self, can_hex: bool) -> String {
+        let mut parts = vec!["\u{2191} \u{2193} previous or next file"];
+        match self.body {
+            Body::Audio(_) => {
+                parts.push("Enter plays or pauses \u{00b7} Shift \u{2190} \u{2192} skips 5 s")
+            }
+            Body::Video(_) => parts.push("Enter plays in your default player"),
+            _ => {}
+        }
+        if can_hex {
+            parts.push("Tab switches to Hex");
+        }
+        parts.push("Esc closes");
+        parts.join(" \u{00b7} ")
+    }
+
     fn render_media(&self, p: &Palette) -> AnyElement {
         let name = self
             .path
@@ -466,8 +527,6 @@ impl QuickView {
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default();
         let hint = match self.kind {
-            Kind::Audio => "Audio plays in your default player.",
-            Kind::Video => "Video plays in your default player.",
             Kind::Pdf => "PDFs open in your default viewer.",
             _ => "No preview for this kind of file. Try the Hex view.",
         };
@@ -549,6 +608,8 @@ impl Render for QuickView {
                 Body::Lines { .. } => self.render_lines(&p, cx),
                 Body::Markdown(blocks) => self.render_markdown(blocks, &p),
                 Body::Office(doc) => self.render_office(doc, &p),
+                Body::Audio(panel) => panel.clone().into_any_element(),
+                Body::Video(panel) => panel.clone().into_any_element(),
                 Body::Media => self.render_media(&p),
                 Body::Error(e) => div()
                     .size_full()
@@ -582,6 +643,9 @@ impl Render for QuickView {
             .on_action(cx.listener(|_, _: &QuickLook, _, cx| cx.emit(QuickEvent::Close)))
             .on_action(cx.listener(|_, _: &MoveUp, _, cx| cx.emit(QuickEvent::Step(-1))))
             .on_action(cx.listener(|_, _: &MoveDown, _, cx| cx.emit(QuickEvent::Step(1))))
+            .on_action(cx.listener(|this, _: &TogglePlayback, _, cx| this.toggle_playback(cx)))
+            .on_action(cx.listener(|this, _: &SeekForward, _, cx| this.seek_step(true, cx)))
+            .on_action(cx.listener(|this, _: &SeekBackward, _, cx| this.seek_step(false, cx)))
             .on_action(cx.listener(|this, _: &ToggleHex, _, cx| {
                 this.hex = !this.hex;
                 cx.notify();
@@ -618,13 +682,22 @@ impl Render for QuickView {
                             .min_w_0()
                             .flex()
                             .flex_col()
-                            .child(div().truncate().text_size(px(13.0)).font_weight(FontWeight::SEMIBOLD).text_color(p.text_strong).child(name))
                             .child(
                                 div()
-                                    .text_size(px(11.0))
-                                    .text_color(p.text_muted)
-                                    .child(format!("{} \u{00b7} {} \u{00b7} {}", self.kind_label(), fmt_size(Some(self.size)), self.modified)),
-                            ),
+                                    .truncate()
+                                    .text_size(px(13.0))
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .text_color(p.text_strong)
+                                    .child(name),
+                            )
+                            .child(div().text_size(px(11.0)).text_color(p.text_muted).child(
+                                format!(
+                                    "{} \u{00b7} {} \u{00b7} {}",
+                                    self.kind_label(),
+                                    fmt_size(Some(self.size)),
+                                    self.modified
+                                ),
+                            )),
                     )
                     .when(can_hex, |d| {
                         d.child(
@@ -633,14 +706,18 @@ impl Render for QuickView {
                                 .p(px(2.0))
                                 .rounded(px(7.0))
                                 .bg(white_alpha(0.05))
-                                .child(tab("qv-preview", "Preview", !self.hex).on_click(cx.listener(|this, _, _, cx| {
-                                    this.hex = false;
-                                    cx.notify();
-                                })))
-                                .child(tab("qv-hex", "Hex", self.hex).on_click(cx.listener(|this, _, _, cx| {
-                                    this.hex = true;
-                                    cx.notify();
-                                }))),
+                                .child(tab("qv-preview", "Preview", !self.hex).on_click(
+                                    cx.listener(|this, _, _, cx| {
+                                        this.hex = false;
+                                        cx.notify();
+                                    }),
+                                ))
+                                .child(tab("qv-hex", "Hex", self.hex).on_click(cx.listener(
+                                    |this, _, _, cx| {
+                                        this.hex = true;
+                                        cx.notify();
+                                    },
+                                ))),
                         )
                     })
                     .child(
@@ -684,11 +761,7 @@ impl Render for QuickView {
                     .text_color(p.text_dim)
                     .border_t_1()
                     .border_color(white_alpha(0.06))
-                    .child(if can_hex {
-                        "\u{2191} \u{2193} previous or next file \u{00b7} Tab switches to Hex \u{00b7} Esc closes"
-                    } else {
-                        "\u{2191} \u{2193} previous or next file \u{00b7} Esc closes"
-                    }),
+                    .child(self.footer(can_hex)),
             )
     }
 }

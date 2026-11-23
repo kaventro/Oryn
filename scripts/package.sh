@@ -89,7 +89,7 @@ Section: utils
 Priority: optional
 Architecture: $DEB_ARCH
 Maintainer: Kaventro <noreply@github.com>
-Depends: libxkbcommon0, libxkbcommon-x11-0, libwayland-client0, libvulkan1, libx11-xcb1, libxcb1, libfontconfig1, libfreetype6, libzstd1
+Depends: libxkbcommon0, libxkbcommon-x11-0, libwayland-client0, libvulkan1, libx11-xcb1, libxcb1, libfontconfig1, libfreetype6, libzstd1, libasound2t64 | libasound2
 Homepage: https://github.com/kaventro/Oryn
 Description: Fast dual-pane file manager
  Oryn is a native file manager with dual panes, Quick View,
