@@ -4,13 +4,18 @@
 
 - Two independent panes, each with its own tabs, history and selection. Switch with Tab, or go single-pane with Ctrl+\\.
 - List, grid and column views. Grid view shows image thumbnails.
-- A sidebar with favourites, drives, saved SFTP servers and colour tags.
-- Breadcrumbs, a filter box per pane, and a command palette (Ctrl+P) that runs any command or jumps to a typed path such as `~/Downloads`.
+- A sidebar with favourites, drives, saved SFTP servers and colour tags. Add a folder to Favourites with + or Ctrl+D, remove it with the × on hover, and click a section title to collapse it.
+- Breadcrumbs, Go to Folder (Ctrl+L or the pencil in the path bar), a filter box per pane, and a command palette (Ctrl+P) that runs any command or jumps to a typed path such as `~/Downloads`.
+- The More menu (…) holds view, sort and hidden-file options and the folder commands.
+- Git status letters and tag colours appear next to each file.
+- Oryn reopens the folders you had open last time.
 - Folders refresh on their own when files change on disk.
 - Six accent colours and the other preferences live in Settings (Ctrl+,).
 
 ## File operations
 
+- Enter or double-click opens a file in its default app. Archives (`.zip`, `.tar`, `.tar.gz`) open like folders; you can preview, open and copy out the files inside.
+- Cut, Copy and Paste (Ctrl+X, Ctrl+C, Ctrl+V), Swap Panes (Ctrl+U), Open in Terminal, and Properties (Alt+Enter).
 - Copy or move to the other pane (F5, F6), drag and drop between panes and onto folders, duplicate, rename, new file and new folder.
 - Conflicts ask whether to skip or replace before anything is overwritten.
 - Long operations run in the background with a progress bar and a Cancel button.

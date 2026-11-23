@@ -14,6 +14,9 @@ pub struct Settings {
     pub sidebar: bool,
     pub folders_first: bool,
     pub check_updates: bool,
+    pub left: Option<String>,
+    pub right: Option<String>,
+    pub collapsed: Vec<String>,
 }
 
 impl Default for Settings {
@@ -28,6 +31,9 @@ impl Default for Settings {
             sidebar: true,
             folders_first: true,
             check_updates: true,
+            left: None,
+            right: None,
+            collapsed: Vec::new(),
         }
     }
 }

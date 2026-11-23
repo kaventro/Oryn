@@ -18,6 +18,8 @@ pub struct GitTool {
     branch_name: Entity<InputState>,
     note: Option<(String, bool)>,
     busy: bool,
+    clear_on_success: bool,
+    clear_message: bool,
     task: Option<Task<()>>,
     pub focus: FocusHandle,
 }
@@ -54,6 +56,8 @@ impl GitTool {
             branch_name,
             note: None,
             busy: false,
+            clear_on_success: false,
+            clear_message: false,
             task: None,
             focus: cx.focus_handle(),
         };
@@ -124,6 +128,10 @@ impl GitTool {
             cx,
             move || work(&root),
             |t, res, cx| {
+                if t.clear_on_success {
+                    t.clear_on_success = false;
+                    t.clear_message = res.is_ok();
+                }
                 t.busy = false;
                 t.note = Some(match res {
                     Ok(s) => (s, false),
@@ -153,14 +161,14 @@ impl GitTool {
         );
     }
 
-    fn commit(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn commit(&mut self, _: &mut Window, cx: &mut Context<Self>) {
         let msg = value(&self.message, cx);
         if !self.status.changes.iter().any(Change::is_staged) {
             self.note = Some(("Stage some changes first.".into(), true));
             cx.notify();
             return;
         }
-        self.message.update(cx, |s, cx| s.set_value("", window, cx));
+        self.clear_on_success = true;
         self.act(
             move |r| repo::commit(r, &msg).map(|h| format!("Committed {h}.")),
             cx,
@@ -473,7 +481,11 @@ impl Focusable for GitTool {
 }
 
 impl Render for GitTool {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if self.clear_message {
+            self.clear_message = false;
+            self.message.update(cx, |s, cx| s.set_value("", window, cx));
+        }
         let p = palette(cx);
         let Some(root) = self.root.clone() else {
             return div()

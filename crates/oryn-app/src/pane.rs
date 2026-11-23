@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
@@ -9,7 +10,7 @@ use oryn_core::ui::selection::{Entry, Selection};
 
 use crate::actions::*;
 use crate::icons::{file_icon, thumbnail};
-use crate::theme::{Palette, black_alpha, palette, white_alpha, with_alpha};
+use crate::theme::{Palette, black_alpha, hex, palette, tag_color, white_alpha, with_alpha};
 
 pub const ROW_HEIGHT: f32 = 30.0;
 const TILE_MIN: f32 = 96.0;
@@ -147,7 +148,26 @@ impl Column {
     }
 }
 
+fn archive_view(path: &Path) -> bool {
+    oryn_core::vfs::is_virtual(path) || oryn_core::vfs::is_archive_file(path)
+}
+
 fn read_rows(path: &Path) -> anyhow::Result<Vec<Row>> {
+    if archive_view(path) {
+        use oryn_core::vfs::{VfsRouter, VirtualFileSystem};
+        return Ok(VfsRouter::new()
+            .read_dir(&path.to_string_lossy())?
+            .into_iter()
+            .map(|it| Row {
+                name: it.base.into(),
+                is_dir: it.is_dir,
+                is_parent: false,
+                size: it.size,
+                mtime_ms: rfc3339_millis(&it.mtime),
+                mtime: it.mtime,
+            })
+            .collect());
+    }
     Ok(oryn_core::list_dir(path)?
         .into_iter()
         .map(|it| Row {
@@ -159,6 +179,98 @@ fn read_rows(path: &Path) -> anyhow::Result<Vec<Row>> {
             mtime: it.mtime,
         })
         .collect())
+}
+
+pub fn materialize(path: &Path) -> Option<PathBuf> {
+    if !oryn_core::vfs::is_virtual(path) {
+        return Some(path.to_path_buf());
+    }
+    use oryn_core::vfs::{VfsRouter, VirtualFileSystem};
+    let name = path.file_name()?.to_string_lossy().into_owned();
+    let dst = crate::opener::temp_copy(&name)?;
+    VfsRouter::new()
+        .extract_to(&path.to_string_lossy(), &dst)
+        .ok()?;
+    Some(dst)
+}
+
+fn git_marks(dir: &Path) -> HashMap<String, char> {
+    use oryn_core::tools::repo;
+    use oryn_core::ui::git_status::{GitFileEntry, tag_from_entry};
+    let mut out = HashMap::new();
+    let Some(root) = repo::root(dir) else {
+        return out;
+    };
+    let Ok(status) = repo::status(&root) else {
+        return out;
+    };
+    let root = root.canonicalize().unwrap_or(root);
+    let here = dir.canonicalize().unwrap_or_else(|_| dir.to_path_buf());
+    let Ok(rel) = here.strip_prefix(&root) else {
+        return out;
+    };
+    let parts: Vec<String> = rel
+        .components()
+        .map(|c| c.as_os_str().to_string_lossy().into_owned())
+        .collect();
+    let prefix = if parts.is_empty() {
+        String::new()
+    } else {
+        format!("{}/", parts.join("/"))
+    };
+    for change in &status.changes {
+        let Some(rest) = change.path.strip_prefix(prefix.as_str()) else {
+            continue;
+        };
+        let base = rest.split('/').next().unwrap_or("");
+        if base.is_empty() {
+            continue;
+        }
+        let nested = rest.trim_end_matches('/') != base;
+        let mark = tag_from_entry(&GitFileEntry {
+            file: change.path.clone(),
+            index: Some(change.staged),
+            worktree: Some(change.unstaged),
+        });
+        let mark = if nested && mark != '?' { 'M' } else { mark };
+        out.entry(base.to_string())
+            .and_modify(|m| {
+                if *m != mark {
+                    *m = 'M'
+                }
+            })
+            .or_insert(mark);
+    }
+    out
+}
+
+fn git_badge(mark: char, on_accent: bool, p: &Palette) -> AnyElement {
+    let (text, color) = match mark {
+        '?' => ("U", 0x34c759),
+        'A' => ("A", 0x34c759),
+        'D' => ("D", 0xff453a),
+        _ => ("M", 0xff9f0a),
+    };
+    div()
+        .flex_none()
+        .text_size(px(10.5))
+        .font_weight(FontWeight::BOLD)
+        .text_color(if on_accent { p.on_accent } else { hex(color) })
+        .child(text)
+        .into_any_element()
+}
+
+fn tag_dots(tags: &[String]) -> AnyElement {
+    div()
+        .flex()
+        .flex_none()
+        .gap(px(3.0))
+        .children(
+            tags.iter()
+                .filter_map(|t| tag_color(t))
+                .map(|c| div().size(px(8.0)).rounded_full().bg(hex(c))),
+        )
+        .into_any_element()
 }
 
 pub struct FilePane {
@@ -184,6 +296,9 @@ pub struct FilePane {
     back: Vec<PathBuf>,
     forward: Vec<PathBuf>,
     bench: Option<Bench>,
+    pub git: HashMap<String, char>,
+    pub tags: HashMap<String, Vec<String>>,
+    git_task: Option<Task<()>>,
 }
 
 struct Bench {
@@ -216,9 +331,49 @@ impl FilePane {
             back: Vec::new(),
             forward: Vec::new(),
             bench: None,
+            git: HashMap::new(),
+            tags: HashMap::new(),
+            git_task: None,
         };
         pane.load(path, None);
+        pane.decorate(cx);
         pane
+    }
+
+    pub fn in_archive(&self) -> bool {
+        archive_view(&self.path)
+    }
+
+    pub fn decorate(&mut self, cx: &mut Context<Self>) {
+        let tags = oryn_core::tools::tags::Tags::load();
+        self.tags = self
+            .all_rows
+            .iter()
+            .filter(|r| !r.is_parent)
+            .filter_map(|r| {
+                let t = tags.of(&self.path.join(r.name.as_ref()));
+                (!t.is_empty()).then(|| (r.name.to_string(), t.to_vec()))
+            })
+            .collect();
+        if self.in_archive() {
+            self.git.clear();
+            self.git_task = None;
+            return;
+        }
+        let dir = self.path.clone();
+        let task = cx.background_spawn({
+            let dir = dir.clone();
+            async move { git_marks(&dir) }
+        });
+        self.git_task = Some(cx.spawn(async move |this, cx| {
+            let marks = task.await;
+            let _ = this.update(cx, |p, cx| {
+                if p.path == dir && p.git != marks {
+                    p.git = marks;
+                    cx.notify();
+                }
+            });
+        }));
     }
 
     pub fn start_bench(&mut self, cx: &mut Context<Self>) {
@@ -249,6 +404,9 @@ impl FilePane {
                 }
                 rows.extend(items);
                 self.all_rows = rows;
+                if self.path != path {
+                    self.git.clear();
+                }
                 self.path = path;
                 self.error = None;
                 self.filter.clear();
@@ -421,9 +579,31 @@ impl FilePane {
         let Some(col) = self.columns.get(self.col_ix) else {
             return;
         };
-        if let Some(row) = col.selected().filter(|r| r.is_dir) {
-            let target = col.path.join(row.name.as_ref());
+        let Some(row) = col.selected() else {
+            return;
+        };
+        let target = col.path.join(row.name.as_ref());
+        if row.is_dir {
             self.navigate(target, cx);
+        } else {
+            self.open_file(target, cx);
+        }
+    }
+
+    pub fn open_file(&mut self, target: PathBuf, cx: &mut Context<Self>) {
+        if oryn_core::vfs::is_archive_file(&target) {
+            return self.navigate(target, cx);
+        }
+        let name = target
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        match materialize(&target) {
+            Some(path) => {
+                crate::opener::open(&path);
+                self.report(format!("Opened \u{201c}{name}\u{201d}."), cx);
+            }
+            None => self.report(format!("Couldn't open \u{201c}{name}\u{201d}."), cx),
         }
     }
 
@@ -497,6 +677,7 @@ impl FilePane {
             }
             Err(err) => self.error = Some(format!("Can't open this folder: {err}").into()),
         }
+        self.decorate(cx);
         cx.notify();
     }
 
@@ -610,6 +791,7 @@ impl FilePane {
         self.back.push(self.path.clone());
         self.forward.clear();
         self.load(path, None);
+        self.decorate(cx);
         cx.notify();
     }
 
@@ -625,6 +807,7 @@ impl FilePane {
         self.back.push(self.path.clone());
         self.forward.clear();
         self.load(dir.to_path_buf(), Some(&name));
+        self.decorate(cx);
         cx.notify();
     }
 
@@ -640,6 +823,7 @@ impl FilePane {
         if let Some(prev) = self.back.pop() {
             self.forward.push(self.path.clone());
             self.load(prev, None);
+            self.decorate(cx);
             cx.notify();
         }
     }
@@ -648,6 +832,7 @@ impl FilePane {
         if let Some(next) = self.forward.pop() {
             self.back.push(self.path.clone());
             self.load(next, None);
+            self.decorate(cx);
             cx.notify();
         }
     }
@@ -827,11 +1012,13 @@ impl FilePane {
         let Some(row) = self.rows.get(ix).cloned() else {
             return;
         };
+        let target = self.path.join(row.name.as_ref());
         if row.is_parent {
             self.go_parent(cx);
         } else if row.is_dir {
-            let target = self.path.join(row.name.as_ref());
             self.navigate(target, cx);
+        } else {
+            self.open_file(target, cx);
         }
     }
 
@@ -843,6 +1030,7 @@ impl FilePane {
         self.back.push(self.path.clone());
         self.forward.clear();
         self.load(parent, Some(&from));
+        self.decorate(cx);
         cx.notify();
     }
 
@@ -928,6 +1116,7 @@ impl FilePane {
         let is_cursor = ix == self.cursor;
         div()
             .id(ix)
+            .debug_selector(|| format!("row-{}", row.name))
             .role(Role::ListItem)
             .aria_label(SharedString::from(if row.is_parent {
                 "Parent folder".to_string()
@@ -1339,6 +1528,7 @@ impl FilePane {
 
         div()
             .id(ix)
+            .debug_selector(|| format!("row-{}", row.name))
             .role(Role::Row)
             .aria_label(SharedString::from(label))
             .aria_selected(marked || is_cursor)
@@ -1409,7 +1599,13 @@ impl FilePane {
                     .text_size(px(13.0))
                     .text_color(name_color)
                     .child(file_icon(&row.name, row.is_dir, marked, p))
-                    .child(div().truncate().child(row.name.clone())),
+                    .child(div().truncate().child(row.name.clone()))
+                    .children(self.tags.get(row.name.as_ref()).map(|t| tag_dots(t)))
+                    .children(
+                        self.git
+                            .get(row.name.as_ref())
+                            .map(|m| git_badge(*m, marked, p)),
+                    ),
             )
             .child(
                 div()

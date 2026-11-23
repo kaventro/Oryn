@@ -57,7 +57,7 @@ fn tok_color(t: Tok) -> Option<Hsla> {
 }
 
 pub fn open_default(path: &std::path::Path) {
-    let _ = open::that_detached(path);
+    crate::opener::open(path);
 }
 
 impl QuickView {

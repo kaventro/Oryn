@@ -65,6 +65,20 @@ actions!(
         NextTab,
         PrevTab,
         Quit,
+        AddFavorite,
+        FavoriteThisFolder,
+        ToggleHidden,
+        SortByName,
+        SortByDate,
+        SortBySize,
+        ShowProperties,
+        OpenInTerminal,
+        SwapPanes,
+        CutItems,
+        CopyItems,
+        PasteItems,
+        GoToPath,
+        OpenMoreMenu,
     ]
 );
 
@@ -156,6 +170,23 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("ctrl-tab", NextTab, None),
         KeyBinding::new("ctrl-shift-tab", PrevTab, None),
         KeyBinding::new(sec("q"), Quit, None),
+        KeyBinding::new(sec("d"), AddFavorite, Some("FilePane")),
+        KeyBinding::new(
+            if cfg!(target_os = "macos") {
+                "cmd-shift-."
+            } else {
+                "ctrl-h"
+            },
+            ToggleHidden,
+            None,
+        ),
+        KeyBinding::new("alt-enter", ShowProperties, Some("FilePane")),
+        KeyBinding::new(sec("i"), ShowProperties, Some("FilePane")),
+        KeyBinding::new(sec("u"), SwapPanes, None),
+        KeyBinding::new(sec("x"), CutItems, Some("FilePane")),
+        KeyBinding::new(sec("c"), CopyItems, Some("FilePane")),
+        KeyBinding::new(sec("v"), PasteItems, Some("FilePane")),
+        KeyBinding::new(sec("l"), GoToPath, None),
     ]);
 }
 

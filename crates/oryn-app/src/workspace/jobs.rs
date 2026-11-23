@@ -15,6 +15,34 @@ use super::dialog::Dialog;
 use crate::actions::*;
 use crate::theme::{Palette, black_alpha, hex, white_alpha};
 
+fn copy_out_of_archive(
+    sources: &[PathBuf],
+    dest: &std::path::Path,
+    policy: OverwritePolicy,
+    p: &Progress,
+) -> BatchReport {
+    use oryn_core::vfs::{VfsRouter, VirtualFileSystem};
+    let router = VfsRouter::new();
+    let mut report = BatchReport::default();
+    p.total.store(sources.len() as u64, Ordering::Relaxed);
+    for src in sources {
+        let name = src
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let target = dest.join(&name);
+        if target.symlink_metadata().is_ok() && policy == OverwritePolicy::Skip {
+            report.done += 1;
+            continue;
+        }
+        match router.extract_to(&src.to_string_lossy(), &target) {
+            Ok(()) => report.done += 1,
+            Err(e) => report.failed.push((name, e.to_string())),
+        }
+    }
+    report
+}
+
 pub struct Job {
     label: String,
     progress: Arc<Progress>,
@@ -106,6 +134,21 @@ impl Workspace {
         if self.busy(cx) {
             return;
         }
+        if sources.iter().any(|s| oryn_core::vfs::is_virtual(s)) {
+            if kind != BatchKind::Copy {
+                return self
+                    .notify_active("Files inside an archive can only be copied out.".into(), cx);
+            }
+            let Some(dest) = dest else {
+                return;
+            };
+            return self.run_job(
+                "Copying".into(),
+                kind,
+                move |p| copy_out_of_archive(&sources, &dest, policy, p),
+                cx,
+            );
+        }
         let label = kind.verb().to_string();
         self.run_job(
             label,
@@ -134,7 +177,7 @@ impl Workspace {
     }
 
     fn transfer(&mut self, kind: BatchKind, window: &mut Window, cx: &mut Context<Self>) {
-        if self.busy(cx) {
+        if self.busy(cx) || (kind == BatchKind::Move && self.read_only(cx)) {
             return;
         }
         let Some(sources) = self.sources(cx) else {
@@ -172,7 +215,7 @@ impl Workspace {
     }
 
     fn delete(&mut self, permanent: bool, window: &mut Window, cx: &mut Context<Self>) {
-        if self.busy(cx) {
+        if self.busy(cx) || self.read_only(cx) {
             return;
         }
         let Some(sources) = self.sources(cx) else {
@@ -204,6 +247,9 @@ impl Workspace {
     }
 
     pub(super) fn rename_item(&mut self, _: &RenameItem, w: &mut Window, cx: &mut Context<Self>) {
+        if self.read_only(cx) {
+            return;
+        }
         let pane = self.active_pane().read(cx);
         let dir = pane.op_dir();
         let Some((old, _)) = pane.cursor_entry() else {
@@ -214,11 +260,17 @@ impl Workspace {
     }
 
     pub(super) fn new_folder(&mut self, _: &NewFolder, w: &mut Window, cx: &mut Context<Self>) {
+        if self.read_only(cx) {
+            return;
+        }
         let dir = self.active_pane().read(cx).op_dir();
         self.open_dialog(Dialog::NewFolder { dir }, "untitled folder", w, cx);
     }
 
     pub(super) fn new_file(&mut self, _: &NewFile, w: &mut Window, cx: &mut Context<Self>) {
+        if self.read_only(cx) {
+            return;
+        }
         let dir = self.active_pane().read(cx).op_dir();
         self.open_dialog(Dialog::NewFile { dir }, "untitled.txt", w, cx);
     }
@@ -229,12 +281,19 @@ impl Workspace {
         _: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.busy(cx) {
+        if self.busy(cx) || self.read_only(cx) {
             return;
         }
         let Some(sources) = self.sources(cx) else {
             return;
         };
+        self.duplicate_paths(sources, cx);
+    }
+
+    pub(super) fn duplicate_paths(&mut self, sources: Vec<PathBuf>, cx: &mut Context<Self>) {
+        if self.busy(cx) {
+            return;
+        }
         self.run_job(
             "Duplicating".into(),
             BatchKind::Copy,
@@ -268,6 +327,9 @@ impl Workspace {
     }
 
     pub(super) fn compress_zip(&mut self, _: &CompressZip, _: &mut Window, cx: &mut Context<Self>) {
+        if self.read_only(cx) {
+            return;
+        }
         let Some(sources) = self.sources(cx) else {
             return;
         };
@@ -282,6 +344,9 @@ impl Workspace {
     }
 
     pub(super) fn extract_here(&mut self, _: &ExtractHere, _: &mut Window, cx: &mut Context<Self>) {
+        if self.read_only(cx) {
+            return;
+        }
         let Some(sources) = self.sources(cx) else {
             return;
         };

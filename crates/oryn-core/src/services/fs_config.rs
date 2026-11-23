@@ -10,9 +10,12 @@ pub struct DeleteOptions {
 }
 
 pub fn data_dir() -> ServiceResult<PathBuf> {
-    let dir = dirs::data_local_dir()
-        .ok_or_else(|| anyhow::anyhow!("no data dir"))?
-        .join("Oryn");
+    let dir = match std::env::var_os("ORYN_DATA_DIR") {
+        Some(custom) => PathBuf::from(custom),
+        None => dirs::data_local_dir()
+            .ok_or_else(|| anyhow::anyhow!("no data dir"))?
+            .join("Oryn"),
+    };
     fs::create_dir_all(&dir)?;
     Ok(dir)
 }

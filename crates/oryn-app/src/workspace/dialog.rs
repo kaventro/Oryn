@@ -34,6 +34,11 @@ pub enum Dialog {
         sources: Vec<PathBuf>,
         permanent: bool,
     },
+    GoTo,
+    Info {
+        path: PathBuf,
+        rows: Vec<(&'static str, String)>,
+    },
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -109,6 +114,25 @@ impl Dialog {
                 sources,
                 permanent: true,
             } => format!("Delete {} permanently?", count(sources.len())),
+            Dialog::GoTo => "Go to folder".into(),
+            Dialog::Info { path, .. } => path
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_else(|| path.display().to_string()),
+        }
+    }
+
+    #[cfg(test)]
+    pub fn kind(&self) -> &'static str {
+        match self {
+            Dialog::Mask { .. } => "mask",
+            Dialog::NewFolder { .. } => "new-folder",
+            Dialog::NewFile { .. } => "new-file",
+            Dialog::Rename { .. } => "rename",
+            Dialog::Transfer { .. } => "transfer",
+            Dialog::Delete { .. } => "delete",
+            Dialog::GoTo => "goto",
+            Dialog::Info { .. } => "info",
         }
     }
 
@@ -130,11 +154,17 @@ impl Dialog {
             Dialog::Delete {
                 sources,
                 permanent: false,
-            } => format!("{}. You can restore them from the Trash.", names(sources)),
+            } => format!(
+                "{}. You can restore {} from the Trash.",
+                names(sources),
+                if sources.len() == 1 { "it" } else { "them" }
+            ),
             Dialog::Delete {
                 sources,
                 permanent: true,
             } => format!("{}. This can't be undone.", names(sources)),
+            Dialog::GoTo => "Type or paste a path. ~ stands for your home folder.".into(),
+            Dialog::Info { .. } => String::new(),
         }
     }
 
@@ -142,6 +172,7 @@ impl Dialog {
         !matches!(
             self,
             Dialog::Delete { .. }
+                | Dialog::Info { .. }
                 | Dialog::Transfer {
                     conflicts: Some(_),
                     ..
@@ -181,6 +212,8 @@ impl Dialog {
             Dialog::Delete {
                 permanent: true, ..
             } => vec![("Delete", Choice::Confirm, Tone::Danger)],
+            Dialog::GoTo => vec![("Go", Choice::Confirm, Tone::Primary)],
+            Dialog::Info { .. } => Vec::new(),
         }
     }
 }
@@ -343,6 +376,23 @@ impl Workspace {
                 self.close_prompt(window, cx);
                 self.start_batch(kind, sources, Some(dest), policy, cx);
             }
+            Dialog::GoTo => {
+                let here = self.active_pane().read(cx).path.clone();
+                let target = super::palette::expand(&value).unwrap_or_else(|| here.join(&value));
+                if target.is_dir() || oryn_core::vfs::is_archive_file(&target) {
+                    self.close_prompt(window, cx);
+                    self.go_to(target, window, cx);
+                } else if target.is_file() {
+                    self.close_prompt(window, cx);
+                    self.active_pane()
+                        .clone()
+                        .update(cx, |p, cx| p.reveal(&target, cx));
+                } else {
+                    self.dialog = Some(Dialog::GoTo);
+                    self.fail("That folder doesn't exist.", cx);
+                }
+            }
+            Dialog::Info { .. } => self.close_prompt(window, cx),
             Dialog::Delete { sources, permanent } => {
                 self.close_prompt(window, cx);
                 let kind = if permanent {
@@ -407,6 +457,7 @@ impl Workspace {
         let button = |id: usize, label: &'static str, tone: Tone| {
             div()
                 .id(("dialog-btn", id))
+                .debug_selector(|| format!("dialog-{label}"))
                 .role(Role::Button)
                 .aria_label(label)
                 .flex()
@@ -452,6 +503,11 @@ impl Workspace {
         let title = dialog.title();
         let subtitle = dialog.subtitle();
         let buttons = dialog.buttons();
+        let close_label = if buttons.is_empty() {
+            "Close"
+        } else {
+            "Cancel"
+        };
         Some(
             div()
                 .id("dialog-overlay")
@@ -511,6 +567,46 @@ impl Workspace {
                                     .child(subtitle),
                             )
                         })
+                        .when_some(
+                            match dialog {
+                                Dialog::Info { rows, .. } => Some(rows.clone()),
+                                _ => None,
+                            },
+                            |d, rows| {
+                                d.child(
+                                    div()
+                                        .id("info-rows")
+                                        .flex()
+                                        .flex_col()
+                                        .gap(px(6.0))
+                                        .p(px(12.0))
+                                        .rounded(px(8.0))
+                                        .bg(white_alpha(0.04))
+                                        .border_1()
+                                        .border_color(white_alpha(0.08))
+                                        .text_size(px(12.5))
+                                        .children(rows.into_iter().map(|(k, v)| {
+                                            div()
+                                                .flex()
+                                                .gap(px(12.0))
+                                                .child(
+                                                    div()
+                                                        .w(px(90.0))
+                                                        .flex_none()
+                                                        .text_color(p.text_muted)
+                                                        .child(k),
+                                                )
+                                                .child(
+                                                    div()
+                                                        .flex_1()
+                                                        .min_w_0()
+                                                        .text_color(p.text_strong)
+                                                        .child(v),
+                                                )
+                                        })),
+                                )
+                            },
+                        )
                         .when(dialog.has_input(), |d| {
                             d.child(
                                 div()
@@ -550,7 +646,7 @@ impl Workspace {
                                 .flex()
                                 .justify_end()
                                 .gap(px(10.0))
-                                .child(button(0, "Cancel", Tone::Plain).on_click(
+                                .child(button(0, close_label, Tone::Plain).on_click(
                                     cx.listener(|this, _, w, cx| this.close_prompt(w, cx)),
                                 ))
                                 .children(buttons.into_iter().enumerate().map(

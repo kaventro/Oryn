@@ -111,7 +111,16 @@ gpui_kit::assets::icon_assets!(
         FileCode,
         Keyboard,
         Palette,
-        CornerDownLeft
+        CornerDownLeft,
+        Star,
+        StarOff,
+        Scissors,
+        ClipboardPaste,
+        ArrowLeftRight,
+        EyeOff,
+        ArrowUpDown,
+        SquareTerminal,
+        Check
     ]
 );
 

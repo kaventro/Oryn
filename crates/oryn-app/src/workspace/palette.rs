@@ -102,9 +102,37 @@ pub const COMMANDS: &[(&str, &str, &str, Make)] = &[
     ("server", "SFTP", "Ctrl+Shift+R", || Box::new(ShowSftp)),
     ("settings", "Settings", "Ctrl+,", || Box::new(OpenSettings)),
     ("palette", "Next Accent Colour", "", || Box::new(CycleTray)),
+    ("star", "Add to Favourites", "Ctrl+D", || {
+        Box::new(AddFavorite)
+    }),
+    ("eye-off", "Show or Hide Hidden Files", "Ctrl+H", || {
+        Box::new(ToggleHidden)
+    }),
+    ("arrow-up-down", "Sort by Name", "", || Box::new(SortByName)),
+    ("arrow-up-down", "Sort by Date Modified", "", || {
+        Box::new(SortByDate)
+    }),
+    ("arrow-up-down", "Sort by Size", "", || Box::new(SortBySize)),
+    ("info", "Properties", "Alt+Enter", || {
+        Box::new(ShowProperties)
+    }),
+    ("square-terminal", "Open in Terminal", "", || {
+        Box::new(OpenInTerminal)
+    }),
+    ("arrow-left-right", "Swap Panes", "Ctrl+U", || {
+        Box::new(SwapPanes)
+    }),
+    ("scissors", "Cut", "Ctrl+X", || Box::new(CutItems)),
+    ("copy", "Copy", "Ctrl+C", || Box::new(CopyItems)),
+    ("clipboard-paste", "Paste", "Ctrl+V", || {
+        Box::new(PasteItems)
+    }),
+    ("folder-open", "Go to Folder", "Ctrl+L", || {
+        Box::new(GoToPath)
+    }),
 ];
 
-fn expand(raw: &str) -> Option<PathBuf> {
+pub(super) fn expand(raw: &str) -> Option<PathBuf> {
     let raw = raw.trim();
     if let Some(rest) = raw.strip_prefix('~') {
         let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE"))?;

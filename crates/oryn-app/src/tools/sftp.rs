@@ -80,7 +80,7 @@ impl SftpTool {
             use_key: false,
         };
         form.port.update(cx, |s, cx| s.set_value("22", window, cx));
-        Self {
+        let mut tool = Self {
             profiles: profile::load_profiles().unwrap_or_default(),
             editing: None,
             prefill: None,
@@ -102,6 +102,28 @@ impl SftpTool {
             note: None,
             task: None,
             focus: cx.focus_handle(),
+        };
+        if let Some(pr) = ctx
+            .tag
+            .as_ref()
+            .and_then(|id| tool.profiles.iter().find(|p| &p.id == id).cloned())
+        {
+            tool.pick(pr, cx);
+        }
+        tool
+    }
+
+    fn pick(&mut self, pr: RemoteProfile, cx: &mut Context<Self>) {
+        if pr.auth_type == AuthMethod::Password && pr.password.is_none() {
+            self.editing = Some(pr.id.clone());
+            self.note = Some((
+                format!("Type the password for {}, then press Connect.", pr.name),
+                false,
+            ));
+            self.prefill = Some(pr);
+            cx.notify();
+        } else {
+            self.connect(pr, cx);
         }
     }
 
@@ -339,19 +361,7 @@ impl SftpTool {
                 .border_color(white_alpha(0.06))
                 .cursor_pointer()
                 .hover(|s| s.bg(white_alpha(0.04)))
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    if pr.auth_type == AuthMethod::Password && pr.password.is_none() {
-                        this.editing = Some(pr.id.clone());
-                        this.note = Some((
-                            format!("Type the password for {}, then press Connect.", pr.name),
-                            false,
-                        ));
-                        this.prefill = Some(pr.clone());
-                        cx.notify();
-                    } else {
-                        this.connect(pr.clone(), cx);
-                    }
-                }))
+                .on_click(cx.listener(move |this, _, _, cx| this.pick(pr.clone(), cx)))
                 .child(icon("server", 16.0, p.accent))
                 .child(
                     div()

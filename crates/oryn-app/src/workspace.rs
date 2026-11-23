@@ -12,11 +12,12 @@ use crate::icons::{icon, oryn_icon};
 use crate::pane::{FilePane, ViewMode};
 use crate::terminal::TerminalView;
 use crate::theme::{
-    OrynTheme, Palette, TRAYS, black_alpha, hex, palette, ui_font, white_alpha, with_alpha,
+    OrynTheme, Palette, TAGS, TRAYS, black_alpha, hex, palette, ui_font, white_alpha, with_alpha,
 };
 
 mod batch_rename;
 mod dialog;
+mod extras;
 mod jobs;
 mod menu;
 mod palette;
@@ -31,6 +32,10 @@ use jobs::Job;
 const TRAFFIC_LIGHTS: f32 = 78.0;
 
 pub struct Workspace {
+    favorites: oryn_core::favorites::Favorites,
+    profiles: Vec<oryn_core::services::remote::profile::RemoteProfile>,
+    clipboard: Option<(oryn_core::batch::BatchKind, Vec<PathBuf>)>,
+    info_task: Option<Task<()>>,
     tabs: [Vec<Entity<FilePane>>; 2],
     tab_ix: [usize; 2],
     view: ViewMode,
@@ -71,28 +76,24 @@ fn home_dir() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("/"))
 }
 
-fn favorites() -> Vec<Place> {
-    let home = home_dir();
-    let mut v = vec![Place {
-        label: "Home",
-        icon: "house",
-        path: home.clone(),
-    }];
-    for (label, icon, sub) in [
-        ("Desktop", "monitor", "Desktop"),
-        ("Documents", "file-text", "Documents"),
-        ("Downloads", "download", "Downloads"),
-    ] {
-        let p = home.join(sub);
-        if p.is_dir() {
-            v.push(Place {
-                label,
-                icon,
-                path: p,
-            });
-        }
+type Hook = fn(&mut Workspace, &mut Window, &mut Context<Workspace>);
+
+fn fav_look(path: &Path, home: &Path) -> (String, &'static str) {
+    if path == home {
+        return ("Home".into(), "house");
     }
-    v
+    let label = oryn_core::favorites::Favorites::label(path);
+    let icon = if path.parent() == Some(home) {
+        match label.as_str() {
+            "Desktop" => "monitor",
+            "Documents" => "file-text",
+            "Downloads" => "download",
+            _ => "folder",
+        }
+    } else {
+        "folder"
+    };
+    (label, icon)
 }
 
 fn system_drive() -> Place {
@@ -108,16 +109,6 @@ fn system_drive() -> Place {
         path: PathBuf::from(if cfg!(windows) { "C:\\" } else { "/" }),
     }
 }
-
-const TAGS: [(&str, u32); 7] = [
-    ("Red", 0xff453a),
-    ("Orange", 0xff9f0a),
-    ("Yellow", 0xffd60a),
-    ("Green", 0x34c759),
-    ("Blue", 0x0a84ff),
-    ("Purple", 0xbf5af2),
-    ("Gray", 0x8e8e93),
-];
 
 impl Workspace {
     pub fn new(left: PathBuf, right: PathBuf, window: &mut Window, cx: &mut Context<Self>) -> Self {
@@ -162,6 +153,10 @@ impl Workspace {
         window.focus(&focus, cx);
         let check = settings.check_updates;
         let mut this = Self {
+            favorites: oryn_core::favorites::Favorites::load(&home_dir()),
+            profiles: oryn_core::services::remote::profile::load_profiles().unwrap_or_default(),
+            clipboard: None,
+            info_task: None,
             tabs: [vec![l], vec![r]],
             tab_ix: [0, 0],
             view,
@@ -206,6 +201,7 @@ impl Workspace {
             ("quick", self.quick.is_some()),
             ("menu", self.menu.is_some()),
             ("terminal", self.show_terminal),
+            ("dialog", self.dialog.is_some()),
         ]
         .into_iter()
         .filter(|(_, on)| *on)
@@ -238,7 +234,11 @@ impl Workspace {
             pane.dual = dual;
             pane
         });
-        cx.observe(&pane, |_, _, cx| cx.notify()).detach();
+        cx.observe(&pane, |this, _, cx| {
+            this.remember_paths(cx);
+            cx.notify()
+        })
+        .detach();
         cx.subscribe_in(&pane, window, Self::on_pane_event).detach();
         pane
     }
@@ -380,6 +380,15 @@ impl Workspace {
             return;
         }
         let cwd = self.active_pane().read(cx).path.clone();
+        self.show_terminal_at(cwd, window, cx);
+    }
+
+    pub(super) fn show_terminal_at(
+        &mut self,
+        cwd: PathBuf,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if self
             .terminal
             .as_ref()
@@ -440,14 +449,36 @@ impl Workspace {
         self.focus_pane(self.active, window, cx);
     }
 
-    fn section_header(title: &'static str, plus: bool, p: &Palette) -> Div {
+    fn section_header(
+        &self,
+        key: &'static str,
+        title: &'static str,
+        plus: Option<(&'static str, Hook)>,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> Stateful<Div> {
+        let collapsed = self.is_collapsed(key);
+        let chevron = oryn_icon("section-chevron", 10.0, p.text_muted).when(collapsed, |s| {
+            s.with_transformation(Transformation::rotate(percentage(0.75)))
+        });
         div()
+            .id(SharedString::from(format!("section-{key}")))
+            .debug_selector(|| format!("section-{key}"))
+            .role(Role::Button)
+            .aria_label(format!(
+                "{title}, {}",
+                if collapsed { "collapsed" } else { "expanded" }
+            ))
             .flex()
             .items_center()
             .h(px(28.0))
             .pl(px(8.0))
-            .pr(px(12.0))
+            .pr(px(6.0))
             .mt(px(10.0))
+            .rounded(px(6.0))
+            .cursor_pointer()
+            .hover(|s| s.bg(white_alpha(0.03)))
+            .on_click(cx.listener(move |this, _, _, cx| this.toggle_section(key, cx)))
             .child(
                 div()
                     .flex()
@@ -457,22 +488,36 @@ impl Workspace {
                     .text_size(px(11.0))
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(p.text_muted)
-                    .child(oryn_icon("section-chevron", 10.0, p.text_muted))
+                    .child(chevron)
                     .child(title),
             )
-            .when(plus, |d| {
+            .when_some(plus, |d, (label, hook)| {
                 d.child(
                     div()
+                        .id(SharedString::from(format!("{key}-add")))
+                        .debug_selector(|| format!("{key}-add"))
+                        .role(Role::Button)
+                        .aria_label(label)
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .size(px(20.0))
+                        .rounded(px(4.0))
                         .text_size(px(14.0))
                         .text_color(p.text_muted)
+                        .hover(|s| s.bg(white_alpha(0.08)).text_color(p.text_strong))
+                        .on_click(cx.listener(move |this, _, w, cx| {
+                            cx.stop_propagation();
+                            hook(this, w, cx)
+                        }))
                         .child("+"),
                 )
             })
     }
 
     fn sidebar_item(
-        id: (&'static str, usize),
-        label: &'static str,
+        id: impl Into<ElementId>,
+        label: SharedString,
         lead: AnyElement,
         selected: bool,
         p: &Palette,
@@ -480,7 +525,7 @@ impl Workspace {
         div()
             .id(id)
             .role(Role::Link)
-            .aria_label(label)
+            .aria_label(label.clone())
             .flex()
             .items_center()
             .gap(px(10.0))
@@ -497,7 +542,7 @@ impl Workspace {
             .when(!selected, |d| d.hover(|s| s.bg(white_alpha(0.05))))
             .cursor_pointer()
             .child(lead)
-            .child(label)
+            .child(div().flex_1().min_w_0().truncate().child(label))
     }
 
     fn render_sidebar(
@@ -506,24 +551,59 @@ impl Workspace {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let favs = favorites().into_iter().enumerate().map(|(i, place)| {
-            let target = place.path.clone();
-            Self::sidebar_item(
-                ("fav", i),
-                place.label,
-                icon(place.icon, 16.0, p.text_sidebar).into_any_element(),
-                current == place.path,
-                p,
-            )
-            .on_click(
-                cx.listener(move |this, _, window, cx| this.go_to(target.clone(), window, cx)),
-            )
-        });
+        let home = home_dir();
+        let favs: Vec<AnyElement> = self
+            .favorites
+            .paths
+            .iter()
+            .enumerate()
+            .map(|(i, path)| {
+                let (label, icon_name) = fav_look(path, &home);
+                let target = path.clone();
+                let gone = path.clone();
+                let group = SharedString::from(format!("fav-group-{i}"));
+                Self::sidebar_item(
+                    ("fav", i),
+                    label.into(),
+                    icon(icon_name, 16.0, p.text_sidebar).into_any_element(),
+                    current == path.as_path(),
+                    p,
+                )
+                .debug_selector(|| format!("fav-{i}"))
+                .group(group.clone())
+                .on_click(
+                    cx.listener(move |this, _, window, cx| this.go_to(target.clone(), window, cx)),
+                )
+                .child(
+                    div()
+                        .id(("fav-remove", i))
+                        .debug_selector(|| format!("fav-remove-{i}"))
+                        .role(Role::Button)
+                        .aria_label("Remove from favourites")
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .size(px(18.0))
+                        .rounded(px(4.0))
+                        .text_size(px(13.0))
+                        .text_color(p.text_muted)
+                        .opacity(0.0)
+                        .group_hover(group, |s| s.opacity(1.0))
+                        .hover(|s| s.bg(white_alpha(0.1)).text_color(p.text_strong))
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            cx.stop_propagation();
+                            this.remove_favorite(&gone, cx);
+                        }))
+                        .child("\u{00d7}"),
+                )
+                .into_any_element()
+            })
+            .collect();
         let drive = system_drive();
         let drive_target = drive.path.clone();
         let drive_item = Self::sidebar_item(
-            ("drive", 0),
-            drive.label,
+            ("drive", 0usize),
+            drive.label.into(),
             icon(drive.icon, 16.0, p.accent).into_any_element(),
             current == drive.path,
             p,
@@ -531,23 +611,48 @@ impl Workspace {
         .on_click(
             cx.listener(move |this, _, window, cx| this.go_to(drive_target.clone(), window, cx)),
         );
-        let tags = TAGS.iter().enumerate().map(|(i, (label, color))| {
-            Self::sidebar_item(
-                ("tag", i),
-                label,
-                div()
-                    .size(px(9.0))
-                    .rounded_full()
-                    .bg(hex(*color))
-                    .mx(px(3.5))
-                    .into_any_element(),
-                false,
-                p,
-            )
-            .on_click(cx.listener(move |this, _, w, cx| {
-                this.open_tool_with(ToolKind::Tags, Some(label.to_string()), w, cx)
-            }))
-        });
+        let servers: Vec<AnyElement> = self
+            .profiles
+            .iter()
+            .enumerate()
+            .map(|(i, prof)| {
+                let id = prof.id.clone();
+                Self::sidebar_item(
+                    ("server", i),
+                    prof.name.clone().into(),
+                    icon("server", 16.0, p.text_sidebar).into_any_element(),
+                    false,
+                    p,
+                )
+                .debug_selector(|| format!("server-{i}"))
+                .on_click(cx.listener(move |this, _, w, cx| {
+                    this.open_tool_with(ToolKind::Sftp, Some(id.clone()), w, cx)
+                }))
+                .into_any_element()
+            })
+            .collect();
+        let tags: Vec<AnyElement> = TAGS
+            .iter()
+            .enumerate()
+            .map(|(i, (label, color))| {
+                Self::sidebar_item(
+                    ("tag", i),
+                    (*label).into(),
+                    div()
+                        .size(px(9.0))
+                        .rounded_full()
+                        .bg(hex(*color))
+                        .mx(px(3.5))
+                        .into_any_element(),
+                    false,
+                    p,
+                )
+                .debug_selector(|| format!("tag-{label}"))
+                .on_click(cx.listener(move |this, _, w, cx| this.click_tag(label, w, cx)))
+                .into_any_element()
+            })
+            .collect();
+        let no_servers = servers.is_empty();
 
         div()
             .flex()
@@ -602,22 +707,56 @@ impl Workspace {
                     .flex_1()
                     .overflow_y_scroll()
                     .px(px(8.0))
-                    .child(Self::section_header("FAVORITES", true, p))
-                    .children(favs)
-                    .child(Self::section_header("LOCATIONS", false, p))
-                    .child(drive_item)
-                    .child(Self::section_header("REMOTE (SFTP)", true, p))
-                    .child(
-                        div()
-                            .px(px(12.0))
-                            .py(px(6.0))
-                            .text_size(px(11.0))
-                            .text_color(p.text_muted)
-                            .child("No saved servers"),
-                    )
-                    .child(Self::section_header("TAGS", true, p))
-                    .children(tags),
+                    .child(self.section_header(
+                        "favorites",
+                        "FAVORITES",
+                        Some(("Add this folder to favourites", |this, w, cx| {
+                            this.add_current_favorite(w, cx)
+                        })),
+                        p,
+                        cx,
+                    ))
+                    .when(!self.is_collapsed("favorites"), |d| {
+                        d.children(favs).when(self.favorites.paths.is_empty(), |d| {
+                            d.child(Self::sidebar_hint("Press + to add this folder", p))
+                        })
+                    })
+                    .child(self.section_header("locations", "LOCATIONS", None, p, cx))
+                    .when(!self.is_collapsed("locations"), |d| d.child(drive_item))
+                    .child(self.section_header(
+                        "remote",
+                        "REMOTE (SFTP)",
+                        Some(("Add a server", |this, w, cx| {
+                            this.open_tool(ToolKind::Sftp, w, cx)
+                        })),
+                        p,
+                        cx,
+                    ))
+                    .when(!self.is_collapsed("remote"), |d| {
+                        d.children(servers).when(no_servers, |d| {
+                            d.child(Self::sidebar_hint("No saved servers", p))
+                        })
+                    })
+                    .child(self.section_header(
+                        "tags",
+                        "TAGS",
+                        Some(("Tag the selection", |this, w, cx| {
+                            this.open_tool(ToolKind::Tags, w, cx)
+                        })),
+                        p,
+                        cx,
+                    ))
+                    .when(!self.is_collapsed("tags"), |d| d.children(tags)),
             )
+    }
+
+    fn sidebar_hint(text: &'static str, p: &Palette) -> Div {
+        div()
+            .px(px(12.0))
+            .py(px(6.0))
+            .text_size(px(11.0))
+            .text_color(p.text_muted)
+            .child(text)
     }
 
     fn brand(&self, p: &Palette) -> impl IntoElement {
@@ -668,6 +807,7 @@ impl Workspace {
     ) -> Stateful<Div> {
         div()
             .id(id)
+            .debug_selector(|| format!("btn-{id}"))
             .role(Role::Button)
             .aria_label(label)
             .flex()
@@ -977,6 +1117,7 @@ impl Workspace {
     ) -> Stateful<Div> {
         div()
             .id(id)
+            .debug_selector(|| format!("tool-{id}"))
             .role(Role::Button)
             .aria_label(aria)
             .flex()
@@ -1195,15 +1336,24 @@ impl Workspace {
                         ),
                     ),
             )
-            .child(Self::group(p).child(Self::tool(
-                "more",
-                "more",
-                None,
-                "More options",
-                true,
-                false,
-                p,
-            )))
+            .child(
+                Self::group(p).child(
+                    Self::tool(
+                        "more",
+                        "more",
+                        None,
+                        "More options",
+                        true,
+                        self.menu.is_some(),
+                        p,
+                    )
+                    .on_click(cx.listener(|this, ev: &ClickEvent, w, cx| {
+                        let at = ev.position();
+                        let at = point(at.x - px(200.0), at.y + px(14.0));
+                        this.open_more_menu(at, w, cx)
+                    })),
+                ),
+            )
     }
 
     fn render_nav_bar(&self, path: &Path, p: &Palette, cx: &mut Context<Self>) -> impl IntoElement {
@@ -1284,7 +1434,20 @@ impl Workspace {
                     .child(div().flex_1())
                     .child(
                         div()
-                            .px(px(6.0))
+                            .id("path-edit")
+                            .debug_selector(|| "path-edit".into())
+                            .role(Role::Button)
+                            .aria_label("Type a path")
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .size(px(22.0))
+                            .rounded(px(4.0))
+                            .cursor_pointer()
+                            .hover(|s| s.bg(white_alpha(0.08)))
+                            .on_click(
+                                cx.listener(|this, _, w, cx| this.go_to_path(&GoToPath, w, cx)),
+                            )
                             .child(oryn_icon("rename", 12.0, hex(0x78787c))),
                     ),
             )
@@ -1311,7 +1474,26 @@ impl Workspace {
                                 .text_color(p.text),
                         ),
                     )
-                    .child(oryn_icon("filter", 14.0, p.text_muted)),
+                    .when(!self.search.read(cx).value().is_empty(), |d| {
+                        d.child(
+                            div()
+                                .id("filter-clear")
+                                .debug_selector(|| "filter-clear".into())
+                                .role(Role::Button)
+                                .aria_label("Clear the filter")
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .size(px(18.0))
+                                .rounded_full()
+                                .text_size(px(13.0))
+                                .text_color(p.text_muted)
+                                .cursor_pointer()
+                                .hover(|s| s.bg(white_alpha(0.1)).text_color(p.text_strong))
+                                .on_click(cx.listener(|this, _, w, cx| this.clear_filter(w, cx)))
+                                .child("\u{00d7}"),
+                        )
+                    }),
             )
     }
 
@@ -1469,6 +1651,25 @@ impl Render for Workspace {
                 cx.listener(|this, _: &ShowSftp, w, cx| this.open_tool(ToolKind::Sftp, w, cx)),
             )
             .on_action(cx.listener(|_, _: &Quit, _, cx| cx.quit()))
+            .on_action(cx.listener(Self::add_favorite))
+            .on_action(cx.listener(Self::toggle_current_favorite))
+            .on_action(cx.listener(Self::toggle_hidden))
+            .on_action(cx.listener(|this, _: &SortByName, w, cx| {
+                this.sort_active(oryn_core::ui::arrange::SortField::Name, w, cx)
+            }))
+            .on_action(cx.listener(|this, _: &SortByDate, w, cx| {
+                this.sort_active(oryn_core::ui::arrange::SortField::Date, w, cx)
+            }))
+            .on_action(cx.listener(|this, _: &SortBySize, w, cx| {
+                this.sort_active(oryn_core::ui::arrange::SortField::Size, w, cx)
+            }))
+            .on_action(cx.listener(Self::show_properties))
+            .on_action(cx.listener(Self::open_in_terminal))
+            .on_action(cx.listener(Self::swap_panes))
+            .on_action(cx.listener(Self::cut_items))
+            .on_action(cx.listener(Self::copy_items))
+            .on_action(cx.listener(Self::paste_items))
+            .on_action(cx.listener(Self::go_to_path))
             .flex()
             .size_full()
             .bg(p.bg)

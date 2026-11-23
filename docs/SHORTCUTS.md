@@ -6,7 +6,7 @@ On macOS, Ctrl in this table means Cmd unless a row says otherwise. Every comman
 | --- | --- |
 | Up, Down, Page Up, Page Down, Home, End | Move the cursor |
 | Left, Right | Move in grid view; step between columns in column view |
-| Enter, double-click | Open a folder |
+| Enter, double-click | Open a folder or archive, or open a file in its default app |
 | Backspace, Alt+Up | Parent folder |
 | Alt+Left, Alt+Right | Back, forward |
 | Space, Insert | Mark or unmark, then move down |
@@ -48,4 +48,10 @@ On macOS, Ctrl in this table means Cmd unless a row says otherwise. Every comman
 | Context menu, Compress to ZIP | Pack the selection into a `.zip` next to it |
 | Context menu, Extract Here | Unpack a `.zip`, `.tar` or `.tar.gz` into a new folder |
 | Drag, Shift+drag | Copy or move onto a folder or the other pane |
+| Ctrl+D (Cmd+D) | Add the folder under the cursor, or this folder, to Favourites |
+| Ctrl+X, Ctrl+C, Ctrl+V (Cmd on macOS) | Cut, copy, paste |
+| Ctrl+U (Cmd+U) | Swap panes |
+| Ctrl+L (Cmd+L) | Go to a typed folder |
+| Alt+Enter, Ctrl+I (Cmd+I) | Properties |
+| Ctrl+H (Cmd+Shift+. on macOS) | Show or hide hidden files |
 | Ctrl+Q (Cmd+Q) | Quit |

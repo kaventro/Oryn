@@ -2,6 +2,7 @@
 
 mod actions;
 mod icons;
+mod opener;
 mod pane;
 mod quick_view;
 mod terminal;
@@ -29,8 +30,9 @@ fn start_dir(arg: Option<String>) -> PathBuf {
 
 fn main() {
     let mut args = std::env::args().skip(1);
-    let left = start_dir(args.next());
-    let right = start_dir(args.next());
+    let saved = oryn_core::settings::Settings::load();
+    let left = start_dir(args.next().or(saved.left));
+    let right = start_dir(args.next().or(saved.right));
     let tray = std::env::var("ORYN_TRAY")
         .ok()
         .and_then(|v| v.parse().ok())

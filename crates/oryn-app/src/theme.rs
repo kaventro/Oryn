@@ -7,6 +7,20 @@ pub struct Tray {
     pub accent_hover: u32,
 }
 
+pub const TAGS: [(&str, u32); 7] = [
+    ("Red", 0xff453a),
+    ("Orange", 0xff9f0a),
+    ("Yellow", 0xffd60a),
+    ("Green", 0x34c759),
+    ("Blue", 0x0a84ff),
+    ("Purple", 0xbf5af2),
+    ("Gray", 0x8e8e93),
+];
+
+pub fn tag_color(name: &str) -> Option<u32> {
+    TAGS.iter().find(|(n, _)| *n == name).map(|(_, c)| *c)
+}
+
 pub const TRAYS: [Tray; 6] = [
     Tray {
         name: "Graphite Blue",
