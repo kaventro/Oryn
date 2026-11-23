@@ -26,6 +26,10 @@ fn copy_out_of_archive(
     let mut report = BatchReport::default();
     p.total.store(sources.len() as u64, Ordering::Relaxed);
     for src in sources {
+        if p.is_cancelled() {
+            report.cancelled = true;
+            break;
+        }
         let name = src
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
@@ -134,10 +138,23 @@ impl Workspace {
         if self.busy(cx) {
             return;
         }
+        if kind == BatchKind::Move
+            && let Some((BatchKind::Move, cut)) = &self.clipboard
+            && sources.iter().all(|s| cut.contains(s))
+        {
+            self.clipboard = None;
+        }
         if sources.iter().any(|s| oryn_core::vfs::is_virtual(s)) {
             if kind != BatchKind::Copy {
                 return self
                     .notify_active("Files inside an archive can only be copied out.".into(), cx);
+            }
+            if sources.iter().any(|s| super::dialog::virtual_dir(s)) {
+                return self.notify_active(
+                    "Folders inside an archive can't be copied out yet. Extract the archive instead."
+                        .into(),
+                    cx,
+                );
             }
             let Some(dest) = dest else {
                 return;

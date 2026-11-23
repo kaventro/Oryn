@@ -357,9 +357,6 @@ impl Workspace {
         if sources.is_empty() {
             return;
         }
-        if kind == BatchKind::Move {
-            self.clipboard = None;
-        }
         if sources.iter().all(|p| p.parent() == Some(dir.as_path())) {
             return self.dispatch_duplicate(window, cx, sources);
         }

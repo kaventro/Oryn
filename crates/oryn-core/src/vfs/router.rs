@@ -66,11 +66,15 @@ fn is_tar_path(lower: &str) -> bool {
 }
 
 pub fn is_virtual(path: &std::path::Path) -> bool {
-    route_kind(&path.to_string_lossy()) != RouteKind::Local && path.symlink_metadata().is_err()
+    route_kind(&path.to_string_lossy()) != RouteKind::Local
+        && path.symlink_metadata().is_err()
+        && path.ancestors().skip(1).any(is_archive_file)
 }
 
 pub fn is_archive_file(path: &std::path::Path) -> bool {
-    route_kind(&path.to_string_lossy()) != RouteKind::Local && path.is_file()
+    path.file_name()
+        .is_some_and(|n| route_kind(&n.to_string_lossy()) != RouteKind::Local)
+        && path.is_file()
 }
 
 impl VirtualFileSystem for VfsRouter {
@@ -100,6 +104,10 @@ mod tests {
         assert!(!is_virtual(&file));
         assert!(is_virtual(&file.join("inner")));
         assert!(!is_virtual(tmp.path()));
+        let inside = dir.join("notes.txt");
+        std::fs::write(&inside, b"x").unwrap();
+        assert!(!is_archive_file(&inside));
+        assert!(!is_virtual(&dir.join("missing.txt")));
     }
 
     #[test]

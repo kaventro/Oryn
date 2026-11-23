@@ -10,7 +10,11 @@ pub struct Favorites {
 fn same(a: &Path, b: &Path) -> bool {
     let norm = |p: &Path| {
         let s = p.to_string_lossy();
-        let t = s.trim_end_matches(['/', '\\']);
+        let t = if cfg!(windows) {
+            s.trim_end_matches(['/', '\\'])
+        } else {
+            s.trim_end_matches('/')
+        };
         if t.is_empty() {
             s.into_owned()
         } else {

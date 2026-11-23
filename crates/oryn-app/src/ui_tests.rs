@@ -13,6 +13,20 @@ use crate::pane::ViewMode;
 use crate::tools::ToolKind;
 use crate::workspace::Workspace;
 
+static SERIAL: parking_lot::Mutex<()> = parking_lot::Mutex::new(());
+
+fn serial() -> parking_lot::MutexGuard<'static, ()> {
+    let guard = SERIAL.lock();
+    let data = data_dir();
+    for name in ["settings.json", "favorites.json", "tags.json"] {
+        let _ = std::fs::remove_file(data.join(name));
+    }
+    unsafe {
+        std::env::set_var("ORYN_DATA_DIR", data);
+    }
+    guard
+}
+
 fn data_dir() -> &'static Path {
     static DIR: OnceLock<tempfile::TempDir> = OnceLock::new();
     DIR.get_or_init(|| tempfile::tempdir().unwrap()).path()
@@ -77,6 +91,7 @@ fn overlays(cx: &mut TestAppContext, ws: &Entity<Workspace>) -> Vec<&'static str
 
 #[gpui_kit::test]
 fn overlays_open_from_their_shortcuts(cx: &mut TestAppContext) {
+    let _serial = serial();
     let (_tmp, a, b) = dirs();
     let (window, ws) = open(cx, &a, &b);
     assert!(overlays(cx, &ws).is_empty());
@@ -94,6 +109,7 @@ fn overlays_open_from_their_shortcuts(cx: &mut TestAppContext) {
 
 #[gpui_kit::test]
 fn quick_view_opens_on_a_file(cx: &mut TestAppContext) {
+    let _serial = serial();
     let (_tmp, a, b) = dirs();
     let (window, ws) = open(cx, &a, &b);
     send(cx, window, crate::actions::MoveDown);
@@ -103,6 +119,7 @@ fn quick_view_opens_on_a_file(cx: &mut TestAppContext) {
 
 #[gpui_kit::test]
 fn context_menu_opens_from_the_keyboard(cx: &mut TestAppContext) {
+    let _serial = serial();
     let (_tmp, a, b) = dirs();
     let (window, ws) = open(cx, &a, &b);
     send(cx, window, crate::actions::OpenContextMenu);
@@ -111,6 +128,7 @@ fn context_menu_opens_from_the_keyboard(cx: &mut TestAppContext) {
 
 #[gpui_kit::test]
 fn compress_and_extract_from_the_workspace(cx: &mut TestAppContext) {
+    let _serial = serial();
     let (_tmp, a, b) = dirs();
     let (window, _ws) = open(cx, &a, &b);
     cx.update_window(window, |_, window, cx| {
@@ -207,6 +225,7 @@ fn saved_favorites() -> oryn_core::favorites::Favorites {
 
 #[gpui_kit::test]
 fn favourites_are_added_from_the_plus_and_the_menu_then_removed(cx: &mut TestAppContext) {
+    let _serial = serial();
     let (_tmp, a, b) = dirs();
     std::fs::create_dir(a.join("projects")).unwrap();
     let (window, ws) = open(cx, &a, &b);
@@ -240,6 +259,7 @@ fn favourites_are_added_from_the_plus_and_the_menu_then_removed(cx: &mut TestApp
 
 #[gpui_kit::test]
 fn files_open_with_enter_and_double_click(cx: &mut TestAppContext) {
+    let _serial = serial();
     let (_tmp, a, b) = dirs();
     std::fs::write(a.join("other.md"), "# hi").unwrap();
     let (window, ws) = open(cx, &a, &b);
@@ -265,6 +285,7 @@ fn make_zip(path: &Path) {
 
 #[gpui_kit::test]
 fn zip_archives_open_like_folders(cx: &mut TestAppContext) {
+    let _serial = serial();
     let (_tmp, a, b) = dirs();
     let zip = a.join("bundle.zip");
     make_zip(&zip);
@@ -285,6 +306,7 @@ fn zip_archives_open_like_folders(cx: &mut TestAppContext) {
 
     cursor_to(cx, &ws, "top.txt");
     send(cx, window, crate::actions::OpenEntry);
+    cx.run_until_parked();
     let opened = crate::opener::OPENED.lock().clone();
     let copy = opened
         .iter()
@@ -307,10 +329,29 @@ fn zip_archives_open_like_folders(cx: &mut TestAppContext) {
     send(cx, window, crate::actions::GoParent);
     send(cx, window, crate::actions::GoParent);
     assert_eq!(pane_path(cx, &ws, 0), a);
+
+    send(cx, window, crate::actions::GoToPath);
+    let docs = zip.join("docs");
+    cx.update_window(window, |_, w, cx| {
+        ws.update(cx, |ws, cx| {
+            ws.set_dialog_value(docs.to_str().unwrap(), w, cx)
+        })
+    })
+    .unwrap();
+    click(cx, window, "dialog-Go");
+    assert_eq!(pane_path(cx, &ws, 0), docs);
+
+    send(cx, window, crate::actions::GoParent);
+    cursor_to(cx, &ws, "docs");
+    send(cx, window, crate::actions::CopyToOther);
+    send(cx, window, crate::actions::ConfirmPrompt);
+    cx.run_until_parked();
+    assert!(!b.join("docs").exists());
 }
 
 #[gpui_kit::test]
 fn sidebar_and_toolbar_controls_respond(cx: &mut TestAppContext) {
+    let _serial = serial();
     let (_tmp, a, b) = dirs();
     std::fs::create_dir(a.join("deep")).unwrap();
     let (window, ws) = open(cx, &a, &b);
@@ -353,6 +394,7 @@ fn sidebar_and_toolbar_controls_respond(cx: &mut TestAppContext) {
 
 #[gpui_kit::test]
 fn the_filter_clears_from_its_button(cx: &mut TestAppContext) {
+    let _serial = serial();
     let (_tmp, a, b) = dirs();
     std::fs::write(a.join("zeta.txt"), "z").unwrap();
     let (window, ws) = open(cx, &a, &b);
@@ -369,6 +411,7 @@ fn the_filter_clears_from_its_button(cx: &mut TestAppContext) {
 
 #[gpui_kit::test]
 fn git_status_and_tags_show_in_the_list(cx: &mut TestAppContext) {
+    let _serial = serial();
     let (_tmp, a, b) = dirs();
     let git = |args: &[&str]| {
         std::process::Command::new("git")
@@ -400,6 +443,7 @@ fn git_status_and_tags_show_in_the_list(cx: &mut TestAppContext) {
 
 #[gpui_kit::test]
 fn properties_cut_paste_swap_and_hidden_files(cx: &mut TestAppContext) {
+    let _serial = serial();
     let (_tmp, a, b) = dirs();
     std::fs::write(a.join(".secret"), "s").unwrap();
     let (window, ws) = open(cx, &a, &b);

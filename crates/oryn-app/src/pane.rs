@@ -598,7 +598,20 @@ impl FilePane {
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default();
-        match materialize(&target) {
+        if !oryn_core::vfs::is_virtual(&target) {
+            return self.finish_open(Some(target), &name, cx);
+        }
+        self.report(format!("Extracting \u{201c}{name}\u{201d}\u{2026}"), cx);
+        let task = cx.background_spawn(async move { materialize(&target) });
+        cx.spawn(async move |this, cx| {
+            let path = task.await;
+            let _ = this.update(cx, |p, cx| p.finish_open(path, &name, cx));
+        })
+        .detach();
+    }
+
+    fn finish_open(&mut self, path: Option<PathBuf>, name: &str, cx: &mut Context<Self>) {
+        match path {
             Some(path) => {
                 crate::opener::open(&path);
                 self.report(format!("Opened \u{201c}{name}\u{201d}."), cx);

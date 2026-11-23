@@ -18,8 +18,8 @@ pub struct GitTool {
     branch_name: Entity<InputState>,
     note: Option<(String, bool)>,
     busy: bool,
-    clear_on_success: bool,
-    clear_message: bool,
+    clear_on_success: Option<String>,
+    clear_message: Option<String>,
     task: Option<Task<()>>,
     pub focus: FocusHandle,
 }
@@ -56,8 +56,8 @@ impl GitTool {
             branch_name,
             note: None,
             busy: false,
-            clear_on_success: false,
-            clear_message: false,
+            clear_on_success: None,
+            clear_message: None,
             task: None,
             focus: cx.focus_handle(),
         };
@@ -128,9 +128,10 @@ impl GitTool {
             cx,
             move || work(&root),
             |t, res, cx| {
-                if t.clear_on_success {
-                    t.clear_on_success = false;
-                    t.clear_message = res.is_ok();
+                if let Some(sent) = t.clear_on_success.take()
+                    && res.is_ok()
+                {
+                    t.clear_message = Some(sent);
                 }
                 t.busy = false;
                 t.note = Some(match res {
@@ -168,7 +169,7 @@ impl GitTool {
             cx.notify();
             return;
         }
-        self.clear_on_success = true;
+        self.clear_on_success = Some(msg.clone());
         self.act(
             move |r| repo::commit(r, &msg).map(|h| format!("Committed {h}.")),
             cx,
@@ -482,8 +483,9 @@ impl Focusable for GitTool {
 
 impl Render for GitTool {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        if self.clear_message {
-            self.clear_message = false;
+        if let Some(sent) = self.clear_message.take()
+            && value(&self.message, cx) == sent
+        {
             self.message.update(cx, |s, cx| s.set_value("", window, cx));
         }
         let p = palette(cx);

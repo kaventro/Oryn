@@ -130,7 +130,10 @@ impl Workspace {
                 self.close_tool(window, cx);
                 self.go_to(dir.clone(), window, cx);
             }
-            ToolEvent::Changed => self.refresh_all(None, cx),
+            ToolEvent::Changed => {
+                self.reload_profiles();
+                self.refresh_all(None, cx);
+            }
         }
     }
 

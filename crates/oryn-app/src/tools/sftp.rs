@@ -391,6 +391,7 @@ impl SftpTool {
                             cx.stop_propagation();
                             if let Ok(list) = profile::delete_profile(&id) {
                                 this.profiles = list;
+                                cx.emit(ToolEvent::Changed);
                             }
                             cx.notify();
                         }))

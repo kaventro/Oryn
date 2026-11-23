@@ -379,7 +379,10 @@ impl Workspace {
             Dialog::GoTo => {
                 let here = self.active_pane().read(cx).path.clone();
                 let target = super::palette::expand(&value).unwrap_or_else(|| here.join(&value));
-                if target.is_dir() || oryn_core::vfs::is_archive_file(&target) {
+                if target.is_dir()
+                    || oryn_core::vfs::is_archive_file(&target)
+                    || virtual_dir(&target)
+                {
                     self.close_prompt(window, cx);
                     self.go_to(target, window, cx);
                 } else if target.is_file() {
@@ -661,4 +664,18 @@ impl Workspace {
                 .into_any_element(),
         )
     }
+}
+
+pub(super) fn virtual_dir(path: &std::path::Path) -> bool {
+    use oryn_core::vfs::{VfsRouter, VirtualFileSystem};
+    if !oryn_core::vfs::is_virtual(path) {
+        return false;
+    }
+    let (Some(parent), Some(name)) = (path.parent(), path.file_name()) else {
+        return false;
+    };
+    let name = name.to_string_lossy();
+    VfsRouter::new()
+        .read_dir(&parent.to_string_lossy())
+        .is_ok_and(|items| items.iter().any(|i| i.is_dir && i.base == name))
 }
