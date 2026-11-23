@@ -626,4 +626,61 @@ mod tests {
             "the message should name the fix: {err}"
         );
     }
+
+    fn office_file(dir: &tempfile::TempDir, name: &str, entries: &[(&str, &str)]) -> String {
+        use std::io::Write;
+        let path = dir.path().join(name);
+        let mut zip = zip::ZipWriter::new(File::create(&path).unwrap());
+        for (entry, body) in entries {
+            zip.start_file(*entry, zip::write::SimpleFileOptions::default())
+                .unwrap();
+            zip.write_all(body.as_bytes()).unwrap();
+        }
+        zip.finish().unwrap();
+        path.to_string_lossy().into_owned()
+    }
+
+    #[test]
+    fn pptx_slides_are_read_in_numeric_order() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = office_file(
+            &dir,
+            "deck.pptx",
+            &[
+                (
+                    "ppt/slides/slide10.xml",
+                    "<a:p><a:r><a:t>Ten</a:t></a:r></a:p>",
+                ),
+                (
+                    "ppt/slides/slide2.xml",
+                    "<a:p><a:r><a:t>Two</a:t></a:r></a:p>",
+                ),
+                ("ppt/slides/_rels/slide2.xml.rels", "<x/>"),
+            ],
+        );
+        let doc = read_office(&path).unwrap();
+        assert_eq!(doc.kind, "pptx");
+        assert_eq!(
+            doc.paragraphs,
+            vec!["--- Slide 1 ---", "Two", "--- Slide 2 ---", "Ten"]
+        );
+    }
+
+    #[test]
+    fn xlsx_without_a_workbook_falls_back_to_the_sheet_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = office_file(
+            &dir,
+            "book.xlsx",
+            &[(
+                "xl/worksheets/sheet1.xml",
+                "<row r=\"1\"><c r=\"A1\" t=\"inlineStr\"><is><t>Hi</t></is></c></row>",
+            )],
+        );
+        let doc = read_office(&path).unwrap();
+        assert_eq!(doc.kind, "xlsx");
+        assert_eq!(doc.sheets.len(), 1);
+        assert_eq!(doc.sheets[0].name, "Sheet1");
+        assert_eq!(doc.sheets[0].rows, vec![vec!["Hi".to_string()]]);
+    }
 }
