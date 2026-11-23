@@ -21,19 +21,41 @@ case "$(uname -s)" in
     ARCH="$(uname -m)"
     [ "$ARCH" = "arm64" ] && ARCH="aarch64"
     APP="$DIST/Oryn.app"
+    DMG="$DIST/Oryn_${VERSION}_${ARCH}.dmg"
+    if otool -L "$BIN" | grep -E '^\s+/(opt/homebrew|usr/local)/'; then
+      echo "oryn links to the libraries above, which users do not have" >&2
+      exit 1
+    fi
     mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
     cp "$BIN" "$APP/Contents/MacOS/oryn"
     cp "$PKG/icons/icon.icns" "$APP/Contents/Resources/icon.icns"
     sed "s/@VERSION@/$VERSION/g" "$PKG/macos/Info.plist" > "$APP/Contents/Info.plist"
+    notarize() {
+      xcrun notarytool submit "$1" --wait \
+        --key "$APPLE_API_KEY_PATH" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER"
+    }
+    NOTARIZE=
     if [ -n "${MACOS_SIGNING_IDENTITY:-}" ]; then
-      codesign --force --deep --options runtime --timestamp -s "$MACOS_SIGNING_IDENTITY" "$APP"
+      codesign --force --options runtime --timestamp -s "$MACOS_SIGNING_IDENTITY" "$APP"
+      [ -n "${APPLE_API_KEY_PATH:-}" ] && NOTARIZE=1
     else
-      codesign --force --deep -s - "$APP"
+      codesign --force -s - "$APP"
+    fi
+    if [ -n "$NOTARIZE" ]; then
+      (cd "$DIST" && ditto -c -k --keepParent Oryn.app notarize.zip)
+      notarize "$DIST/notarize.zip"
+      rm "$DIST/notarize.zip"
+      xcrun stapler staple "$APP"
     fi
     STAGE="$(mktemp -d)"
     cp -R "$APP" "$STAGE/"
     ln -s /Applications "$STAGE/Applications"
-    hdiutil create -volname "Oryn" -srcfolder "$STAGE" -ov -format UDZO "$DIST/Oryn_${VERSION}_${ARCH}.dmg"
+    hdiutil create -volname "Oryn" -srcfolder "$STAGE" -ov -format UDZO "$DMG"
+    if [ -n "$NOTARIZE" ]; then
+      codesign --timestamp -s "$MACOS_SIGNING_IDENTITY" "$DMG"
+      notarize "$DMG"
+      xcrun stapler staple "$DMG"
+    fi
     (cd "$DIST" && ditto -c -k --keepParent Oryn.app "Oryn_${VERSION}_${ARCH}.app.zip")
     rm -rf "$STAGE" "$APP"
     ;;
