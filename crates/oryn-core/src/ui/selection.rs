@@ -64,6 +64,15 @@ impl Selection {
         self.bases.is_empty()
     }
 
+    pub fn names(&self) -> impl Iterator<Item = &str> {
+        self.bases.iter().map(String::as_str)
+    }
+
+    pub fn retain<E: Entry>(&mut self, items: &[E]) {
+        let present: HashSet<&str> = items.iter().map(|e| e.base()).collect();
+        self.bases.retain(|b| present.contains(b.as_str()));
+    }
+
     pub fn toggle(&mut self, base: &str) -> bool {
         if !self.bases.remove(base) {
             self.bases.insert(base.to_string());
@@ -171,6 +180,15 @@ mod tests {
         fn size(&self) -> u64 {
             self.2
         }
+    }
+
+    #[test]
+    fn retain_drops_missing_names() {
+        let mut sel = Selection::default();
+        sel.toggle("a");
+        sel.toggle("gone");
+        sel.retain(&[Item("a", false, 1), Item("b", false, 2)]);
+        assert_eq!(sel.names().collect::<Vec<_>>(), vec!["a"]);
     }
 
     #[test]

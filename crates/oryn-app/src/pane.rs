@@ -371,7 +371,74 @@ impl FilePane {
         cx.notify();
     }
 
-    fn report(&mut self, text: String, cx: &mut Context<Self>) {
+    pub fn op_dir(&self) -> PathBuf {
+        if self.view == ViewMode::Columns
+            && let Some(col) = self.columns.get(self.col_ix)
+        {
+            return col.path.clone();
+        }
+        self.path.clone()
+    }
+
+    pub fn cursor_entry(&self) -> Option<(String, bool)> {
+        if self.view == ViewMode::Columns
+            && let Some(col) = self.columns.get(self.col_ix)
+        {
+            return col.selected().map(|r| (r.name.to_string(), r.is_dir));
+        }
+        self.rows
+            .get(self.cursor)
+            .filter(|r| !r.is_parent)
+            .map(|r| (r.name.to_string(), r.is_dir))
+    }
+
+    pub fn targets(&self) -> Vec<PathBuf> {
+        let dir = self.op_dir();
+        let in_root = dir == self.path;
+        if in_root && !self.selection.is_empty() {
+            let mut names: Vec<&str> = self.selection.names().collect();
+            names.sort_unstable();
+            return names.into_iter().map(|n| dir.join(n)).collect();
+        }
+        self.cursor_entry()
+            .map(|(n, _)| vec![dir.join(n)])
+            .unwrap_or_default()
+    }
+
+    pub fn refresh(&mut self, focus: Option<&str>, cx: &mut Context<Self>) {
+        let keep = focus
+            .map(str::to_string)
+            .or_else(|| self.rows.get(self.cursor).map(|r| r.name.to_string()));
+        match read_rows(&self.path) {
+            Ok(items) => {
+                let mut rows = Vec::with_capacity(items.len() + 1);
+                if let Some(parent) = self.all_rows.first().filter(|r| r.is_parent) {
+                    rows.push(parent.clone());
+                }
+                rows.extend(items);
+                self.all_rows = rows;
+                self.selection.retain(&self.all_rows);
+                let old = self.cursor;
+                self.apply_filter(keep.as_deref());
+                let found = keep
+                    .as_deref()
+                    .is_some_and(|k| self.rows.iter().any(|r| r.name.as_ref() == k));
+                if !found && !self.rows.is_empty() {
+                    self.cursor = old.min(self.rows.len() - 1);
+                    self.scroll
+                        .scroll_to_item(self.scroll_target(), ScrollStrategy::Nearest);
+                }
+            }
+            Err(err) => self.error = Some(format!("Can't open this folder: {err}").into()),
+        }
+        cx.notify();
+    }
+
+    pub fn clear_marks(&mut self) {
+        self.selection.clear();
+    }
+
+    pub fn report(&mut self, text: String, cx: &mut Context<Self>) {
         self.notice = Some(text.into());
         cx.notify();
     }

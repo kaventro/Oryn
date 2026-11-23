@@ -1,6 +1,7 @@
 #![allow(deprecated, clippy::permissions_set_readonly_false)]
 
 pub mod archive;
+pub mod batch;
 pub mod compare;
 pub mod events;
 pub mod format;
