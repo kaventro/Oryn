@@ -115,7 +115,7 @@ impl Workspace {
         );
     }
 
-    fn other_dir(&self, cx: &App) -> PathBuf {
+    pub(super) fn other_dir(&self, cx: &App) -> PathBuf {
         let side = if self.dual {
             1 - self.active
         } else {

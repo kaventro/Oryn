@@ -1,5 +1,5 @@
 mod executor;
-mod matcher;
+pub mod matcher;
 mod query;
 mod service;
 mod session_store;

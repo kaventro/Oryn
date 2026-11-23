@@ -69,6 +69,33 @@ pub const COMMANDS: &[(&str, &str, &str, Make)] = &[
         Box::new(ToggleTerminal)
     }),
     ("search", "Filter Files", "Ctrl+F", || Box::new(FocusSearch)),
+    ("search", "Search Files", "Ctrl+Shift+F", || {
+        Box::new(ShowSearch)
+    }),
+    (
+        "replace",
+        "Find and Replace in Files",
+        "Ctrl+Shift+H",
+        || Box::new(ShowReplace),
+    ),
+    ("git-branch", "Git", "Ctrl+Shift+G", || Box::new(ShowGit)),
+    (
+        "git-compare",
+        "Compare and Sync Folders",
+        "Ctrl+Shift+D",
+        || Box::new(ShowCompare),
+    ),
+    ("files", "Find Duplicates", "Ctrl+Shift+U", || {
+        Box::new(ShowDuplicates)
+    }),
+    ("hash", "Checksums", "Ctrl+Shift+K", || {
+        Box::new(ShowChecksums)
+    }),
+    ("chart-pie", "Disk Space", "Ctrl+Shift+S", || {
+        Box::new(ShowDiskSpace)
+    }),
+    ("tag", "Tags", "", || Box::new(ShowTags)),
+    ("server", "SFTP", "Ctrl+Shift+R", || Box::new(ShowSftp)),
     ("settings", "Settings", "Ctrl+,", || Box::new(OpenSettings)),
     ("palette", "Next Accent Colour", "", || Box::new(CycleTray)),
 ];

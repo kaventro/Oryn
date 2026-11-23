@@ -4767,6 +4767,7 @@ dependencies = [
  "futures",
  "gpui-kit",
  "oryn-core",
+ "parking_lot",
  "portable-pty",
  "rust-embed",
 ]

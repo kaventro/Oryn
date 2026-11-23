@@ -41,6 +41,15 @@ cargo run --release -p oryn-app -- [left-dir] [right-dir]
 | Ctrl+R (Cmd+R) | Refresh both panes |
 | Ctrl+P (Cmd+P) | Command palette; type a path such as `~/Downloads` to jump |
 | Ctrl+, (Cmd+,) | Settings |
+| Ctrl+Shift+F | Search by name or contents |
+| Ctrl+Shift+H | Find and replace in files |
+| Ctrl+Shift+G | Git: stage, commit, diff, branches, pull and push |
+| Ctrl+Shift+D | Compare and sync two folders |
+| Ctrl+Shift+U | Find duplicate files |
+| Ctrl+Shift+K | SHA-256 and SHA-512 checksums |
+| Ctrl+Shift+S | Disk space |
+| Ctrl+Shift+R | SFTP |
+| Click a sidebar tag | Tag the selection and list tagged files |
 | Drag, Shift+drag | Copy or move onto a folder or the other pane |
 | Ctrl+Q (Cmd+Q) | Quit |
 
