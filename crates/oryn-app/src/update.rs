@@ -3,16 +3,18 @@ use std::time::Duration;
 use oryn_core::update::{LATEST_URL, Release, parse_latest};
 
 pub fn latest() -> Option<Release> {
-    let agent = ureq::AgentBuilder::new()
-        .timeout(Duration::from_secs(10))
-        .build();
+    let agent: ureq::Agent = ureq::Agent::config_builder()
+        .timeout_global(Some(Duration::from_secs(10)))
+        .build()
+        .into();
     let body = agent
         .get(LATEST_URL)
-        .set("Accept", "application/vnd.github+json")
-        .set("User-Agent", concat!("Oryn/", env!("CARGO_PKG_VERSION")))
+        .header("Accept", "application/vnd.github+json")
+        .header("User-Agent", concat!("Oryn/", env!("CARGO_PKG_VERSION")))
         .call()
         .ok()?
-        .into_string()
+        .body_mut()
+        .read_to_string()
         .ok()?;
     parse_latest(&body, env!("CARGO_PKG_VERSION"))
 }

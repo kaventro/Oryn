@@ -416,6 +416,7 @@ pub fn read_office(path: &str) -> ServiceResult<OfficeDoc> {
             let mut paragraphs = Vec::new();
             let mut slides: Vec<String> = zip
                 .file_names()
+                .filter_map(Result::ok)
                 .filter(|n| n.starts_with("ppt/slides/slide") && n.ends_with(".xml"))
                 .map(|n| n.to_string())
                 .collect();
@@ -449,6 +450,7 @@ pub fn read_office(path: &str) -> ServiceResult<OfficeDoc> {
             if targets.is_empty() {
                 let mut names: Vec<String> = zip
                     .file_names()
+                    .filter_map(Result::ok)
                     .filter(|n| n.starts_with("xl/worksheets/sheet") && n.ends_with(".xml"))
                     .map(|n| n.to_string())
                     .collect();
