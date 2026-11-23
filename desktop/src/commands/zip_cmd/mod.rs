@@ -1,4 +1,4 @@
-mod core;
+use oryn_core::zip_extract as core;
 
 pub use core::ZipExtractIn;
 use serde_json::Value;

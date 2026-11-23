@@ -1,6 +1,4 @@
-mod actions;
-mod query;
-mod shared;
+use oryn_core::git::{actions, query, shared};
 
 use serde_json::Value;
 

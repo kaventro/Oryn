@@ -1,18 +1,7 @@
-pub type ServiceResult<T> = anyhow::Result<T>;
+pub use oryn_core::services::{
+    fs_archive, fs_config, fs_delete, fs_duplicates, fs_listing, fs_office, fs_props, fs_rename,
+    fs_size, fs_vfs, fs_watcher, fs_zip, os_favorites, preview_asset, remote, ServiceResult,
+};
 
-pub mod fs_archive;
-pub mod fs_config;
-pub mod fs_delete;
-pub mod fs_duplicates;
-pub mod fs_listing;
-pub mod fs_office;
-pub mod fs_props;
-pub mod fs_rename;
-pub mod fs_size;
+pub mod events;
 pub mod fs_transfer;
-pub mod fs_vfs;
-pub mod fs_watcher;
-pub mod fs_zip;
-pub mod os_favorites;
-pub mod preview_asset;
-pub mod remote;

@@ -1,238 +1,112 @@
-use serde::Serialize;
-use std::fs;
-use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
-use tauri::{AppHandle, Manager};
+use std::path::{Path, PathBuf};
+
+use oryn_core::services::fs_transfer::sink::ProgressSink;
+use serde_json::Value;
+use tauri::{AppHandle, Emitter, Manager, Runtime};
 
 use crate::services::ServiceResult;
 
-pub mod conflicts;
-mod engine;
-pub mod sink;
+pub use oryn_core::services::fs_transfer::{
+    conflicts, CopyError, CopyStats, OverwritePolicy, TransferControl, TransferOut,
+};
 
-use engine::{should_copy_instead_of_rename, CopyEngine};
-pub use engine::{CopyError, CopyStats, OverwritePolicy};
-use sink::AppSink;
+type TransferFn = fn(&dyn ProgressSink, &Path, &Path, OverwritePolicy) -> TransferOut;
 
-/// Cancellation flag for the transfer in flight, held in Tauri managed state
-/// (`app.manage(TransferControl::default())`).
-#[derive(Default)]
-pub struct TransferControl {
-    abort: AtomicBool,
-}
+pub struct AppSink<'a, R: Runtime>(pub &'a AppHandle<R>);
 
-impl TransferControl {
-    pub fn request_abort(&self) {
-        self.abort.store(true, Ordering::SeqCst);
+impl<R: Runtime> ProgressSink for AppSink<'_, R> {
+    fn emit(&self, payload: Value) {
+        let _ = self.0.emit("fs:copyProgress", payload);
     }
 
-    pub fn reset(&self) {
-        self.abort.store(false, Ordering::SeqCst);
-    }
-
-    pub fn is_aborted(&self) -> bool {
-        self.abort.load(Ordering::SeqCst)
+    fn is_aborted(&self) -> bool {
+        self.0.state::<TransferControl>().is_aborted()
     }
 }
 
-fn control(app: &AppHandle) -> tauri::State<'_, TransferControl> {
-    app.state::<TransferControl>()
+async fn run_blocking<R: Runtime>(
+    app: AppHandle<R>,
+    src: &str,
+    dst: &str,
+    policy: OverwritePolicy,
+    op: TransferFn,
+) -> ServiceResult<TransferOut> {
+    app.state::<TransferControl>().reset();
+    let src = PathBuf::from(src);
+    let dst = PathBuf::from(dst);
+    tokio::task::spawn_blocking(move || op(&AppSink(&app), &src, &dst, policy))
+        .await
+        .map_err(|error| anyhow::anyhow!(error.to_string()))
 }
 
-/// Transfer outcome envelope. Unlike plain commands, a transfer has
-/// non-error outcomes (cancelled, partially skipped), so they travel in the
-/// payload instead of `Err`.
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TransferOut {
-    pub ok: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cancelled: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub copied: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub skipped: Option<u64>,
-    /// Set on a move that skipped items: the source was kept to avoid
-    /// deleting data that never reached the destination.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub src_kept: Option<bool>,
-}
-
-impl TransferOut {
-    fn success(stats: CopyStats) -> Self {
-        Self {
-            ok: true,
-            cancelled: None,
-            error: None,
-            copied: Some(stats.copied + stats.symlinks),
-            skipped: Some(stats.skipped_existing + stats.symlinks_skipped),
-            src_kept: None,
-        }
-    }
-
-    fn cancelled() -> Self {
-        Self {
-            ok: false,
-            cancelled: Some(true),
-            error: None,
-            copied: None,
-            skipped: None,
-            src_kept: None,
-        }
-    }
-
-    fn failed(error: String) -> Self {
-        Self {
-            ok: false,
-            cancelled: None,
-            error: Some(error),
-            copied: None,
-            skipped: None,
-            src_kept: None,
-        }
-    }
-
-    fn from_engine(result: Result<CopyStats, CopyError>) -> Self {
-        match result {
-            Ok(stats) => Self::success(stats),
-            Err(CopyError::Aborted) => Self::cancelled(),
-            Err(CopyError::Failed(error)) => Self::failed(error),
-        }
-    }
-}
-
-pub async fn copy(
-    app: AppHandle,
+pub async fn copy<R: Runtime>(
+    app: AppHandle<R>,
     src: &str,
     dst: &str,
     policy: OverwritePolicy,
 ) -> ServiceResult<TransferOut> {
-    control(&app).reset();
-    let src_path = PathBuf::from(src);
-    let dst_path = PathBuf::from(dst);
-    let app_handle = app.clone();
-
-    let result = tokio::task::spawn_blocking(move || {
-        let sink = AppSink(&app_handle);
-        CopyEngine::new(&sink, policy, &src_path).run(&src_path, &dst_path)
-    })
-    .await;
-
-    match result {
-        Ok(inner) => Ok(TransferOut::from_engine(inner)),
-        Err(error) => Err(anyhow::anyhow!(error.to_string())),
-    }
+    run_blocking(app, src, dst, policy, oryn_core::services::fs_transfer::copy).await
 }
 
-pub async fn move_path(
-    app: AppHandle,
+pub async fn move_path<R: Runtime>(
+    app: AppHandle<R>,
     src: &str,
     dst: &str,
     policy: OverwritePolicy,
 ) -> ServiceResult<TransferOut> {
-    control(&app).reset();
-
-    // Fast path: same-volume rename. Refuse to clobber when the policy says
-    // skip; rename() would replace the destination silently.
-    let dst_exists = fs::symlink_metadata(dst).is_ok();
-    if dst_exists && policy == OverwritePolicy::Skip {
-        let mut out = TransferOut::success(CopyStats {
-            skipped_existing: 1,
-            ..CopyStats::default()
-        });
-        out.src_kept = Some(true);
-        return Ok(out);
-    }
-
-    if let Err(error) = fs::rename(src, dst) {
-        if !should_copy_instead_of_rename(&error) && !dst_exists {
-            return Ok(TransferOut::failed(error.to_string()));
-        }
-        // Cross-device move, or rename refused because the destination
-        // exists (e.g. non-empty dir): fall through to copy + delete.
-    } else {
-        return Ok(TransferOut::success(CopyStats {
-            copied: 1,
-            ..CopyStats::default()
-        }));
-    }
-
-    let src_path = PathBuf::from(src);
-    let dst_path = PathBuf::from(dst);
-    let app_handle = app.clone();
-
-    let result = tokio::task::spawn_blocking(move || {
-        let sink = AppSink(&app_handle);
-        let stats = CopyEngine::new(&sink, policy, &src_path).run(&src_path, &dst_path)?;
-
-        // Delete the source only when everything was transferred; with
-        // skipped items the source is the sole copy of that data.
-        if stats.is_complete() {
-            if src_path.is_dir() {
-                fs::remove_dir_all(&src_path).map_err(CopyError::from)?;
-            } else {
-                fs::remove_file(&src_path).map_err(CopyError::from)?;
-            }
-        }
-        Ok::<CopyStats, CopyError>(stats)
-    })
-    .await;
-
-    match result {
-        Ok(inner) => {
-            let kept = matches!(&inner, Ok(stats) if !stats.is_complete());
-            let mut out = TransferOut::from_engine(inner);
-            if kept {
-                out.src_kept = Some(true);
-            }
-            Ok(out)
-        }
-        Err(error) => Err(anyhow::anyhow!(error.to_string())),
-    }
+    run_blocking(app, src, dst, policy, oryn_core::services::fs_transfer::move_path).await
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_transfer_control_lifecycle() {
-        let control = TransferControl::default();
-        assert!(!control.is_aborted());
-        control.request_abort();
-        assert!(control.is_aborted());
-        control.reset();
-        assert!(!control.is_aborted());
+    fn test_app() -> AppHandle<tauri::test::MockRuntime> {
+        let app = tauri::test::mock_builder()
+            .manage(TransferControl::default())
+            .build(tauri::test::mock_context(tauri::test::noop_assets()))
+            .expect("mock app");
+        app.handle().clone()
+    }
+
+    #[tokio::test]
+    async fn copies_and_moves_through_the_app_sink() {
+        let tmp = tempfile::tempdir().unwrap();
+        let src = tmp.path().join("a.txt");
+        std::fs::write(&src, b"hello").unwrap();
+        let copied = tmp.path().join("b.txt");
+        let moved = tmp.path().join("c.txt");
+        let app = test_app();
+
+        let out = copy(
+            app.clone(),
+            &src.to_string_lossy(),
+            &copied.to_string_lossy(),
+            OverwritePolicy::Overwrite,
+        )
+        .await
+        .unwrap();
+        assert!(out.ok);
+        assert_eq!(std::fs::read(&copied).unwrap(), b"hello");
+
+        let out = move_path(
+            app.clone(),
+            &copied.to_string_lossy(),
+            &moved.to_string_lossy(),
+            OverwritePolicy::Overwrite,
+        )
+        .await
+        .unwrap();
+        assert!(out.ok);
+        assert!(!copied.exists());
+        assert!(moved.exists());
     }
 
     #[test]
-    fn test_transfer_out_states() {
-        let success = TransferOut::success(CopyStats {
-            copied: 5,
-            symlinks: 1,
-            skipped_existing: 2,
-            symlinks_skipped: 1,
-            ..Default::default()
-        });
-        assert!(success.ok);
-        assert_eq!(success.copied, Some(6));
-        assert_eq!(success.skipped, Some(3));
-        assert!(success.cancelled.is_none());
-
-        let cancelled = TransferOut::cancelled();
-        assert!(!cancelled.ok);
-        assert_eq!(cancelled.cancelled, Some(true));
-
-        let failed = TransferOut::failed("disk full".into());
-        assert!(!failed.ok);
-        assert_eq!(failed.error.as_deref(), Some("disk full"));
-
-        let from_engine_aborted = TransferOut::from_engine(Err(CopyError::Aborted));
-        assert_eq!(from_engine_aborted.cancelled, Some(true));
-
-        let from_engine_failed = TransferOut::from_engine(Err(CopyError::Failed("io error".into())));
-        assert_eq!(from_engine_failed.error.as_deref(), Some("io error"));
+    fn the_sink_reports_abort_requests() {
+        let app = test_app();
+        assert!(!AppSink(&app).is_aborted());
+        app.state::<TransferControl>().request_abort();
+        assert!(AppSink(&app).is_aborted());
     }
 }

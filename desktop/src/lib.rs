@@ -1,9 +1,9 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod commands;
-mod fs_safe;
 pub mod services;
-pub mod vfs;
+
+pub use oryn_core::{fs_safe, vfs};
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -73,7 +73,9 @@ pub fn run() {
                 app.state::<Arc<services::fs_watcher::FsWatcherService>>()
                     .inner(),
             );
-            watcher_service.set_app_handle(app.handle().clone());
+            watcher_service.set_sink(Arc::new(services::events::TauriEvents(
+                app.handle().clone(),
+            )));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
