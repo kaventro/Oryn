@@ -12,7 +12,7 @@ dependencies = [
  "cap-std",
  "chrono",
  "diffy",
- "dirs",
+ "dirs 7.0.0",
  "filetime",
  "flate2",
  "globset",
@@ -49,7 +49,7 @@ dependencies = [
  "walkdir",
  "win32job",
  "windows-sys 0.59.0",
- "zip 8.6.0",
+ "zip 9.0.5",
 ]
 
 [[package]]
@@ -476,6 +476,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fd16c4719339c4530435d38e511904438d07cce7950afa3718a84ac36c10e89e"
 
 [[package]]
+name = "cfg_aliases"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f079e83a288787bcd14a6aea84cee5c87a67c5a3e660c30f557a3d24761b3527"
+
+[[package]]
 name = "chrono"
 version = "0.4.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -533,6 +539,15 @@ name = "constant_time_eq"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3d52eff69cd5e647efe296129160853a42795992097e8af39800e1060caeea9b"
+
+[[package]]
+name = "constant_time_eq"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9eb6feb175df65d0a3ccd3e73484e940d0ac664e8034f0519fd49a93db3071d9"
+dependencies = [
+ "rustversion",
+]
 
 [[package]]
 name = "cookie"
@@ -852,6 +867,15 @@ dependencies = [
  "crypto-common 0.2.2",
  "ctutils",
  "zeroize",
+]
+
+[[package]]
+name = "dirs"
+version = "6.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c3e8aa94d75141228480295a7d0e7feb620b1a5ad9f12bc40be62411e38cce4e"
+dependencies = [
+ "dirs-sys",
 ]
 
 [[package]]
@@ -2495,7 +2519,19 @@ checksum = "ab2156c4fce2f8df6c499cc1c763e4394b7482525bf2a9701c9d79d215f519e4"
 dependencies = [
  "bitflags 2.13.1",
  "cfg-if",
- "cfg_aliases",
+ "cfg_aliases 0.1.1",
+ "libc",
+]
+
+[[package]]
+name = "nix"
+version = "0.31.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2bc81ce8148d3b4f3274da811f11cdd824ae661ee4ef732cdb229825cf5be7f7"
+dependencies = [
+ "bitflags 2.13.1",
+ "cfg-if",
+ "cfg_aliases 0.2.2",
  "libc",
 ]
 
@@ -2902,7 +2938,7 @@ dependencies = [
  "cap-std",
  "chrono",
  "diffy",
- "dirs",
+ "dirs 6.0.0",
  "filetime",
  "flate2",
  "globset",
@@ -2913,7 +2949,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
- "sha2 0.11.0",
+ "sha2 0.11.1",
  "ssh2",
  "tar",
  "tokio",
@@ -3126,7 +3162,7 @@ dependencies = [
  "lazy_static",
  "libc",
  "log",
- "nix",
+ "nix 0.28.0",
  "serial2",
  "shared_library",
  "shell-words",
@@ -4255,7 +4291,7 @@ dependencies = [
  "anyhow",
  "bytes",
  "cookie",
- "dirs",
+ "dirs 7.0.0",
  "dunce",
  "embed_plist",
  "getrandom 0.3.4",
@@ -4306,7 +4342,7 @@ checksum = "adddb0e648752aaac5da9c3c3c6a68e1e87cab55e3b757b18a9441ef8c3ac614"
 dependencies = [
  "anyhow",
  "cargo_toml",
- "dirs",
+ "dirs 7.0.0",
  "glob",
  "heck 0.5.0",
  "json-patch",
@@ -4395,7 +4431,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "855a336eb389d2c1502244fd48fa2d8cb487a430f691bbaed025195f99a04489"
 dependencies = [
  "base64 0.22.1",
- "dirs",
+ "dirs 7.0.0",
  "flate2",
  "futures-util",
  "http",
@@ -4939,7 +4975,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b2b9c52859a94554803ccd4a24b98f74148ebc73b90676d783f3490b1bff9d72"
 dependencies = [
  "crossbeam-channel",
- "dirs",
+ "dirs 7.0.0",
  "libappindicator",
  "muda",
  "objc2",
@@ -5952,7 +5988,7 @@ dependencies = [
  "block2",
  "cookie",
  "crossbeam-channel",
- "dirs",
+ "dirs 7.0.0",
  "dom_query",
  "dpi",
  "dunce",
@@ -6155,13 +6191,35 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2d04a6b5381502aa6087c94c669499eb1602eb9c5e8198e534de571f7154809b"
 dependencies = [
  "aes",
- "constant_time_eq",
+ "constant_time_eq 0.4.2",
  "crc32fast",
  "flate2",
  "getrandom 0.4.3",
  "hmac",
  "indexmap 2.14.1",
  "memchr",
+ "pbkdf2",
+ "sha1",
+ "typed-path",
+ "zeroize",
+ "zopfli",
+]
+
+[[package]]
+name = "zip"
+version = "9.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6e04976da629d3b04204ba8105b396a193af8ad2583b2c79bfb3ab8af580a11e"
+dependencies = [
+ "aes",
+ "constant_time_eq 0.6.1",
+ "crc32fast",
+ "flate2",
+ "getrandom 0.4.3",
+ "hmac",
+ "indexmap 2.14.1",
+ "memchr",
+ "nix 0.31.4",
  "pbkdf2",
  "sha1",
  "typed-path",
