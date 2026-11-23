@@ -25,6 +25,8 @@ pub struct Workspace {
     terminal: Option<Entity<TerminalView>>,
     show_terminal: bool,
     search: Entity<InputState>,
+    mask_input: Entity<InputState>,
+    mask_selecting: Option<bool>,
     placeholder_for: SharedString,
 }
 
@@ -102,6 +104,17 @@ impl Workspace {
             }
         })
         .detach();
+        let mask_input = cx.new(|cx| InputState::new(window, cx));
+        cx.subscribe_in(
+            &mask_input,
+            window,
+            |this, _, ev: &InputEvent, window, cx| {
+                if matches!(ev, InputEvent::PressEnter { .. }) {
+                    this.confirm_prompt(&ConfirmPrompt, window, cx);
+                }
+            },
+        )
+        .detach();
         let focus = l.read(cx).focus.clone();
         window.focus(&focus, cx);
         Self {
@@ -114,8 +127,191 @@ impl Workspace {
             terminal: None,
             show_terminal: false,
             search,
+            mask_input,
+            mask_selecting: None,
             placeholder_for: SharedString::default(),
         }
+    }
+
+    fn open_mask(&mut self, selecting: bool, window: &mut Window, cx: &mut Context<Self>) {
+        self.mask_selecting = Some(selecting);
+        self.mask_input.update(cx, |s, cx| {
+            s.set_value("*", window, cx);
+            s.select_all(window, cx);
+            s.focus(window, cx);
+        });
+        cx.notify();
+    }
+
+    fn close_prompt(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.mask_selecting = None;
+        self.focus_pane(self.active, window, cx);
+        cx.notify();
+    }
+
+    fn confirm_prompt(&mut self, _: &ConfirmPrompt, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(selecting) = self.mask_selecting else {
+            return;
+        };
+        let mask = self.mask_input.read(cx).value().trim().to_string();
+        if !mask.is_empty() {
+            self.active_pane()
+                .clone()
+                .update(cx, |p, cx| p.apply_mask(&mask, selecting, cx));
+        }
+        self.close_prompt(window, cx);
+    }
+
+    fn cancel_prompt(&mut self, _: &CancelPrompt, window: &mut Window, cx: &mut Context<Self>) {
+        self.close_prompt(window, cx);
+    }
+
+    fn render_mask_prompt(
+        &self,
+        selecting: bool,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let button = |id: &'static str, label: &'static str, primary: bool| {
+            div()
+                .id(id)
+                .role(Role::Button)
+                .aria_label(label)
+                .flex()
+                .items_center()
+                .justify_center()
+                .h(px(30.0))
+                .px(px(16.0))
+                .rounded(px(6.0))
+                .text_size(px(13.0))
+                .cursor_pointer()
+                .when(primary, |d| {
+                    d.bg(p.accent)
+                        .text_color(p.on_accent)
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .shadow(vec![BoxShadow {
+                            color: with_alpha(p.accent, 0.35),
+                            offset: point(px(0.0), px(2.0)),
+                            blur_radius: px(8.0),
+                            spread_radius: px(0.0),
+                            inset: false,
+                        }])
+                        .hover(|s| s.bg(p.accent_hover))
+                })
+                .when(!primary, |d| {
+                    d.bg(white_alpha(0.08))
+                        .border_1()
+                        .border_color(white_alpha(0.1))
+                        .text_color(hex(0xd1d1d6))
+                        .hover(|s| s.bg(white_alpha(0.14)).text_color(p.text_strong))
+                })
+                .child(label)
+        };
+        div()
+            .id("mask-overlay")
+            .key_context("MaskPrompt")
+            .on_action(cx.listener(Self::cancel_prompt))
+            .on_action(cx.listener(Self::confirm_prompt))
+            .absolute()
+            .inset_0()
+            .flex()
+            .items_center()
+            .justify_center()
+            .bg(black_alpha(0.55))
+            .on_click(cx.listener(|this, _, w, cx| this.close_prompt(w, cx)))
+            .child(
+                div()
+                    .id("mask-dialog")
+                    .role(Role::Dialog)
+                    .aria_label(if selecting {
+                        "Select by mask"
+                    } else {
+                        "Deselect by mask"
+                    })
+                    .on_click(|_, _, cx| cx.stop_propagation())
+                    .w(px(420.0))
+                    .flex()
+                    .flex_col()
+                    .py(px(20.0))
+                    .px(px(24.0))
+                    .rounded(px(14.0))
+                    .bg(hex(0x242428).opacity(0.94))
+                    .border_1()
+                    .border_color(white_alpha(0.12))
+                    .shadow(vec![BoxShadow {
+                        color: black_alpha(0.75),
+                        offset: point(px(0.0), px(28.0)),
+                        blur_radius: px(70.0),
+                        spread_radius: px(0.0),
+                        inset: false,
+                    }])
+                    .child(
+                        div()
+                            .mb(px(4.0))
+                            .text_size(px(15.0))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(p.text_strong)
+                            .child(if selecting {
+                                "Select by mask"
+                            } else {
+                                "Deselect by mask"
+                            }),
+                    )
+                    .child(
+                        div()
+                            .mb(px(14.0))
+                            .text_size(px(12.5))
+                            .text_color(p.text_muted)
+                            .child("Use * and ? as wildcards, for example *.png"),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .h(px(34.0))
+                            .mb(px(18.0))
+                            .px(px(12.0))
+                            .rounded(px(8.0))
+                            .bg(white_alpha(0.1))
+                            .border_1()
+                            .border_color(p.accent)
+                            .shadow(vec![BoxShadow {
+                                color: with_alpha(p.accent, 0.28),
+                                offset: point(px(0.0), px(0.0)),
+                                blur_radius: px(0.0),
+                                spread_radius: px(3.0),
+                                inset: false,
+                            }])
+                            .child(
+                                Input::new(&self.mask_input)
+                                    .appearance(false)
+                                    .text_size(px(13.0))
+                                    .text_color(p.text_strong),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .justify_end()
+                            .gap(px(10.0))
+                            .child(
+                                button("mask-cancel", "Cancel", false).on_click(
+                                    cx.listener(|this, _, w, cx| this.close_prompt(w, cx)),
+                                ),
+                            )
+                            .child(
+                                button(
+                                    "mask-ok",
+                                    if selecting { "Select" } else { "Deselect" },
+                                    true,
+                                )
+                                .on_click(cx.listener(
+                                    |this, _, w, cx| this.confirm_prompt(&ConfirmPrompt, w, cx),
+                                )),
+                            ),
+                    ),
+            )
+            .into_any_element()
     }
 
     fn spawn_pane(path: PathBuf, dual: bool, cx: &mut Context<Self>) -> Entity<FilePane> {
@@ -1108,7 +1304,9 @@ impl Workspace {
         let pane = self.active_pane().read(cx);
         let (n, bytes) = pane.marked_summary();
         let (total, total_bytes) = pane.totals();
-        let left = if n > 0 {
+        let left = if let Some(notice) = &pane.notice {
+            notice.to_string()
+        } else if n > 0 {
             format!("{n} of {total} selected ({})", fmt_size(Some(bytes)))
         } else {
             format!("{total} items \u{2014} {}", fmt_size(Some(total_bytes)))
@@ -1207,6 +1405,8 @@ impl Render for Workspace {
             .on_action(cx.listener(Self::toggle_terminal))
             .on_action(cx.listener(Self::focus_search))
             .on_action(cx.listener(Self::cycle_tray))
+            .on_action(cx.listener(|this, _: &SelectByMask, w, cx| this.open_mask(true, w, cx)))
+            .on_action(cx.listener(|this, _: &DeselectByMask, w, cx| this.open_mask(false, w, cx)))
             .on_action(cx.listener(|_, _: &Quit, _, cx| cx.quit()))
             .flex()
             .size_full()
@@ -1253,5 +1453,8 @@ impl Render for Workspace {
                     })
                     .child(self.render_status(&p, cx)),
             )
+            .when_some(self.mask_selecting, |d, selecting| {
+                d.child(self.render_mask_prompt(selecting, &p, cx))
+            })
     }
 }

@@ -115,6 +115,7 @@ pub struct FilePane {
     pub load_time: Duration,
     pub dual: bool,
     pub view: ViewMode,
+    pub notice: Option<SharedString>,
     grid_width: f32,
     columns: Vec<Column>,
     col_ix: usize,
@@ -145,6 +146,7 @@ impl FilePane {
             load_time: Duration::ZERO,
             dual: true,
             view: ViewMode::List,
+            notice: None,
             grid_width: 0.0,
             columns: Vec::new(),
             col_ix: 0,
@@ -188,6 +190,7 @@ impl FilePane {
                 self.error = None;
                 self.filter.clear();
                 self.selection = Selection::default();
+                self.notice = None;
                 self.apply_filter(focus_name);
             }
             Err(err) => {
@@ -368,6 +371,40 @@ impl FilePane {
         cx.notify();
     }
 
+    fn report(&mut self, text: String, cx: &mut Context<Self>) {
+        self.notice = Some(text.into());
+        cx.notify();
+    }
+
+    pub fn apply_mask(&mut self, mask: &str, selecting: bool, cx: &mut Context<Self>) {
+        let text = self.selection.apply_mask(&self.all_rows, mask, selecting);
+        self.report(text, cx);
+    }
+
+    fn invert_selection(&mut self, _: &InvertSelection, _: &mut Window, cx: &mut Context<Self>) {
+        let text = self.selection.invert(&self.all_rows);
+        self.report(text, cx);
+    }
+
+    fn clear_selection(&mut self, _: &ClearSelection, _: &mut Window, cx: &mut Context<Self>) {
+        let text = self.selection.clear();
+        self.report(text, cx);
+    }
+
+    fn select_by_extension(
+        &mut self,
+        _: &SelectByExtension,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let cursor = self.rows.get(self.cursor);
+        let text = self
+            .selection
+            .select_by_extension(&self.all_rows, cursor)
+            .unwrap_or_else(|| "Put the cursor on a file first.".to_string());
+        self.report(text, cx);
+    }
+
     pub fn is_marked(&self, ix: usize) -> bool {
         self.rows
             .get(ix)
@@ -544,6 +581,7 @@ impl FilePane {
         {
             let name = row.name.clone();
             self.selection.toggle(&name);
+            self.notice = None;
         }
         self.set_cursor(self.cursor + 1, cx);
     }
@@ -1192,6 +1230,9 @@ impl Render for FilePane {
             .on_action(cx.listener(Self::end))
             .on_action(cx.listener(Self::toggle_mark))
             .on_action(cx.listener(Self::mark_all))
+            .on_action(cx.listener(Self::invert_selection))
+            .on_action(cx.listener(Self::clear_selection))
+            .on_action(cx.listener(Self::select_by_extension))
             .on_action(cx.listener(Self::open_entry))
             .on_action(cx.listener(|this, _: &GoParent, _, cx| this.go_parent(cx)))
             .on_action(cx.listener(|this, _: &GoBack, _, cx| this.go_back(cx)))
