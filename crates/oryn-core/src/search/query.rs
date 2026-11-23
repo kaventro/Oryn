@@ -86,9 +86,6 @@ impl TryFrom<SearchStartIn> for SearchQuery {
     type Error = String;
 
     fn try_from(input: SearchStartIn) -> Result<Self, Self::Error> {
-        // Keep the existing UI option wire-compatible until a native index
-        // strategy is implemented. The normal filesystem strategy is the
-        // deliberate fallback for now.
         let _native_index_fallback = input.use_native_index;
         let root_dir = PathBuf::from(input.root_dir.trim());
         if !root_dir.is_dir() {
@@ -286,9 +283,6 @@ mod tests {
             include_hidden: false,
             search_in_archives: false,
             archive_search_contents: false,
-            // Spotlight is an optional future strategy; while it is not
-            // available, the request intentionally falls back to normal
-            // filesystem search instead of failing the visible UI control.
             use_native_index: true,
             max_results: 99_999,
         })

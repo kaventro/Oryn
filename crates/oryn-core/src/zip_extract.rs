@@ -61,22 +61,26 @@ mod tests {
         let res = zip_extract(ZipExtractIn {
             zip_path: zip_file.to_str().unwrap().into(),
             entry_name: "sample.txt".into(),
-        }).unwrap();
+        })
+        .unwrap();
 
         assert_eq!(res["ok"], true);
         let extracted_path = res["path"].as_str().unwrap();
-        assert_eq!(fs::read_to_string(extracted_path).unwrap(), "zip sample data");
+        assert_eq!(
+            fs::read_to_string(extracted_path).unwrap(),
+            "zip sample data"
+        );
 
-        // Nonexistent entry
         assert!(zip_extract(ZipExtractIn {
             zip_path: zip_file.to_str().unwrap().into(),
             entry_name: "missing.txt".into(),
-        }).is_err());
+        })
+        .is_err());
 
-        // Nonexistent zip
         assert!(zip_extract(ZipExtractIn {
             zip_path: "not_a_file.zip".into(),
             entry_name: "sample.txt".into(),
-        }).is_err());
+        })
+        .is_err());
     }
 }

@@ -1,4 +1,4 @@
-pub mod core;
+pub use oryn_core::archive as core;
 
 use serde_json::Value;
 

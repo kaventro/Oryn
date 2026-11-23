@@ -113,7 +113,6 @@ fn create_archive_impl(input: CreateArchiveIn) -> Result<Value> {
         }
         tar.finish()?;
     } else {
-        // ZIP format (supports AES-256 password protection)
         let zip_file = File::create(&dest_path)
             .with_context(|| format!("Failed to create file {:?}", dest_path))?;
         let mut zip = ZipWriter::new(zip_file);
@@ -245,10 +244,9 @@ fn extract_archive_impl(input: ExtractArchiveIn) -> Result<Value> {
             }
         }
     } else {
-        // ZIP format
         let f = File::open(&archive_path)?;
-        let mut archive = ZipArchive::new(f)
-            .map_err(|e| anyhow!("Failed to open zip archive: {}", e))?;
+        let mut archive =
+            ZipArchive::new(f).map_err(|e| anyhow!("Failed to open zip archive: {}", e))?;
 
         let password = input.password.as_deref().unwrap_or("");
 
@@ -368,7 +366,6 @@ fn list_archive_entries_impl(input: ListArchiveIn) -> Result<Value> {
     }))
 }
 
-/// Safely resolves a path against a base canonical directory to prevent Zip-Slip attacks.
 fn safe_resolve_path(canonical_base: &Path, rel_path: &Path) -> Result<PathBuf> {
     let mut out = canonical_base.to_path_buf();
     for comp in rel_path.components() {
@@ -377,14 +374,18 @@ fn safe_resolve_path(canonical_base: &Path, rel_path: &Path) -> Result<PathBuf> 
             std::path::Component::CurDir => {}
             std::path::Component::ParentDir => {
                 if !out.pop() || !out.starts_with(canonical_base) {
-                    return Err(anyhow!("Archive entry escapes destination directory (zip-slip)"));
+                    return Err(anyhow!(
+                        "Archive entry escapes destination directory (zip-slip)"
+                    ));
                 }
             }
             _ => return Err(anyhow!("Invalid entry path component")),
         }
     }
     if !out.starts_with(canonical_base) {
-        return Err(anyhow!("Archive entry escapes destination directory (zip-slip)"));
+        return Err(anyhow!(
+            "Archive entry escapes destination directory (zip-slip)"
+        ));
     }
     Ok(out)
 }
@@ -407,7 +408,8 @@ mod tests {
             format: Some("zip".into()),
             password: None,
             compression_level: Some(6),
-        }).unwrap();
+        })
+        .unwrap();
 
         assert_eq!(res["ok"], true);
         assert!(zip_dest.exists());
@@ -417,12 +419,16 @@ mod tests {
             archive_path: zip_dest.to_string_lossy().to_string(),
             destination_dir: extract_dir.to_string_lossy().to_string(),
             password: None,
-        }).unwrap();
+        })
+        .unwrap();
 
         assert_eq!(ext_res["ok"], true);
         let extracted_file = extract_dir.join("hello.txt");
         assert!(extracted_file.exists());
-        assert_eq!(fs::read_to_string(extracted_file).unwrap(), "Hello Oryn Archive!");
+        assert_eq!(
+            fs::read_to_string(extracted_file).unwrap(),
+            "Hello Oryn Archive!"
+        );
     }
 
     #[test]
@@ -438,11 +444,11 @@ mod tests {
             format: Some("zip".into()),
             password: Some("mySecretPass99".into()),
             compression_level: Some(6),
-        }).unwrap();
+        })
+        .unwrap();
 
         let extract_dir = dir.path().join("extracted_enc");
 
-        // Attempt without password should fail
         let no_pass_res = extract_archive_impl(ExtractArchiveIn {
             archive_path: zip_dest.to_string_lossy().to_string(),
             destination_dir: extract_dir.to_string_lossy().to_string(),
@@ -450,17 +456,20 @@ mod tests {
         });
         assert!(no_pass_res.is_err());
 
-        // Extract with correct password
         let ext_res = extract_archive_impl(ExtractArchiveIn {
             archive_path: zip_dest.to_string_lossy().to_string(),
             destination_dir: extract_dir.to_string_lossy().to_string(),
             password: Some("mySecretPass99".into()),
-        }).unwrap();
+        })
+        .unwrap();
 
         assert_eq!(ext_res["ok"], true);
         let extracted_file = extract_dir.join("secret.txt");
         assert!(extracted_file.exists());
-        assert_eq!(fs::read_to_string(extracted_file).unwrap(), "Super Secret Data 12345");
+        assert_eq!(
+            fs::read_to_string(extracted_file).unwrap(),
+            "Super Secret Data 12345"
+        );
     }
 
     #[test]
@@ -476,18 +485,23 @@ mod tests {
             format: Some("tar.gz".into()),
             password: None,
             compression_level: Some(6),
-        }).unwrap();
+        })
+        .unwrap();
 
         let extract_dir = dir.path().join("extracted_tar");
         let ext_res = extract_archive_impl(ExtractArchiveIn {
             archive_path: tar_dest.to_string_lossy().to_string(),
             destination_dir: extract_dir.to_string_lossy().to_string(),
             password: None,
-        }).unwrap();
+        })
+        .unwrap();
 
         assert_eq!(ext_res["ok"], true);
         let extracted_file = extract_dir.join("tar_test.txt");
         assert!(extracted_file.exists());
-        assert_eq!(fs::read_to_string(extracted_file).unwrap(), "Tar Gz Contents");
+        assert_eq!(
+            fs::read_to_string(extracted_file).unwrap(),
+            "Tar Gz Contents"
+        );
     }
 }

@@ -138,7 +138,7 @@ impl SearchService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::commands::search_cmd::core::query::{EntryTypes, NameMatchMode};
+    use crate::search::query::{EntryTypes, NameMatchMode};
     use std::fs;
     use tempfile::tempdir;
 

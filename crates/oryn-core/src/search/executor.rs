@@ -422,10 +422,6 @@ impl ArchiveSearchExecutor {
                 if is_dir || entry.size() > MAX_ARCHIVE_ENTRY_CONTENT_BYTES {
                     continue;
                 }
-                // Bound the ACTUAL decompressed read: a malicious archive can
-                // declare a small uncompressed size (passing the check above)
-                // while its deflate stream expands to gigabytes. Cap the read at
-                // the limit and skip entries whose real content exceeds it.
                 let cap = (entry.size() as usize).min(MAX_ARCHIVE_ENTRY_CONTENT_BYTES as usize);
                 let mut bytes = Vec::with_capacity(cap);
                 if entry
@@ -632,7 +628,7 @@ fn is_hidden(entry: &DirEntry) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::commands::search_cmd::core::query::{EntryTypes, NameMatchMode};
+    use crate::search::query::{EntryTypes, NameMatchMode};
     use std::fs;
     use std::io::Write;
     use tempfile::tempdir;

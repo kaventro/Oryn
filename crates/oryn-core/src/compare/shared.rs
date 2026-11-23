@@ -166,10 +166,10 @@ mod tests {
         assert!(map.contains_key("nested/one.txt"));
 
         let diff = binary_differ(&f1, &f2).unwrap();
-        assert!(!diff); // Not different
+        assert!(!diff);
 
         std::fs::write(&f2, b"modified content").unwrap();
         let diff2 = binary_differ(&f1, &f2).unwrap();
-        assert!(diff2); // Different
+        assert!(diff2);
     }
 }

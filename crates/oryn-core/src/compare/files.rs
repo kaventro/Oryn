@@ -83,17 +83,17 @@ mod tests {
         std::fs::create_dir(&d1).unwrap();
         std::fs::write(&f1, b"hello").unwrap();
 
-        // Nonexistent
         assert!(compare_files(CompareFilesIn {
             left_path: "missing.txt".into(),
             right_path: f1.to_str().unwrap().into(),
-        }).is_err());
+        })
+        .is_err());
 
-        // Directory
         assert!(compare_files(CompareFilesIn {
             left_path: d1.to_str().unwrap().into(),
             right_path: f1.to_str().unwrap().into(),
-        }).is_err());
+        })
+        .is_err());
     }
 
     #[test]
@@ -107,19 +107,19 @@ mod tests {
         std::fs::write(&f2, "line 1\nline 2\n").unwrap();
         std::fs::write(&f3, "line 1\nline changed\n").unwrap();
 
-        // Identical
         let same_res = compare_files(CompareFilesIn {
             left_path: f1.to_str().unwrap().into(),
             right_path: f2.to_str().unwrap().into(),
-        }).unwrap();
+        })
+        .unwrap();
         assert_eq!(same_res["ok"], true);
         assert_eq!(same_res["same"], true);
 
-        // Diff
         let diff_res = compare_files(CompareFilesIn {
             left_path: f1.to_str().unwrap().into(),
             right_path: f3.to_str().unwrap().into(),
-        }).unwrap();
+        })
+        .unwrap();
         assert_eq!(diff_res["ok"], true);
         assert_eq!(diff_res["same"], false);
         assert_eq!(diff_res["engine"], "diffy");
@@ -132,13 +132,14 @@ mod tests {
         let b1 = tmp.path().join("bin1.dat");
         let b2 = tmp.path().join("bin2.dat");
 
-        std::fs::write(&b1, &[0u8, 1, 2, 3, 0, 5]).unwrap();
-        std::fs::write(&b2, &[0u8, 1, 9, 9, 0, 5, 8]).unwrap();
+        std::fs::write(&b1, [0u8, 1, 2, 3, 0, 5]).unwrap();
+        std::fs::write(&b2, [0u8, 1, 9, 9, 0, 5, 8]).unwrap();
 
         let res = compare_files(CompareFilesIn {
             left_path: b1.to_str().unwrap().into(),
             right_path: b2.to_str().unwrap().into(),
-        }).unwrap();
+        })
+        .unwrap();
         assert_eq!(res["ok"], true);
         assert_eq!(res["same"], false);
         assert_eq!(res["engine"], "binary");

@@ -1,6 +1,8 @@
 use serde_json::{json, Value};
 use std::fs;
-use tauri::{AppHandle, Emitter};
+use std::sync::Arc;
+
+use crate::events::EventSink;
 use tokio::process::Command as AsyncCommand;
 
 const MAX_REPLACE_FILE_BYTES: u64 = 25 * 1024 * 1024;
@@ -10,7 +12,10 @@ pub struct FindReplaceIn {
     pub payload: Value,
 }
 
-pub async fn fs_find_replace(app: AppHandle, input: FindReplaceIn) -> Result<Value, String> {
+pub async fn fs_find_replace(
+    sink: Arc<dyn EventSink>,
+    input: FindReplaceIn,
+) -> Result<Value, String> {
     let payload = input.payload;
     let root_dirs: Vec<String> = payload
         .get("rootDirs")
@@ -105,7 +110,7 @@ pub async fn fs_find_replace(app: AppHandle, input: FindReplaceIn) -> Result<Val
     let mut changed: Vec<String> = Vec::new();
     let mut errors: Vec<Value> = Vec::new();
     for (i, file_path) in matched.iter().enumerate() {
-        let _ = app.emit(
+        sink.emit(
             "fs:replaceProgress",
             json!({"file": file_path, "index": i + 1, "total": matched.len()}),
         );
@@ -113,7 +118,6 @@ pub async fn fs_find_replace(app: AppHandle, input: FindReplaceIn) -> Result<Val
             changed.push(file_path.clone());
             continue;
         }
-        // Guard against loading a huge matched file entirely into memory.
         if fs::metadata(file_path).map(|m| m.len()).unwrap_or(0) > MAX_REPLACE_FILE_BYTES {
             errors.push(json!({"file": file_path, "error": "file too large for in-place replace"}));
             continue;
@@ -206,7 +210,6 @@ mod tests {
 
     #[test]
     fn literal_replacement_does_not_expand_dollar_groups() {
-        // In literal mode, `$1` in the replacement must be inserted verbatim.
         assert_eq!(
             apply_replacement("hello", "hello", "$1world", false, false).unwrap(),
             "$1world"

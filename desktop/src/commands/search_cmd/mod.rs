@@ -1,4 +1,4 @@
-mod core;
+use oryn_core::search as core;
 
 pub use core::SearchService;
 use core::{

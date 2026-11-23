@@ -49,7 +49,6 @@ pub async fn git_status(input: RepoPathIn) -> Result<Value, String> {
                 }
             }
         } else if line.starts_with("1 ") {
-            // Ordinary modified / staged file: 1 <XY> <sub> <mH> <mI> <mW> <hH> <hI> <path>
             let parts: Vec<&str> = line.splitn(9, ' ').collect();
             if parts.len() >= 9 {
                 let xy = parts[1];
@@ -62,7 +61,6 @@ pub async fn git_status(input: RepoPathIn) -> Result<Value, String> {
                 }));
             }
         } else if line.starts_with("2 ") {
-            // Renamed / copied file
             let parts: Vec<&str> = line.splitn(10, ' ').collect();
             if parts.len() >= 10 {
                 let xy = parts[1];
@@ -76,7 +74,6 @@ pub async fn git_status(input: RepoPathIn) -> Result<Value, String> {
                 }));
             }
         } else if line.starts_with("u ") {
-            // Unmerged conflict
             let parts: Vec<&str> = line.splitn(11, ' ').collect();
             if parts.len() >= 11 {
                 let xy = parts[1];
@@ -415,40 +412,57 @@ filename test.txt
 
     #[tokio::test]
     async fn test_git_queries() {
-        let cur_dir = std::env::current_dir().unwrap().to_string_lossy().to_string();
+        let cur_dir = std::env::current_dir()
+            .unwrap()
+            .to_string_lossy()
+            .to_string();
 
-        // git_is_repo on actual repo
-        let is_repo_res = git_is_repo(DirPathIn { dir_path: cur_dir.clone() }).await.unwrap();
+        let is_repo_res = git_is_repo(DirPathIn {
+            dir_path: cur_dir.clone(),
+        })
+        .await
+        .unwrap();
         assert_eq!(is_repo_res["ok"], true);
 
-        // git_is_repo on non-repo tempdir
         let tmp = tempfile::tempdir().unwrap();
-        let not_repo_res = git_is_repo(DirPathIn { dir_path: tmp.path().to_string_lossy().to_string() }).await.unwrap();
+        let not_repo_res = git_is_repo(DirPathIn {
+            dir_path: tmp.path().to_string_lossy().to_string(),
+        })
+        .await
+        .unwrap();
         assert_eq!(not_repo_res["ok"], false);
 
-        // git_status on actual repo
-        let status_res = git_status(RepoPathIn { repo_path: cur_dir.clone() }).await.unwrap();
+        let status_res = git_status(RepoPathIn {
+            repo_path: cur_dir.clone(),
+        })
+        .await
+        .unwrap();
         assert_eq!(status_res["ok"], true);
 
-        // git_branches
-        let branch_res = git_branches(RepoPathIn { repo_path: cur_dir.clone() }).await.unwrap();
+        let branch_res = git_branches(RepoPathIn {
+            repo_path: cur_dir.clone(),
+        })
+        .await
+        .unwrap();
         assert_eq!(branch_res["ok"], true);
 
-        // git_log
         let log_res = git_log(GitLogIn {
             repo_path: cur_dir.clone(),
             max_count: Some(2),
             file_path: None,
-        }).await.unwrap();
+        })
+        .await
+        .unwrap();
         assert_eq!(log_res["ok"], true);
 
-        // git_diff with invalid ref
         let diff_res = git_diff(GitDiffIn {
             repo_path: cur_dir.clone(),
             ref1: Some("-invalid-ref".into()),
             ref2: None,
             file_path: None,
-        }).await.unwrap();
+        })
+        .await
+        .unwrap();
         assert_eq!(diff_res["ok"], false);
     }
 }

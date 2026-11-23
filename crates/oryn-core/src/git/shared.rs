@@ -94,7 +94,7 @@ pub async fn git(args: &[&str], cwd: &str) -> std::io::Result<std::process::Outp
 
     #[cfg(target_os = "windows")]
     {
-        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+        cmd.creation_flags(0x08000000);
     }
 
     cmd.output().await

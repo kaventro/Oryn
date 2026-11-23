@@ -1,6 +1,8 @@
 use serde_json::{json, Map, Value};
 use std::path::{Path, PathBuf};
-use tauri::{AppHandle, Emitter};
+use std::sync::Arc;
+
+use crate::events::EventSink;
 
 use super::shared::{binary_differ, build_dir_map, same_inode, sort_rows, DirEnt};
 
@@ -11,16 +13,16 @@ pub struct CompareDirsIn {
     pub right_path: String,
 }
 
-pub async fn compare_dirs(app: AppHandle, input: CompareDirsIn) -> Result<Value, String> {
+pub async fn compare_dirs(sink: Arc<dyn EventSink>, input: CompareDirsIn) -> Result<Value, String> {
     let left = PathBuf::from(&input.left_path);
     let right = PathBuf::from(&input.right_path);
-    let app2 = app.clone();
-    tokio::task::spawn_blocking(move || compare_dirs_blocking(&app2, &left, &right))
+
+    tokio::task::spawn_blocking(move || compare_dirs_blocking(sink.as_ref(), &left, &right))
         .await
         .map_err(|e| e.to_string())?
 }
 
-fn compare_dirs_blocking(app: &AppHandle, left: &Path, right: &Path) -> Result<Value, String> {
+fn compare_dirs_blocking(sink: &dyn EventSink, left: &Path, right: &Path) -> Result<Value, String> {
     let left_map = build_dir_map(left)?;
     let right_map = build_dir_map(right)?;
 
@@ -63,7 +65,7 @@ fn compare_dirs_blocking(app: &AppHandle, left: &Path, right: &Path) -> Result<V
         }
     }
 
-    let _ = app.emit(
+    sink.emit(
         "compare:update",
         json!({
             "type": "partial",
@@ -109,7 +111,7 @@ fn compare_dirs_blocking(app: &AppHandle, left: &Path, right: &Path) -> Result<V
         }
         let done = i + 1;
         if done % 48 == 0 || done == total {
-            let _ = app.emit(
+            sink.emit(
                 "compare:update",
                 json!({"type": "progress", "done": done, "total": total}),
             );
@@ -139,6 +141,6 @@ fn compare_dirs_blocking(app: &AppHandle, left: &Path, right: &Path) -> Result<V
     });
     let mut emit_obj: Map<String, Value> = body.as_object().cloned().unwrap_or_default();
     emit_obj.insert("type".into(), json!("done"));
-    let _ = app.emit("compare:update", Value::Object(emit_obj));
+    sink.emit("compare:update", Value::Object(emit_obj));
     Ok(body)
 }

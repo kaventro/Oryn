@@ -72,8 +72,6 @@ pub async fn git_pull(input: RepoPathIn) -> Result<Value, String> {
 
 pub async fn git_checkout(input: GitCheckoutIn) -> Result<Value, String> {
     let git_ref = input.git_ref.as_str();
-    // Refuse a ref that would be parsed as an option (e.g. "--orphan"); branch
-    // names and hashes never legitimately start with '-'.
     if git_ref.starts_with('-') {
         return Ok(json!({"ok": false, "error": "invalid git ref"}));
     }
