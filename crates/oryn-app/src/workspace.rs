@@ -145,7 +145,7 @@ impl Workspace {
         let path = self.active_pane().read(cx).path.clone();
         let pane = Self::spawn_pane(path, self.dual, cx);
         let view = self.view;
-        pane.update(cx, |p, _| p.view = view);
+        pane.update(cx, |p, _| p.set_view(view));
         self.tabs[side].push(pane);
         self.tab_ix[side] = self.tabs[side].len() - 1;
         self.focus_pane(side, window, cx);
@@ -155,7 +155,7 @@ impl Workspace {
         self.view = view;
         for pane in self.tabs.iter().flatten().cloned().collect::<Vec<_>>() {
             pane.update(cx, |p, cx| {
-                p.view = view;
+                p.set_view(view);
                 cx.notify();
             });
         }

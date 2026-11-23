@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 use oryn_core::format::{fmt_size, rfc3339_millis, row_date_text};
-use oryn_core::ui::arrange::{ArrangeEntry, SortField, SortOrder, arrange};
+use oryn_core::ui::arrange::{ArrangeEntry, SortField, SortOrder, arrange, short_extension};
 use oryn_core::ui::selection::{Entry, Selection};
 
 use crate::actions::*;
@@ -16,6 +16,9 @@ const TILE_MIN: f32 = 96.0;
 const TILE_HEIGHT: f32 = 88.0;
 const TILE_GAP: f32 = 6.0;
 const GRID_PAD: f32 = 10.0;
+const COLUMN_WIDTH: f32 = 240.0;
+const COLUMN_ROW: f32 = 26.0;
+const INSPECTOR_WIDTH: f32 = 280.0;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum ViewMode {
@@ -64,6 +67,42 @@ impl Entry for Row {
     }
 }
 
+struct Column {
+    path: PathBuf,
+    rows: Vec<Row>,
+    cursor: Option<usize>,
+    scroll: UniformListScrollHandle,
+}
+
+impl Column {
+    fn new(path: PathBuf, rows: Vec<Row>) -> Self {
+        Self {
+            path,
+            rows,
+            cursor: None,
+            scroll: UniformListScrollHandle::new(),
+        }
+    }
+
+    fn selected(&self) -> Option<&Row> {
+        self.cursor.and_then(|i| self.rows.get(i))
+    }
+}
+
+fn read_rows(path: &Path) -> anyhow::Result<Vec<Row>> {
+    Ok(oryn_core::list_dir(path)?
+        .into_iter()
+        .map(|it| Row {
+            name: it.name.into(),
+            is_dir: it.is_dir,
+            is_parent: false,
+            size: it.size,
+            mtime_ms: rfc3339_millis(&it.mtime),
+            mtime: it.mtime,
+        })
+        .collect())
+}
+
 pub struct FilePane {
     pub path: PathBuf,
     pub rows: Vec<Row>,
@@ -77,6 +116,9 @@ pub struct FilePane {
     pub dual: bool,
     pub view: ViewMode,
     grid_width: f32,
+    columns: Vec<Column>,
+    col_ix: usize,
+    col_scroll: ScrollHandle,
     filter: String,
     scroll: UniformListScrollHandle,
     back: Vec<PathBuf>,
@@ -104,6 +146,9 @@ impl FilePane {
             dual: true,
             view: ViewMode::List,
             grid_width: 0.0,
+            columns: Vec::new(),
+            col_ix: 0,
+            col_scroll: ScrollHandle::new(),
             filter: String::new(),
             scroll: UniformListScrollHandle::new(),
             back: Vec::new(),
@@ -124,7 +169,7 @@ impl FilePane {
 
     pub fn load(&mut self, path: PathBuf, focus_name: Option<&str>) {
         let started = Instant::now();
-        match oryn_core::list_dir(&path) {
+        match read_rows(&path) {
             Ok(items) => {
                 let mut rows = Vec::with_capacity(items.len() + 1);
                 if path.parent().is_some() {
@@ -137,14 +182,7 @@ impl FilePane {
                         mtime_ms: 0,
                     });
                 }
-                rows.extend(items.into_iter().map(|it| Row {
-                    name: it.name.into(),
-                    is_dir: it.is_dir,
-                    is_parent: false,
-                    size: it.size,
-                    mtime_ms: rfc3339_millis(&it.mtime),
-                    mtime: it.mtime,
-                }));
+                rows.extend(items);
                 self.all_rows = rows;
                 self.path = path;
                 self.error = None;
@@ -170,6 +208,157 @@ impl FilePane {
             .unwrap_or(0);
         self.scroll
             .scroll_to_item(self.scroll_target(), ScrollStrategy::Center);
+        self.reset_columns();
+    }
+
+    pub fn set_view(&mut self, view: ViewMode) {
+        if self.view != view {
+            self.view = view;
+            self.reset_columns();
+        }
+    }
+
+    fn arranged(&self, rows: Vec<Row>) -> Vec<Row> {
+        let order = arrange(&rows, "", self.order);
+        let mut slots: Vec<Option<Row>> = rows.into_iter().map(Some).collect();
+        order.into_iter().filter_map(|i| slots[i].take()).collect()
+    }
+
+    fn reset_columns(&mut self) {
+        if self.view != ViewMode::Columns {
+            self.columns.clear();
+            self.col_ix = 0;
+            return;
+        }
+        let same_root = self.columns.first().is_some_and(|c| c.path == self.path);
+        let chain: Vec<SharedString> = if same_root {
+            self.columns
+                .iter()
+                .map_while(|c| c.selected().map(|r| r.name.clone()))
+                .collect()
+        } else {
+            self.rows
+                .get(self.cursor)
+                .filter(|r| !r.is_parent)
+                .map(|r| vec![r.name.clone()])
+                .unwrap_or_default()
+        };
+        let keep_ix = if same_root { self.col_ix } else { 0 };
+        let root: Vec<Row> = self.rows.iter().filter(|r| !r.is_parent).cloned().collect();
+        self.columns = vec![Column::new(self.path.clone(), root)];
+        for (depth, name) in chain.iter().enumerate() {
+            let Some(col) = self.columns.get_mut(depth) else {
+                break;
+            };
+            let Some(ix) = col.rows.iter().position(|r| &r.name == name) else {
+                break;
+            };
+            col.cursor = Some(ix);
+            col.scroll.scroll_to_item(ix, ScrollStrategy::Center);
+            self.expand_from(depth);
+        }
+        self.col_ix = keep_ix.min(self.columns.len() - 1);
+    }
+
+    fn expand_from(&mut self, ci: usize) {
+        self.columns.truncate(ci + 1);
+        let Some(col) = self.columns.get(ci) else {
+            return;
+        };
+        let Some(row) = col.selected().filter(|r| r.is_dir) else {
+            return;
+        };
+        let child = col.path.join(row.name.as_ref());
+        if let Ok(rows) = read_rows(&child) {
+            let rows = self.arranged(rows);
+            self.columns.push(Column::new(child, rows));
+        }
+    }
+
+    fn col_select(&mut self, ci: usize, ri: usize, cx: &mut Context<Self>) {
+        let Some(col) = self.columns.get_mut(ci) else {
+            return;
+        };
+        if col.rows.is_empty() {
+            return;
+        }
+        let ri = ri.min(col.rows.len() - 1);
+        col.cursor = Some(ri);
+        col.scroll.scroll_to_item(ri, ScrollStrategy::Nearest);
+        let name = col.rows[ri].name.clone();
+        self.col_ix = ci;
+        self.expand_from(ci);
+        if ci == 0
+            && let Some(ix) = self
+                .rows
+                .iter()
+                .position(|r| !r.is_parent && r.name == name)
+        {
+            self.cursor = ix;
+        }
+        let last = self.columns.len() - 1;
+        let tail = if self.columns[last].selected().is_some_and(|r| !r.is_dir) {
+            last + 1
+        } else {
+            last
+        };
+        self.col_scroll.scroll_to_item(tail);
+        cx.notify();
+    }
+
+    fn col_current(&self) -> Option<usize> {
+        self.columns.get(self.col_ix).and_then(|c| c.cursor)
+    }
+
+    fn col_len(&self) -> usize {
+        self.columns.get(self.col_ix).map_or(0, |c| c.rows.len())
+    }
+
+    fn col_step(&mut self, delta: isize, cx: &mut Context<Self>) {
+        let next = match self.col_current() {
+            None => 0,
+            Some(cur) => cur.saturating_add_signed(delta),
+        };
+        self.col_select(self.col_ix, next, cx);
+    }
+
+    fn col_left(&mut self, cx: &mut Context<Self>) {
+        if self.col_ix == 0 {
+            self.go_parent(cx);
+            return;
+        }
+        self.col_ix -= 1;
+        self.columns.truncate(self.col_ix + 2);
+        if let Some(child) = self.columns.get_mut(self.col_ix + 1) {
+            child.cursor = None;
+        }
+        cx.notify();
+    }
+
+    fn col_right(&mut self, cx: &mut Context<Self>) {
+        let has_child = self
+            .columns
+            .get(self.col_ix)
+            .and_then(Column::selected)
+            .is_some_and(|r| r.is_dir);
+        if has_child
+            && self
+                .columns
+                .get(self.col_ix + 1)
+                .is_some_and(|c| !c.rows.is_empty())
+        {
+            self.col_select(self.col_ix + 1, 0, cx);
+        }
+    }
+
+    fn col_open(&mut self, cx: &mut Context<Self>) {
+        let Some(col) = self.columns.get(self.col_ix) else {
+            return;
+        };
+        if let Some(row) = col.selected().filter(|r| r.is_dir) {
+            let target = col.path.join(row.name.as_ref());
+            self.navigate(target, cx);
+        }
     }
 
     pub fn sort_by(&mut self, field: SortField, cx: &mut Context<Self>) {
@@ -284,6 +473,9 @@ impl FilePane {
     }
 
     fn move_up(&mut self, _: &MoveUp, _: &mut Window, cx: &mut Context<Self>) {
+        if self.view == ViewMode::Columns {
+            return self.col_step(-1, cx);
+        }
         let step = self.vertical_step();
         if self.cursor >= step {
             self.set_cursor(self.cursor - step, cx);
@@ -291,6 +483,9 @@ impl FilePane {
     }
 
     fn move_down(&mut self, _: &MoveDown, _: &mut Window, cx: &mut Context<Self>) {
+        if self.view == ViewMode::Columns {
+            return self.col_step(1, cx);
+        }
         let step = self.vertical_step();
         if self.cursor + step < self.rows.len() {
             self.set_cursor(self.cursor + step, cx);
@@ -298,32 +493,48 @@ impl FilePane {
     }
 
     fn move_left(&mut self, _: &MoveLeft, _: &mut Window, cx: &mut Context<Self>) {
-        if self.view == ViewMode::Grid {
-            self.set_cursor(self.cursor.saturating_sub(1), cx);
+        match self.view {
+            ViewMode::Grid => self.set_cursor(self.cursor.saturating_sub(1), cx),
+            ViewMode::Columns => self.col_left(cx),
+            ViewMode::List => {}
         }
     }
 
     fn move_right(&mut self, _: &MoveRight, _: &mut Window, cx: &mut Context<Self>) {
-        if self.view == ViewMode::Grid {
-            self.set_cursor(self.cursor + 1, cx);
+        match self.view {
+            ViewMode::Grid => self.set_cursor(self.cursor + 1, cx),
+            ViewMode::Columns => self.col_right(cx),
+            ViewMode::List => {}
         }
     }
 
     fn page_up(&mut self, _: &PageUp, window: &mut Window, cx: &mut Context<Self>) {
         let n = self.page_rows(window);
+        if self.view == ViewMode::Columns {
+            return self.col_step(-(n as isize), cx);
+        }
         self.set_cursor(self.cursor.saturating_sub(n), cx);
     }
 
     fn page_down(&mut self, _: &PageDown, window: &mut Window, cx: &mut Context<Self>) {
         let n = self.page_rows(window);
+        if self.view == ViewMode::Columns {
+            return self.col_step(n as isize, cx);
+        }
         self.set_cursor(self.cursor + n, cx);
     }
 
     fn home(&mut self, _: &MoveHome, _: &mut Window, cx: &mut Context<Self>) {
+        if self.view == ViewMode::Columns {
+            return self.col_select(self.col_ix, 0, cx);
+        }
         self.set_cursor(0, cx);
     }
 
     fn end(&mut self, _: &MoveEnd, _: &mut Window, cx: &mut Context<Self>) {
+        if self.view == ViewMode::Columns {
+            return self.col_select(self.col_ix, self.col_len(), cx);
+        }
         self.set_cursor(usize::MAX, cx);
     }
 
@@ -348,6 +559,9 @@ impl FilePane {
     }
 
     fn open_entry(&mut self, _: &OpenEntry, _: &mut Window, cx: &mut Context<Self>) {
+        if self.view == ViewMode::Columns {
+            return self.col_open(cx);
+        }
         self.open_at(self.cursor, cx);
     }
 
@@ -568,6 +782,213 @@ impl FilePane {
             .into_any_element()
     }
 
+    fn render_column_row(
+        &self,
+        ci: usize,
+        ri: usize,
+        active: bool,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> Stateful<Div> {
+        let col = &self.columns[ci];
+        let row = &col.rows[ri];
+        let selected = col.cursor == Some(ri);
+        let strong = selected && active && ci == self.col_ix;
+        div()
+            .id(ri)
+            .role(Role::ListItem)
+            .aria_label(row.name.clone())
+            .aria_selected(selected)
+            .flex()
+            .items_center()
+            .gap(px(6.0))
+            .w_full()
+            .h(px(COLUMN_ROW))
+            .mb(px(1.0))
+            .px(px(10.0))
+            .rounded(px(6.0))
+            .when(strong, |d| d.bg(p.accent))
+            .when(selected && !strong, |d| d.bg(white_alpha(0.08)))
+            .when(!selected, |d| d.hover(|s| s.bg(white_alpha(0.04))))
+            .on_click(cx.listener(move |this, ev: &ClickEvent, window, cx| {
+                window.focus(&this.focus, cx);
+                this.col_select(ci, ri, cx);
+                if ev.click_count() >= 2 {
+                    this.col_open(cx);
+                }
+            }))
+            .child(file_icon(&row.name, row.is_dir, strong, p))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .truncate()
+                    .text_size(px(12.5))
+                    .text_color(if strong || selected {
+                        p.text_strong
+                    } else {
+                        p.text
+                    })
+                    .child(row.name.clone()),
+            )
+            .when(row.is_dir, |d| {
+                d.child(
+                    div()
+                        .flex_none()
+                        .text_size(px(14.0))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(if strong { p.on_accent } else { p.text_muted })
+                        .child("\u{203a}"),
+                )
+            })
+    }
+
+    fn render_column(
+        &self,
+        ci: usize,
+        active: bool,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let col = &self.columns[ci];
+        let body: AnyElement = if col.rows.is_empty() {
+            div()
+                .flex()
+                .justify_center()
+                .p(px(8.0))
+                .text_size(px(12.0))
+                .italic()
+                .text_color(p.text_muted)
+                .child("Empty Folder")
+                .into_any_element()
+        } else {
+            uniform_list(
+                ("column", ci),
+                col.rows.len(),
+                cx.processor(move |this, range: std::ops::Range<usize>, window, cx| {
+                    let p = palette(cx);
+                    let active = this.focus.contains_focused(window, cx);
+                    let len = this.columns.get(ci).map_or(0, |c| c.rows.len());
+                    range
+                        .filter(|ri| *ri < len)
+                        .map(|ri| this.render_column_row(ci, ri, active, &p, cx))
+                        .collect::<Vec<_>>()
+                }),
+            )
+            .track_scroll(&col.scroll)
+            .size_full()
+            .into_any_element()
+        };
+        div()
+            .id(("column-wrap", ci))
+            .role(Role::List)
+            .aria_label(SharedString::from(
+                col.path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_else(|| col.path.display().to_string()),
+            ))
+            .flex_none()
+            .w(px(COLUMN_WIDTH))
+            .h_full()
+            .p(px(4.0))
+            .border_r_1()
+            .border_color(p.divider)
+            .when(active && ci == self.col_ix, |d| d.bg(white_alpha(0.015)))
+            .child(body)
+            .into_any_element()
+    }
+
+    fn render_inspector(&self, row: &Row, p: &Palette) -> AnyElement {
+        let meta = |label: &'static str, value: String| {
+            div()
+                .flex()
+                .justify_between()
+                .gap(px(8.0))
+                .child(div().flex_none().text_color(p.text_muted).child(label))
+                .child(
+                    div()
+                        .min_w_0()
+                        .truncate()
+                        .text_color(p.text_secondary)
+                        .child(value),
+                )
+        };
+        let kind = match short_extension(&row.name, false).as_str() {
+            "" | "\u{2014}" => "File".to_string(),
+            ext => ext.to_uppercase(),
+        };
+        div()
+            .id("inspector")
+            .flex_none()
+            .w(px(INSPECTOR_WIDTH))
+            .h_full()
+            .flex()
+            .flex_col()
+            .items_center()
+            .py(px(24.0))
+            .px(px(16.0))
+            .bg(black_alpha(0.08))
+            .border_r_1()
+            .border_color(p.divider)
+            .child(
+                div()
+                    .size(px(56.0))
+                    .mb(px(8.0))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(file_icon(&row.name, false, false, p).size(px(48.0))),
+            )
+            .child(
+                div()
+                    .mb(px(16.0))
+                    .text_center()
+                    .text_size(px(13.0))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .line_height(px(17.0))
+                    .text_color(p.text_strong)
+                    .child(row.name.clone()),
+            )
+            .child(
+                div()
+                    .w_full()
+                    .flex()
+                    .flex_col()
+                    .gap(px(8.0))
+                    .p(px(12.0))
+                    .rounded(px(6.0))
+                    .bg(white_alpha(0.04))
+                    .border_1()
+                    .border_color(white_alpha(0.06))
+                    .text_size(px(11.5))
+                    .child(meta("Kind", kind))
+                    .child(meta("Size", fmt_size(row.size)))
+                    .child(meta("Modified", row_date_text(&row.mtime))),
+            )
+            .into_any_element()
+    }
+
+    fn render_columns(&self, active: bool, p: &Palette, cx: &mut Context<Self>) -> AnyElement {
+        let inspector = self
+            .columns
+            .last()
+            .and_then(Column::selected)
+            .filter(|r| !r.is_dir)
+            .map(|r| self.render_inspector(r, p));
+        div()
+            .id("columns")
+            .flex()
+            .flex_row()
+            .flex_1()
+            .min_h_0()
+            .overflow_x_scroll()
+            .track_scroll(&self.col_scroll)
+            .children((0..self.columns.len()).map(|ci| self.render_column(ci, active, p, cx)))
+            .children(inspector)
+            .into_any_element()
+    }
+
     fn render_row(
         &self,
         ix: usize,
@@ -733,6 +1154,8 @@ impl Render for FilePane {
             message("This folder is empty".into())
         } else if self.view == ViewMode::Grid {
             self.render_grid(cx)
+        } else if self.view == ViewMode::Columns {
+            self.render_columns(active, &p, cx)
         } else {
             uniform_list(
                 "rows",
@@ -810,7 +1233,7 @@ impl Render for FilePane {
                 }])
             })
             .when(self.dual && !active, |d| d.opacity(0.92))
-            .when(self.view != ViewMode::Grid, |d| {
+            .when(self.view == ViewMode::List, |d| {
                 d.child(self.render_header(&p, cx))
             })
             .child(body)
