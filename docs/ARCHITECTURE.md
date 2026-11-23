@@ -33,7 +33,7 @@ graph TD
 - `batch` runs multi-item operations (copy, move, trash, delete, compress, extract) and reports progress through `Progress`.
 - `tools/` holds the logic behind each power tool: `find`, `repo` (Git), `dircmp`, `checksum`, `tags` and `textreplace`.
 - `preview` sorts files into kinds, highlights code, parses Markdown and builds hex dumps for Quick View.
-- `settings` and `update` store preferences and check GitHub for a newer release.
+- `settings` stores preferences. `update` checks GitHub for a newer release, plans how to install it on this platform (`Plan`, `Target`), verifies the download against the release checksums and installs it through an `Installer`: the whole bundle on macOS, the portable `.exe` on Windows, and the binary from the `.tar.gz` on Linux.
 - `fs_safe` resolves every write inside a root directory, so archive entries and remote names cannot escape it.
 
 `crates/oryn-app` (edition 2024) is the GPUI interface:

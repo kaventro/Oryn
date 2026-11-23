@@ -619,3 +619,20 @@ fn folders_on_top_follows_the_setting_and_persists(cx: &mut TestAppContext) {
     let (_window, ws) = open(cx, &a, &b);
     assert_eq!(row_names(cx, &ws), ["music", "notes.txt", "zebra"]);
 }
+
+#[gpui_kit::test]
+fn update_pill_offers_the_update_and_later_closes_it(cx: &mut TestAppContext) {
+    let _serial = serial();
+    let (_tmp, a, b) = dirs();
+    let (window, ws) = open(cx, &a, &b);
+    let release = oryn_core::update::Release {
+        version: "99.0.0".into(),
+        url: "https://example.com/release".into(),
+        assets: Vec::new(),
+    };
+    cx.update(|cx| ws.update(cx, |w, cx| w.announce_update(release, cx)));
+    click(cx, window, "update-pill");
+    assert_eq!(cx.update(|cx| ws.read(cx).dialog_kind()), Some("update"));
+    click(cx, window, "dialog-Later");
+    assert_eq!(cx.update(|cx| ws.read(cx).dialog_kind()), None);
+}

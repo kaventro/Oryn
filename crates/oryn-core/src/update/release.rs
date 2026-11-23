@@ -2,10 +2,24 @@ use serde::Deserialize;
 
 pub const LATEST_URL: &str = "https://api.github.com/repos/kaventro/Oryn/releases/latest";
 
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+pub struct Asset {
+    pub name: String,
+    #[serde(rename = "browser_download_url")]
+    pub url: String,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Release {
     pub version: String,
     pub url: String,
+    pub assets: Vec<Asset>,
+}
+
+impl Release {
+    pub fn asset(&self, name: &str) -> Option<&Asset> {
+        self.assets.iter().find(|a| a.name == name)
+    }
 }
 
 #[derive(Deserialize)]
@@ -16,6 +30,8 @@ struct Raw {
     draft: bool,
     #[serde(default)]
     prerelease: bool,
+    #[serde(default)]
+    assets: Vec<Asset>,
 }
 
 pub fn parse_version(text: &str) -> Option<(u64, u64, u64)> {
@@ -49,6 +65,7 @@ pub fn parse_latest(json: &str, current: &str) -> Option<Release> {
     Some(Release {
         version: raw.tag_name.trim_start_matches(['v', 'V']).to_string(),
         url: raw.html_url,
+        assets: raw.assets,
     })
 }
 
@@ -80,12 +97,29 @@ mod tests {
             parse_latest(new, "0.0.8"),
             Some(Release {
                 version: "0.0.9".into(),
-                url: "https://example.com/r".into()
+                url: "https://example.com/r".into(),
+                assets: Vec::new(),
             })
         );
         assert_eq!(parse_latest(new, "0.0.9"), None);
         let pre = r#"{"tag_name":"v0.1.0","html_url":"u","prerelease":true}"#;
         assert_eq!(parse_latest(pre, "0.0.8"), None);
         assert_eq!(parse_latest("not json", "0.0.8"), None);
+    }
+
+    #[test]
+    fn latest_keeps_the_downloads() {
+        let json = r#"{"tag_name":"v0.0.11","html_url":"u","assets":[
+            {"name":"Oryn_0.0.11_aarch64.app.zip","browser_download_url":"https://d/a.zip","size":3},
+            {"name":"SHA256SUMS-macos.txt","browser_download_url":"https://d/s.txt"}]}"#;
+        let release = parse_latest(json, "0.0.10").unwrap();
+        assert_eq!(release.assets.len(), 2);
+        assert_eq!(
+            release
+                .asset("SHA256SUMS-macos.txt")
+                .map(|a| a.url.as_str()),
+            Some("https://d/s.txt")
+        );
+        assert_eq!(release.asset("missing"), None);
     }
 }
