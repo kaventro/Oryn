@@ -1,6 +1,8 @@
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
+use oryn_core::ui::arrange::FoldersOnTop;
+
 use super::Workspace;
 use crate::actions::*;
 use crate::pane::ViewMode;
@@ -125,6 +127,15 @@ impl Workspace {
         }
     }
 
+    pub(super) fn set_folders_on_top(&mut self, folders: FoldersOnTop, cx: &mut Context<Self>) {
+        self.settings.folders_on_top = folders;
+        for pane in self.tabs.iter().flatten().cloned().collect::<Vec<_>>() {
+            pane.update(cx, |p, cx| p.set_folders_on_top(folders, cx));
+        }
+        self.persist(cx);
+        cx.notify();
+    }
+
     pub(super) fn render_settings(
         &self,
         p: &Palette,
@@ -207,6 +218,33 @@ impl Workspace {
                 .when(on, |d| d.bg(p.accent))
                 .when(!on, |d| d.hover(|s| s.bg(white_alpha(0.08))))
                 .on_click(cx.listener(move |this, _, w, cx| this.pick_view(mode, w, cx)))
+                .child(label)
+        });
+        let folder_modes = [
+            (FoldersOnTop::Always, "Always"),
+            (FoldersOnTop::ExceptDate, "Except by date"),
+            (FoldersOnTop::Never, "Never"),
+        ]
+        .into_iter()
+        .map(|(mode, label)| {
+            let on = self.settings.folders_on_top == mode;
+            div()
+                .id(SharedString::from(format!("folders-{label}")))
+                .debug_selector(move || format!("folders-{label}"))
+                .role(Role::RadioButton)
+                .aria_label(label)
+                .aria_selected(on)
+                .flex_1()
+                .flex()
+                .justify_center()
+                .py(px(5.0))
+                .rounded(px(6.0))
+                .text_size(px(12.5))
+                .cursor_pointer()
+                .text_color(if on { p.on_accent } else { p.text })
+                .when(on, |d| d.bg(p.accent))
+                .when(!on, |d| d.hover(|s| s.bg(white_alpha(0.08))))
+                .on_click(cx.listener(move |this, _, _, cx| this.set_folders_on_top(mode, cx)))
                 .child(label)
         });
         let toggles = TOGGLES.iter().enumerate().map(|(ix, (t, label, hint))| {
@@ -307,6 +345,25 @@ impl Workspace {
                                 .rounded(px(8.0))
                                 .bg(white_alpha(0.06))
                                 .children(views),
+                        )
+                        .child(section("Folders on top"))
+                        .child(
+                            div()
+                                .flex()
+                                .p(px(2.0))
+                                .gap(px(2.0))
+                                .rounded(px(8.0))
+                                .bg(white_alpha(0.06))
+                                .children(folder_modes),
+                        )
+                        .child(
+                            div()
+                                .mt(px(6.0))
+                                .text_size(px(11.5))
+                                .text_color(p.text_muted)
+                                .child(
+                                    "Keep folders above files when sorting. \"Except by date\" mixes them when sorting by date modified.",
+                                ),
                         )
                         .child(section("Behaviour"))
                         .children(toggles)

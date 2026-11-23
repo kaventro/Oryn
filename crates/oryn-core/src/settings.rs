@@ -1,3 +1,4 @@
+use crate::ui::arrange::FoldersOnTop;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -12,7 +13,7 @@ pub struct Settings {
     pub use_trash: bool,
     pub dual: bool,
     pub sidebar: bool,
-    pub folders_first: bool,
+    pub folders_on_top: FoldersOnTop,
     pub check_updates: bool,
     pub left: Option<String>,
     pub right: Option<String>,
@@ -29,7 +30,7 @@ impl Default for Settings {
             use_trash: true,
             dual: true,
             sidebar: true,
-            folders_first: true,
+            folders_on_top: FoldersOnTop::Always,
             check_updates: true,
             left: None,
             right: None,
@@ -96,6 +97,21 @@ mod tests {
         let partial = Settings::load_from(&path);
         assert_eq!(partial.tray, 2);
         assert!(partial.use_trash);
+        assert_eq!(partial.folders_on_top, FoldersOnTop::Always);
+        fs::write(&path, r#"{"foldersOnTop": "exceptDate"}"#).unwrap();
+        assert_eq!(
+            Settings::load_from(&path).folders_on_top,
+            FoldersOnTop::ExceptDate
+        );
+        let never = Settings {
+            folders_on_top: FoldersOnTop::Never,
+            ..Default::default()
+        };
+        never.save_to(&path).unwrap();
+        assert!(fs::read_to_string(&path)
+            .unwrap()
+            .contains(r#""foldersOnTop": "never""#));
+        assert_eq!(Settings::load_from(&path), never);
         fs::write(&path, "not json").unwrap();
         assert_eq!(Settings::load_from(&path), Settings::default());
         assert!(Settings::path().is_some());

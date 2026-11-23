@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -36,6 +37,25 @@ impl SortOrder {
                 field,
                 ascending: true,
             }
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum FoldersOnTop {
+    #[default]
+    Always,
+    Never,
+    ExceptDate,
+}
+
+impl FoldersOnTop {
+    pub fn applies(self, field: SortField) -> bool {
+        match self {
+            Self::Always => true,
+            Self::Never => false,
+            Self::ExceptDate => field != SortField::Date,
         }
     }
 }
@@ -118,7 +138,12 @@ fn name_cmp(a: &str, b: &str) -> Ordering {
     natural_cmp(a, b).then_with(|| a.cmp(b))
 }
 
-pub fn arrange<E: ArrangeEntry>(items: &[E], filter: &str, order: SortOrder) -> Vec<usize> {
+pub fn arrange<E: ArrangeEntry>(
+    items: &[E],
+    filter: &str,
+    order: SortOrder,
+    folders: FoldersOnTop,
+) -> Vec<usize> {
     let filter = filter.trim();
     if !filter.is_empty() {
         let mut scored: Vec<(usize, i64)> = items
@@ -137,11 +162,12 @@ pub fn arrange<E: ArrangeEntry>(items: &[E], filter: &str, order: SortOrder) -> 
         return scored.into_iter().map(|(i, _)| i).collect();
     }
 
+    let folders_first = folders.applies(order.field);
     let parent = items.iter().position(|it| it.base() == "..");
     let mut rest: Vec<usize> = (0..items.len()).filter(|&i| Some(i) != parent).collect();
     rest.sort_by(|&ia, &ib| {
         let (a, b) = (&items[ia], &items[ib]);
-        if a.is_dir() != b.is_dir() {
+        if folders_first && a.is_dir() != b.is_dir() {
             return if a.is_dir() {
                 Ordering::Less
             } else {
@@ -217,7 +243,7 @@ mod tests {
         ];
         let order = SortOrder::default();
         assert_eq!(
-            names(&items, arrange(&items, "app", order)),
+            names(&items, arrange(&items, "app", order, FoldersOnTop::Always)),
             ["..", "app.ts", "apple.png"]
         );
     }
@@ -232,8 +258,17 @@ mod tests {
             It("file_c.doc", false, 200, 0),
             It("..", true, 0, 0),
         ];
-        let sort =
-            |field, ascending| names(&items, arrange(&items, "", SortOrder { field, ascending }));
+        let sort = |field, ascending| {
+            names(
+                &items,
+                arrange(
+                    &items,
+                    "",
+                    SortOrder { field, ascending },
+                    FoldersOnTop::Always,
+                ),
+            )
+        };
         assert_eq!(
             sort(SortField::Name, true),
             [
@@ -267,6 +302,77 @@ mod tests {
         assert_eq!(
             sort(SortField::Date, true)[3..],
             ["file_c.doc", "file_b.png", "file_a.txt"]
+        );
+    }
+
+    #[test]
+    fn folders_mix_with_files_when_not_kept_on_top() {
+        let items = [
+            It("..", true, 0, 0),
+            It("old_folder", true, 0, 1000),
+            It("new_file.txt", false, 400, 9000),
+            It("new_folder", true, 0, 8000),
+            It("old_file.txt", false, 100, 2000),
+        ];
+        let sort = |field, ascending, folders| {
+            names(
+                &items,
+                arrange(&items, "", SortOrder { field, ascending }, folders),
+            )
+        };
+        assert_eq!(
+            sort(SortField::Date, false, FoldersOnTop::Always),
+            [
+                "..",
+                "new_folder",
+                "old_folder",
+                "new_file.txt",
+                "old_file.txt"
+            ]
+        );
+        assert_eq!(
+            sort(SortField::Date, false, FoldersOnTop::Never),
+            [
+                "..",
+                "new_file.txt",
+                "new_folder",
+                "old_file.txt",
+                "old_folder"
+            ]
+        );
+        assert_eq!(
+            sort(SortField::Date, false, FoldersOnTop::ExceptDate),
+            [
+                "..",
+                "new_file.txt",
+                "new_folder",
+                "old_file.txt",
+                "old_folder"
+            ]
+        );
+        assert_eq!(
+            sort(SortField::Name, true, FoldersOnTop::ExceptDate),
+            [
+                "..",
+                "new_folder",
+                "old_folder",
+                "new_file.txt",
+                "old_file.txt"
+            ]
+        );
+        assert_eq!(
+            sort(SortField::Name, true, FoldersOnTop::Never),
+            [
+                "..",
+                "new_file.txt",
+                "new_folder",
+                "old_file.txt",
+                "old_folder"
+            ]
+        );
+        assert_eq!(
+            sort(SortField::Size, true, FoldersOnTop::Never)[1..3],
+            ["new_folder", "old_folder"]
         );
     }
 
