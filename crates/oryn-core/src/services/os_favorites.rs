@@ -716,15 +716,11 @@ mod tests {
 
     #[cfg(target_os = "windows")]
     #[test]
-    fn test_windows_read_returns_known_and_pinned_folders() {
+    fn test_windows_read_returns_known_folders() {
         let provider = windows::WindowsFavoritesProvider::new();
         let favs = provider.get_favorites();
         assert!(!favs.is_empty());
         let paths: Vec<&str> = favs.iter().map(|f| f.path.as_str()).collect();
-        assert!(paths
-            .iter()
-            .any(|p| p.eq_ignore_ascii_case("D:\\") || p.eq_ignore_ascii_case("D:")));
-        assert!(paths.iter().any(|p| p.to_lowercase().ends_with("shelf")));
         if let Some(desktop) = dirs::desktop_dir() {
             let d_str = crate::paths::clean_verbatim_path(&desktop.to_string_lossy());
             assert!(paths.iter().any(|p| p.eq_ignore_ascii_case(&d_str)));
