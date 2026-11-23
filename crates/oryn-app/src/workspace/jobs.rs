@@ -178,6 +178,15 @@ impl Workspace {
         let Some(sources) = self.sources(cx) else {
             return;
         };
+        let permanent = permanent || !self.settings.use_trash;
+        if !self.settings.confirm_delete {
+            let kind = if permanent {
+                BatchKind::Delete
+            } else {
+                BatchKind::Trash
+            };
+            return self.start_batch(kind, sources, None, OverwritePolicy::Overwrite, cx);
+        }
         self.open_dialog(Dialog::Delete { sources, permanent }, "", window, cx);
     }
 

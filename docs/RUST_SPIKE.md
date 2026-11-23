@@ -29,7 +29,19 @@ cargo run --release -p oryn-app -- [left-dir] [right-dir]
 | Ctrl+\\ (Cmd+\\) | Dual or single pane |
 | Ctrl+B (Cmd+B) | Show or hide the sidebar |
 | Ctrl+\` or F9 | Toggle the terminal |
-| Ctrl+, (Cmd+,) | Cycle accent trays |
+| F2 | Rename |
+| F5, F6 | Copy or move to the other pane |
+| Shift+F5 | Duplicate |
+| F7, Shift+F7 | New folder, new file |
+| F8, Delete | Move to Trash |
+| Shift+F8, Shift+Delete | Delete permanently |
+| Ctrl+M (Cmd+M) | Batch rename |
+| Ctrl+Shift+C (Cmd+Alt+C) | Copy the path |
+| Shift+F10, right-click | Context menu |
+| Ctrl+R (Cmd+R) | Refresh both panes |
+| Ctrl+P (Cmd+P) | Command palette; type a path such as `~/Downloads` to jump |
+| Ctrl+, (Cmd+,) | Settings |
+| Drag, Shift+drag | Copy or move onto a folder or the other pane |
 | Ctrl+Q (Cmd+Q) | Quit |
 
 The layout copies the current web UI: the sidebar sections, the 52 px header with the folder tab and icon buttons, the toolbar groups, the breadcrumb and search pills, the file rows and the status bar use the same sizes, colours and SVG icons as `src/`. File icons and colours come from `oryn_core::icons`, a port of `iconRegistry.ts`. The toolbar's file actions, the grid and column views, new tabs and remote servers are drawn but not wired yet.

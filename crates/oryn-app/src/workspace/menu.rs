@@ -37,7 +37,12 @@ fn item(icon: &'static str, label: &'static str, keys: &'static str, action: imp
     }
 }
 
-fn danger(icon: &'static str, label: &'static str, keys: &'static str, action: impl Action) -> Entry {
+fn danger(
+    icon: &'static str,
+    label: &'static str,
+    keys: &'static str,
+    action: impl Action,
+) -> Entry {
     Entry::Item {
         icon,
         label,
@@ -61,14 +66,24 @@ fn entries(on_item: bool) -> Vec<Entry> {
             item("clipboard", "Copy Path", "", CopyPath),
             Entry::Separator,
             danger("trash", "Move to Trash", "F8", DeleteItems),
-            danger("archive-x", "Delete Permanently", "\u{21e7}Del", DeletePermanently),
+            danger(
+                "archive-x",
+                "Delete Permanently",
+                "\u{21e7}Del",
+                DeletePermanently,
+            ),
             Entry::Separator,
         ]);
     }
     v.extend([
         item("folder-plus", "New Folder", "F7", NewFolder),
         item("file-plus", "New File", "\u{21e7}F7", NewFile),
-        item("list-checks", "Select by Mask\u{2026}", "Alt+S", SelectByMask),
+        item(
+            "list-checks",
+            "Select by Mask\u{2026}",
+            "Alt+S",
+            SelectByMask,
+        ),
         item("refresh-cw", "Refresh", "", RefreshPanes),
     ]);
     v
@@ -140,9 +155,17 @@ impl Workspace {
         let on_item = pane.read(cx).cursor_entry().is_some();
         let b = window.bounds();
         let position = point(b.size.width / 2.0 - px(110.0), b.size.height / 3.0);
-        self.on_pane_event(&pane, &PaneEvent::ContextMenu(position, on_item), window, cx);
+        self.on_pane_event(
+            &pane,
+            &PaneEvent::ContextMenu(position, on_item),
+            window,
+            cx,
+        );
         if let Some(menu) = &mut self.menu {
-            menu.selected = menu.entries.iter().position(|e| matches!(e, Entry::Item { .. }));
+            menu.selected = menu
+                .entries
+                .iter()
+                .position(|e| matches!(e, Entry::Item { .. }));
         }
     }
 
@@ -189,7 +212,11 @@ impl Workspace {
     pub(super) fn copy_path(&mut self, _: &CopyPath, _: &mut Window, cx: &mut Context<Self>) {
         let paths = self.active_pane().read(cx).targets();
         let text = if paths.is_empty() {
-            self.active_pane().read(cx).path.to_string_lossy().into_owned()
+            self.active_pane()
+                .read(cx)
+                .path
+                .to_string_lossy()
+                .into_owned()
         } else {
             paths
                 .iter()
@@ -205,61 +232,65 @@ impl Workspace {
 
     pub(super) fn render_menu(&self, p: &Palette, cx: &mut Context<Self>) -> Option<AnyElement> {
         let menu = self.menu.as_ref()?;
-        let rows = menu.entries.iter().enumerate().map(|(ix, entry)| match entry {
-            Entry::Separator => div()
-                .h(px(1.0))
-                .my(px(4.0))
-                .mx(px(6.0))
-                .bg(white_alpha(0.08))
-                .into_any_element(),
-            Entry::Item {
-                icon: name,
-                label,
-                keys,
-                danger,
-                ..
-            } => {
-                let selected = menu.selected == Some(ix);
-                let hot = if *danger { hex(0xff6961) } else { p.accent };
-                let base = if *danger { hex(0xff6961) } else { p.text };
-                div()
-                    .id(("menu-item", ix))
-                    .role(Role::MenuItem)
-                    .aria_label(*label)
-                    .flex()
-                    .items_center()
-                    .gap(px(7.0))
-                    .px(px(8.0))
-                    .py(px(4.0))
-                    .rounded(px(4.0))
-                    .text_size(px(12.5))
-                    .text_color(if selected { hot } else { base })
-                    .cursor_pointer()
-                    .when(selected, |d| d.bg(white_alpha(0.08)))
-                    .hover(move |s| s.bg(white_alpha(0.08)).text_color(hot))
-                    .on_mouse_move(cx.listener(move |this, _, _, cx| {
-                        if let Some(m) = &mut this.menu
-                            && m.selected != Some(ix)
-                        {
-                            m.selected = Some(ix);
-                            cx.notify();
-                        }
-                    }))
-                    .on_click(cx.listener(move |this, _, w, cx| this.run_entry(ix, w, cx)))
-                    .child(icon(name, 13.0, if selected { hot } else { p.text_muted }))
-                    .child(div().flex_1().truncate().child(*label))
-                    .when(!keys.is_empty(), |d| {
-                        d.child(
-                            div()
-                                .pl(px(10.0))
-                                .text_size(px(11.0))
-                                .text_color(if selected { hot } else { p.text_muted })
-                                .child(*keys),
-                        )
-                    })
-                    .into_any_element()
-            }
-        });
+        let rows = menu
+            .entries
+            .iter()
+            .enumerate()
+            .map(|(ix, entry)| match entry {
+                Entry::Separator => div()
+                    .h(px(1.0))
+                    .my(px(4.0))
+                    .mx(px(6.0))
+                    .bg(white_alpha(0.08))
+                    .into_any_element(),
+                Entry::Item {
+                    icon: name,
+                    label,
+                    keys,
+                    danger,
+                    ..
+                } => {
+                    let selected = menu.selected == Some(ix);
+                    let hot = if *danger { hex(0xff6961) } else { p.accent };
+                    let base = if *danger { hex(0xff6961) } else { p.text };
+                    div()
+                        .id(("menu-item", ix))
+                        .role(Role::MenuItem)
+                        .aria_label(*label)
+                        .flex()
+                        .items_center()
+                        .gap(px(7.0))
+                        .px(px(8.0))
+                        .py(px(4.0))
+                        .rounded(px(4.0))
+                        .text_size(px(12.5))
+                        .text_color(if selected { hot } else { base })
+                        .cursor_pointer()
+                        .when(selected, |d| d.bg(white_alpha(0.08)))
+                        .hover(move |s| s.bg(white_alpha(0.08)).text_color(hot))
+                        .on_mouse_move(cx.listener(move |this, _, _, cx| {
+                            if let Some(m) = &mut this.menu
+                                && m.selected != Some(ix)
+                            {
+                                m.selected = Some(ix);
+                                cx.notify();
+                            }
+                        }))
+                        .on_click(cx.listener(move |this, _, w, cx| this.run_entry(ix, w, cx)))
+                        .child(icon(name, 13.0, if selected { hot } else { p.text_muted }))
+                        .child(div().flex_1().truncate().child(*label))
+                        .when(!keys.is_empty(), |d| {
+                            d.child(
+                                div()
+                                    .pl(px(10.0))
+                                    .text_size(px(11.0))
+                                    .text_color(if selected { hot } else { p.text_muted })
+                                    .child(*keys),
+                            )
+                        })
+                        .into_any_element()
+                }
+            });
         Some(
             div()
                 .id("menu-overlay")

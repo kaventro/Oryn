@@ -27,7 +27,7 @@ fn main() {
     let tray = std::env::var("ORYN_TRAY")
         .ok()
         .and_then(|v| v.parse().ok())
-        .unwrap_or(0);
+        .unwrap_or_else(|| oryn_core::settings::Settings::load().tray);
     let bench = std::env::var_os("ORYN_BENCH").is_some();
     let terminal = std::env::var_os("ORYN_OPEN_TERMINAL").is_some();
 

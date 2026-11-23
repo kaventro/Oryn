@@ -4,6 +4,7 @@ use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 use oryn_core::format::fmt_size;
+use oryn_core::settings::Settings;
 
 use crate::actions::*;
 use crate::icons::{icon, oryn_icon};
@@ -17,6 +18,8 @@ mod batch_rename;
 mod dialog;
 mod jobs;
 mod menu;
+mod palette;
+mod settings_view;
 
 use dialog::Dialog;
 use jobs::Job;
@@ -40,6 +43,9 @@ pub struct Workspace {
     job: Option<Job>,
     menu: Option<menu::Menu>,
     batch: Option<batch_rename::BatchRename>,
+    palette: Option<palette::CommandPalette>,
+    settings: Settings,
+    settings_open: Option<FocusHandle>,
     placeholder_for: SharedString,
 }
 
@@ -106,8 +112,23 @@ const TAGS: [(&str, u32); 7] = [
 
 impl Workspace {
     pub fn new(left: PathBuf, right: PathBuf, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let l = Self::spawn_pane(left, true, window, cx);
-        let r = Self::spawn_pane(right, true, window, cx);
+        let settings = Settings::load();
+        let view = match settings.view.as_str() {
+            "grid" => ViewMode::Grid,
+            "columns" => ViewMode::Columns,
+            _ => ViewMode::List,
+        };
+        let l = Self::spawn_pane(left, settings.dual, window, cx);
+        let r = Self::spawn_pane(right, settings.dual, window, cx);
+        for pane in [&l, &r] {
+            pane.update(cx, |p, cx| {
+                p.set_view(view);
+                if !settings.show_hidden {
+                    p.show_hidden = false;
+                    p.refresh(None, cx);
+                }
+            });
+        }
         let search = cx.new(|cx| InputState::new(window, cx));
         cx.subscribe(&search, |this, state, ev: &InputEvent, cx| {
             if matches!(ev, InputEvent::Change) {
@@ -133,10 +154,10 @@ impl Workspace {
         Self {
             tabs: [vec![l], vec![r]],
             tab_ix: [0, 0],
-            view: ViewMode::List,
+            view,
             active: 0,
-            dual: true,
-            sidebar: true,
+            dual: settings.dual,
+            sidebar: settings.sidebar,
             terminal: None,
             show_terminal: false,
             search,
@@ -147,6 +168,9 @@ impl Workspace {
             job: None,
             menu: None,
             batch: None,
+            palette: None,
+            settings,
+            settings_open: None,
             placeholder_for: SharedString::default(),
         }
     }
@@ -184,13 +208,20 @@ impl Workspace {
         let path = self.active_pane().read(cx).path.clone();
         let pane = Self::spawn_pane(path, self.dual, window, cx);
         let view = self.view;
-        pane.update(cx, |p, _| p.set_view(view));
+        let hidden = self.settings.show_hidden;
+        pane.update(cx, |p, cx| {
+            p.set_view(view);
+            if !hidden {
+                p.show_hidden = false;
+                p.refresh(None, cx);
+            }
+        });
         self.tabs[side].push(pane);
         self.tab_ix[side] = self.tabs[side].len() - 1;
         self.focus_pane(side, window, cx);
     }
 
-    fn set_view(&mut self, view: ViewMode, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn set_view(&mut self, view: ViewMode, window: &mut Window, cx: &mut Context<Self>) {
         self.view = view;
         for pane in self.tabs.iter().flatten().cloned().collect::<Vec<_>>() {
             pane.update(cx, |p, cx| {
@@ -198,6 +229,7 @@ impl Workspace {
                 cx.notify();
             });
         }
+        self.persist(cx);
         self.focus_pane(self.active, window, cx);
     }
 
@@ -256,7 +288,12 @@ impl Workspace {
         }
     }
 
-    fn toggle_panes(&mut self, _: &TogglePanes, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn toggle_panes(
+        &mut self,
+        _: &TogglePanes,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.dual = !self.dual;
         let dual = self.dual;
         for pane in self.tabs.iter().flatten().cloned().collect::<Vec<_>>() {
@@ -265,11 +302,18 @@ impl Workspace {
         if !self.dual {
             self.focus_pane(0, window, cx);
         }
+        self.persist(cx);
         cx.notify();
     }
 
-    fn toggle_sidebar(&mut self, _: &ToggleSidebar, _: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn toggle_sidebar(
+        &mut self,
+        _: &ToggleSidebar,
+        _: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         self.sidebar = !self.sidebar;
+        self.persist(cx);
         cx.notify();
     }
 
@@ -302,6 +346,21 @@ impl Workspace {
             % TRAYS.len();
         cx.set_global(OrynTheme { tray: next });
         cx.refresh_windows();
+        self.persist(cx);
+    }
+
+    pub(super) fn persist(&mut self, cx: &mut Context<Self>) {
+        let s = &mut self.settings;
+        s.view = match self.view {
+            ViewMode::List => "list",
+            ViewMode::Grid => "grid",
+            ViewMode::Columns => "columns",
+        }
+        .into();
+        s.dual = self.dual;
+        s.sidebar = self.sidebar;
+        s.tray = cx.try_global::<OrynTheme>().map(|t| t.tray).unwrap_or(0);
+        s.save();
     }
 
     fn go_to(&mut self, path: PathBuf, window: &mut Window, cx: &mut Context<Self>) {
@@ -698,7 +757,9 @@ impl Workspace {
                             false,
                             p,
                         )
-                        .on_click(cx.listener(|this, _, w, cx| this.cycle_tray(&CycleTray, w, cx))),
+                        .on_click(
+                            cx.listener(|this, _, w, cx| this.open_settings(&OpenSettings, w, cx)),
+                        ),
                     ),
             )
             .when(caption, |d| {
@@ -1283,6 +1344,8 @@ impl Render for Workspace {
             .on_action(cx.listener(Self::copy_path))
             .on_action(cx.listener(Self::open_context_menu))
             .on_action(cx.listener(Self::open_batch_rename))
+            .on_action(cx.listener(Self::open_palette))
+            .on_action(cx.listener(Self::open_settings))
             .on_action(cx.listener(|_, _: &Quit, _, cx| cx.quit()))
             .flex()
             .size_full()
@@ -1331,6 +1394,8 @@ impl Render for Workspace {
             )
             .children(self.render_job(&p, cx))
             .children(self.render_batch_rename(&p, cx))
+            .children(self.render_palette(&p, cx))
+            .children(self.render_settings(&p, cx))
             .children(self.render_menu(&p, cx))
             .children(self.render_dialog(&p, cx))
     }

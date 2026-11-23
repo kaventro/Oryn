@@ -174,6 +174,7 @@ pub struct FilePane {
     pub dual: bool,
     pub view: ViewMode,
     pub notice: Option<SharedString>,
+    pub show_hidden: bool,
     grid_width: f32,
     columns: Vec<Column>,
     col_ix: usize,
@@ -205,6 +206,7 @@ impl FilePane {
             dual: true,
             view: ViewMode::List,
             notice: None,
+            show_hidden: true,
             grid_width: 0.0,
             columns: Vec::new(),
             col_ix: 0,
@@ -230,7 +232,10 @@ impl FilePane {
     pub fn load(&mut self, path: PathBuf, focus_name: Option<&str>) {
         let started = Instant::now();
         match read_rows(&path) {
-            Ok(items) => {
+            Ok(mut items) => {
+                if !self.show_hidden {
+                    items.retain(|r| !r.name.starts_with('.'));
+                }
                 let mut rows = Vec::with_capacity(items.len() + 1);
                 if path.parent().is_some() {
                     rows.push(Row {
@@ -468,7 +473,10 @@ impl FilePane {
             .map(str::to_string)
             .or_else(|| self.rows.get(self.cursor).map(|r| r.name.to_string()));
         match read_rows(&self.path) {
-            Ok(items) => {
+            Ok(mut items) => {
+                if !self.show_hidden {
+                    items.retain(|r| !r.name.starts_with('.'));
+                }
                 let mut rows = Vec::with_capacity(items.len() + 1);
                 if let Some(parent) = self.all_rows.first().filter(|r| r.is_parent) {
                     rows.push(parent.clone());
@@ -525,17 +533,19 @@ impl FilePane {
     }
 
     fn drop_into(&mut self, dir: PathBuf, item: &DragItem, cx: &mut Context<Self>) {
-        let paths: Vec<PathBuf> = item
-            .paths(cx)
-            .into_iter()
-            .filter(|p| p != &dir)
-            .collect();
+        let paths: Vec<PathBuf> = item.paths(cx).into_iter().filter(|p| p != &dir).collect();
         if !paths.is_empty() {
             cx.emit(PaneEvent::Drop { paths, dir });
         }
     }
 
-    fn context_row(&mut self, ix: usize, pos: Point<Pixels>, window: &mut Window, cx: &mut Context<Self>) {
+    fn context_row(
+        &mut self,
+        ix: usize,
+        pos: Point<Pixels>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         window.focus(&self.focus, cx);
         if !self.is_marked(ix) {
             self.set_cursor(ix, cx);
@@ -925,7 +935,10 @@ impl FilePane {
                 }),
             )
             .when(!row.is_parent, |d| {
-                d.on_drag(self.drag_item(self.path.clone(), row, cx), Self::drag_preview)
+                d.on_drag(
+                    self.drag_item(self.path.clone(), row, cx),
+                    Self::drag_preview,
+                )
             })
             .when(row.is_dir && !row.is_parent, |d| {
                 let dir = self.path.join(row.name.as_ref());
@@ -1058,7 +1071,10 @@ impl FilePane {
                     cx.emit(PaneEvent::ContextMenu(ev.position, true));
                 }),
             )
-            .on_drag(self.drag_item(col.path.clone(), row, cx), Self::drag_preview)
+            .on_drag(
+                self.drag_item(col.path.clone(), row, cx),
+                Self::drag_preview,
+            )
             .child(file_icon(&row.name, row.is_dir, strong, p))
             .child(
                 div()
@@ -1314,7 +1330,10 @@ impl FilePane {
                 }),
             )
             .when(!row.is_parent, |d| {
-                d.on_drag(self.drag_item(self.path.clone(), row, cx), Self::drag_preview)
+                d.on_drag(
+                    self.drag_item(self.path.clone(), row, cx),
+                    Self::drag_preview,
+                )
             })
             .when(row.is_dir && !row.is_parent, |d| {
                 let dir = self.path.join(row.name.as_ref());

@@ -3,7 +3,9 @@ use std::path::PathBuf;
 use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
-use oryn_core::ui::rename::{CaseTransform, Day, MultiRename as Options, NumberPosition, apply_plan, plan};
+use oryn_core::ui::rename::{
+    CaseTransform, Day, MultiRename as Options, NumberPosition, apply_plan, plan,
+};
 
 use super::Workspace;
 use crate::actions::*;
@@ -118,7 +120,9 @@ impl Workspace {
             Ok(n) => {
                 let focus = planned.first().map(|p| p.new.clone());
                 self.close_batch(window, cx);
-                self.active_pane().clone().update(cx, |p, _| p.clear_marks());
+                self.active_pane()
+                    .clone()
+                    .update(cx, |p, _| p.clear_marks());
                 self.refresh_all(focus.as_deref(), cx);
                 self.active_pane()
                     .clone()
@@ -354,24 +358,19 @@ impl Workspace {
                                 .text_color(p.text_strong)
                                 .child(format!("Batch rename {} item(s)", b.names.len())),
                         )
-                        .child(
-                            div()
-                                .text_size(px(12.0))
-                                .text_color(p.text_muted)
-                                .child("Tokens: [N] name, [E] extension, [C] counter, [YMD], [Y], [M], [D]"),
-                        )
-                        .child(row("Find").child(field(&b.find)).child(
-                            group().child(
-                                seg("regex", "Regex", b.regex).on_click(cx.listener(
-                                    |this, _, _, cx| {
-                                        if let Some(b) = &mut this.batch {
-                                            b.regex = !b.regex;
-                                        }
-                                        cx.notify();
-                                    },
-                                )),
-                            ),
+                        .child(div().text_size(px(12.0)).text_color(p.text_muted).child(
+                            "Tokens: [N] name, [E] extension, [C] counter, [YMD], [Y], [M], [D]",
                         ))
+                        .child(row("Find").child(field(&b.find)).child(group().child(
+                            seg("regex", "Regex", b.regex).on_click(cx.listener(
+                                |this, _, _, cx| {
+                                    if let Some(b) = &mut this.batch {
+                                        b.regex = !b.regex;
+                                    }
+                                    cx.notify();
+                                },
+                            )),
+                        )))
                         .child(row("Replace").child(field(&b.replace)))
                         .child(
                             row("Prefix")

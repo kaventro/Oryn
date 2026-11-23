@@ -38,6 +38,8 @@ actions!(
         CopyPath,
         OpenContextMenu,
         MultiRename,
+        OpenPalette,
+        OpenSettings,
         CancelPrompt,
         SwitchPane,
         TogglePanes,
@@ -100,14 +102,24 @@ pub fn bind_keys(cx: &mut App) {
         KeyBinding::new("enter", ConfirmPrompt, Some("ContextMenu")),
         KeyBinding::new("escape", CancelPrompt, Some("ContextMenu")),
         KeyBinding::new(sec("m"), MultiRename, Some("FilePane")),
-        KeyBinding::new(if cfg!(target_os = "macos") { "cmd-alt-c" } else { "ctrl-shift-c" }, CopyPath, Some("FilePane")),
+        KeyBinding::new(
+            if cfg!(target_os = "macos") {
+                "cmd-alt-c"
+            } else {
+                "ctrl-shift-c"
+            },
+            CopyPath,
+            Some("FilePane"),
+        ),
         KeyBinding::new("tab", SwitchPane, Some("FilePane")),
         KeyBinding::new(sec("f"), FocusSearch, None),
         KeyBinding::new(sec("\\"), TogglePanes, None),
         KeyBinding::new(sec("b"), ToggleSidebar, None),
         KeyBinding::new("ctrl-`", ToggleTerminal, None),
         KeyBinding::new("f9", ToggleTerminal, None),
-        KeyBinding::new(sec(","), CycleTray, None),
+        KeyBinding::new(sec(","), OpenSettings, None),
+        KeyBinding::new(sec("p"), OpenPalette, None),
+        KeyBinding::new(sec("shift-p"), OpenPalette, None),
         KeyBinding::new(sec("t"), NewTab, None),
         KeyBinding::new(sec("w"), CloseTab, None),
         KeyBinding::new("ctrl-tab", NextTab, None),
