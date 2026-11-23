@@ -244,6 +244,7 @@ mod macos {
 }
 
 #[cfg(target_os = "windows")]
+#[allow(clippy::upper_case_acronyms, clippy::collapsible_if)]
 mod windows {
     use super::{name_from_path, push_unique, FavoriteFolder, FavoritesProvider};
     use std::ffi::c_void;
