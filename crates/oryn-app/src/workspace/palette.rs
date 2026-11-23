@@ -336,7 +336,9 @@ mod tests {
     #[test]
     fn expands_home_and_absolute_paths() {
         assert!(expand("open").is_none());
-        assert_eq!(expand("/tmp"), Some(PathBuf::from("/tmp")));
+        let abs = std::env::temp_dir();
+        assert_eq!(expand(&abs.to_string_lossy()), Some(abs.clone()));
+        assert!(expand("relative/path").is_none());
         if std::env::var_os("HOME").is_some() {
             assert!(expand("~/x").unwrap().ends_with("x"));
         }
