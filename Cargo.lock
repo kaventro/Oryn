@@ -4766,6 +4766,7 @@ dependencies = [
  "anyhow",
  "futures",
  "gpui-kit",
+ "open",
  "oryn-core",
  "parking_lot",
  "portable-pty",
