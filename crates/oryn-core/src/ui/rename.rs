@@ -187,6 +187,84 @@ pub fn validate_name(name: &str) -> Result<&str, String> {
     Ok(name)
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Planned {
+    pub old: String,
+    pub new: String,
+    pub problem: Option<&'static str>,
+}
+
+pub fn plan(names: &[String], opts: &MultiRename, day: Day, others: &[String]) -> Vec<Planned> {
+    let news: Vec<String> = names
+        .iter()
+        .enumerate()
+        .map(|(i, n)| opts.apply(n, i, day))
+        .collect();
+    let mut counts = std::collections::HashMap::new();
+    for n in &news {
+        *counts.entry(n.to_lowercase()).or_insert(0usize) += 1;
+    }
+    let renamed: std::collections::HashSet<String> =
+        names.iter().map(|n| n.to_lowercase()).collect();
+    names
+        .iter()
+        .zip(news)
+        .map(|(old, new)| {
+            let problem = if validate_name(&new).is_err() {
+                Some("invalid name")
+            } else if counts[&new.to_lowercase()] > 1 {
+                Some("duplicate name")
+            } else if others
+                .iter()
+                .any(|o| o.eq_ignore_ascii_case(&new) && !renamed.contains(&o.to_lowercase()))
+            {
+                Some("already exists")
+            } else {
+                None
+            };
+            Planned {
+                old: old.clone(),
+                new,
+                problem,
+            }
+        })
+        .collect()
+}
+
+pub fn apply_plan(dir: &std::path::Path, planned: &[Planned]) -> Result<usize, String> {
+    if let Some(bad) = planned.iter().find(|p| p.problem.is_some()) {
+        return Err(format!("{}: {}", bad.new, bad.problem.unwrap_or("problem")));
+    }
+    let moves: Vec<&Planned> = planned.iter().filter(|p| p.old != p.new).collect();
+    let stamp = std::process::id();
+    let mut staged = Vec::new();
+    for (i, p) in moves.iter().enumerate() {
+        let tmp = format!(".oryn-rename-{stamp}-{i}");
+        if let Err(e) = std::fs::rename(dir.join(&p.old), dir.join(&tmp)) {
+            for (tmp, old) in staged.iter().rev() {
+                let _ = std::fs::rename(dir.join(tmp), dir.join(old));
+            }
+            return Err(format!("{}: {e}", p.old));
+        }
+        staged.push((tmp, p.old.clone()));
+    }
+    let mut done = 0;
+    let mut first_error = None;
+    for ((tmp, old), p) in staged.iter().zip(&moves) {
+        match std::fs::rename(dir.join(tmp), dir.join(&p.new)) {
+            Ok(()) => done += 1,
+            Err(e) => {
+                let _ = std::fs::rename(dir.join(tmp), dir.join(old));
+                first_error.get_or_insert(format!("{}: {e}", p.old));
+            }
+        }
+    }
+    match first_error {
+        Some(e) => Err(e),
+        None => Ok(done),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -302,6 +380,64 @@ mod tests {
         );
         assert_eq!(duplicate_name("dir.d", true, |_| false), "dir.d - Copy");
         assert_eq!(duplicate_name(".env", false, |_| false), ".env - Copy");
+    }
+
+    #[test]
+    fn plan_flags_problems() {
+        let names: Vec<String> = ["a.txt", "b.txt"].iter().map(|s| s.to_string()).collect();
+        let same = MultiRename {
+            find: "a".into(),
+            replace: "b".into(),
+            ..Default::default()
+        };
+        let p = plan(&names, &same, DAY, &[]);
+        assert_eq!(p[0].problem, Some("duplicate name"));
+        let others = vec!["c.txt".to_string(), "a.txt".to_string()];
+        let clash = MultiRename {
+            find: "b".into(),
+            replace: "c".into(),
+            ..Default::default()
+        };
+        let p = plan(&names, &clash, DAY, &others);
+        assert_eq!(p[1].problem, Some("already exists"));
+        let swap = MultiRename {
+            find: "a".into(),
+            replace: "x/y".into(),
+            ..Default::default()
+        };
+        let p = plan(&names, &swap, DAY, &others);
+        assert_eq!(p[0].problem, Some("invalid name"));
+        assert!(apply_plan(std::path::Path::new("/nonexistent"), &p).is_err());
+    }
+
+    #[test]
+    fn apply_plan_swaps_names() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(tmp.path().join("1.txt"), "one").unwrap();
+        std::fs::write(tmp.path().join("2.txt"), "two").unwrap();
+        let planned = vec![
+            Planned {
+                old: "1.txt".into(),
+                new: "2.txt".into(),
+                problem: None,
+            },
+            Planned {
+                old: "2.txt".into(),
+                new: "1.txt".into(),
+                problem: None,
+            },
+        ];
+        assert_eq!(apply_plan(tmp.path(), &planned), Ok(2));
+        assert_eq!(
+            std::fs::read_to_string(tmp.path().join("1.txt")).unwrap(),
+            "two"
+        );
+        let missing = vec![Planned {
+            old: "nope".into(),
+            new: "x".into(),
+            problem: None,
+        }];
+        assert!(apply_plan(tmp.path(), &missing).is_err());
     }
 
     #[test]

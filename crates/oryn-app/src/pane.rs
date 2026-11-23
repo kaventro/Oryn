@@ -67,6 +67,64 @@ impl Entry for Row {
     }
 }
 
+pub enum PaneEvent {
+    ContextMenu(Point<Pixels>, bool),
+    Drop { paths: Vec<PathBuf>, dir: PathBuf },
+}
+
+#[derive(Clone)]
+pub struct DragItem {
+    source: WeakEntity<FilePane>,
+    dir: PathBuf,
+    name: SharedString,
+    is_dir: bool,
+}
+
+impl DragItem {
+    fn paths(&self, cx: &App) -> Vec<PathBuf> {
+        if let Some(pane) = self.source.upgrade() {
+            let pane = pane.read(cx);
+            if pane.path == self.dir && pane.selection.contains(&self.name) {
+                return pane.targets();
+            }
+        }
+        vec![self.dir.join(self.name.as_ref())]
+    }
+}
+
+pub struct DragPreview {
+    label: SharedString,
+    name: SharedString,
+    is_dir: bool,
+}
+
+impl Render for DragPreview {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let p = palette(cx);
+        div()
+            .flex()
+            .items_center()
+            .gap(px(6.0))
+            .px(px(10.0))
+            .py(px(5.0))
+            .rounded(px(8.0))
+            .bg(p.accent)
+            .text_color(p.on_accent)
+            .text_size(px(12.5))
+            .shadow(vec![BoxShadow {
+                color: black_alpha(0.4),
+                offset: point(px(0.0), px(6.0)),
+                blur_radius: px(16.0),
+                spread_radius: px(0.0),
+                inset: false,
+            }])
+            .child(file_icon(&self.name, self.is_dir, true, &p))
+            .child(self.label.clone())
+    }
+}
+
+impl EventEmitter<PaneEvent> for FilePane {}
+
 struct Column {
     path: PathBuf,
     rows: Vec<Row>,
@@ -436,6 +494,54 @@ impl FilePane {
 
     pub fn clear_marks(&mut self) {
         self.selection.clear();
+    }
+
+    fn drag_item(&self, dir: PathBuf, row: &Row, cx: &Context<Self>) -> DragItem {
+        DragItem {
+            source: cx.entity().downgrade(),
+            dir,
+            name: row.name.clone(),
+            is_dir: row.is_dir,
+        }
+    }
+
+    fn drag_preview(
+        item: &DragItem,
+        _: Point<Pixels>,
+        _: &mut Window,
+        cx: &mut App,
+    ) -> Entity<DragPreview> {
+        let n = item.paths(cx).len();
+        let label: SharedString = if n > 1 {
+            format!("{n} items").into()
+        } else {
+            item.name.clone()
+        };
+        cx.new(|_| DragPreview {
+            label,
+            name: item.name.clone(),
+            is_dir: item.is_dir,
+        })
+    }
+
+    fn drop_into(&mut self, dir: PathBuf, item: &DragItem, cx: &mut Context<Self>) {
+        let paths: Vec<PathBuf> = item
+            .paths(cx)
+            .into_iter()
+            .filter(|p| p != &dir)
+            .collect();
+        if !paths.is_empty() {
+            cx.emit(PaneEvent::Drop { paths, dir });
+        }
+    }
+
+    fn context_row(&mut self, ix: usize, pos: Point<Pixels>, window: &mut Window, cx: &mut Context<Self>) {
+        window.focus(&self.focus, cx);
+        if !self.is_marked(ix) {
+            self.set_cursor(ix, cx);
+        }
+        let on_item = self.rows.get(ix).is_some_and(|r| !r.is_parent);
+        cx.emit(PaneEvent::ContextMenu(pos, on_item));
     }
 
     pub fn report(&mut self, text: String, cx: &mut Context<Self>) {
@@ -811,6 +917,27 @@ impl FilePane {
                     this.open_at(ix, cx);
                 }
             }))
+            .on_mouse_down(
+                MouseButton::Right,
+                cx.listener(move |this, ev: &MouseDownEvent, window, cx| {
+                    cx.stop_propagation();
+                    this.context_row(ix, ev.position, window, cx);
+                }),
+            )
+            .when(!row.is_parent, |d| {
+                d.on_drag(self.drag_item(self.path.clone(), row, cx), Self::drag_preview)
+            })
+            .when(row.is_dir && !row.is_parent, |d| {
+                let dir = self.path.join(row.name.as_ref());
+                d.drag_over::<DragItem>(|s, _, _, cx| {
+                    let p = palette(cx);
+                    s.bg(with_alpha(p.accent, 0.35))
+                })
+                .on_drop(cx.listener(move |this, item: &DragItem, _, cx| {
+                    cx.stop_propagation();
+                    this.drop_into(dir.clone(), item, cx);
+                }))
+            })
             .child(file_icon(&row.name, row.is_dir, marked, p).size(px(36.0)))
             .child(
                 div()
@@ -922,6 +1049,16 @@ impl FilePane {
                     this.col_open(cx);
                 }
             }))
+            .on_mouse_down(
+                MouseButton::Right,
+                cx.listener(move |this, ev: &MouseDownEvent, window, cx| {
+                    cx.stop_propagation();
+                    window.focus(&this.focus, cx);
+                    this.col_select(ci, ri, cx);
+                    cx.emit(PaneEvent::ContextMenu(ev.position, true));
+                }),
+            )
+            .on_drag(self.drag_item(col.path.clone(), row, cx), Self::drag_preview)
             .child(file_icon(&row.name, row.is_dir, strong, p))
             .child(
                 div()
@@ -1169,6 +1306,27 @@ impl FilePane {
                     this.open_at(ix, cx);
                 }
             }))
+            .on_mouse_down(
+                MouseButton::Right,
+                cx.listener(move |this, ev: &MouseDownEvent, window, cx| {
+                    cx.stop_propagation();
+                    this.context_row(ix, ev.position, window, cx);
+                }),
+            )
+            .when(!row.is_parent, |d| {
+                d.on_drag(self.drag_item(self.path.clone(), row, cx), Self::drag_preview)
+            })
+            .when(row.is_dir && !row.is_parent, |d| {
+                let dir = self.path.join(row.name.as_ref());
+                d.drag_over::<DragItem>(|s, _, _, cx| {
+                    let p = palette(cx);
+                    s.bg(with_alpha(p.accent, 0.35))
+                })
+                .on_drop(cx.listener(move |this, item: &DragItem, _, cx| {
+                    cx.stop_propagation();
+                    this.drop_into(dir.clone(), item, cx);
+                }))
+            })
             .child(
                 div()
                     .flex()
@@ -1287,6 +1445,32 @@ impl Render for FilePane {
                 "Files in {}",
                 self.path.display()
             )))
+            .on_mouse_down(
+                MouseButton::Right,
+                cx.listener(|this, ev: &MouseDownEvent, window, cx| {
+                    window.focus(&this.focus, cx);
+                    cx.emit(PaneEvent::ContextMenu(ev.position, false));
+                }),
+            )
+            .drag_over::<DragItem>(|s, _, _, cx| {
+                let p = palette(cx);
+                s.border_color(p.accent)
+            })
+            .drag_over::<ExternalPaths>(|s, _, _, cx| {
+                let p = palette(cx);
+                s.border_color(p.accent)
+            })
+            .on_drop(cx.listener(|this, item: &DragItem, _, cx| {
+                let dir = this.op_dir();
+                this.drop_into(dir, item, cx);
+            }))
+            .on_drop(cx.listener(|this, ext: &ExternalPaths, _, cx| {
+                let dir = this.op_dir();
+                let paths: Vec<PathBuf> = ext.paths().to_vec();
+                if !paths.is_empty() {
+                    cx.emit(PaneEvent::Drop { paths, dir });
+                }
+            }))
             .on_action(cx.listener(Self::move_up))
             .on_action(cx.listener(Self::move_down))
             .on_action(cx.listener(Self::move_left))

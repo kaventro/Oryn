@@ -13,8 +13,10 @@ use crate::theme::{
     OrynTheme, Palette, TRAYS, black_alpha, hex, palette, ui_font, white_alpha, with_alpha,
 };
 
+mod batch_rename;
 mod dialog;
 mod jobs;
+mod menu;
 
 use dialog::Dialog;
 use jobs::Job;
@@ -36,6 +38,8 @@ pub struct Workspace {
     dialog_error: Option<SharedString>,
     dialog_focus: FocusHandle,
     job: Option<Job>,
+    menu: Option<menu::Menu>,
+    batch: Option<batch_rename::BatchRename>,
     placeholder_for: SharedString,
 }
 
@@ -102,8 +106,8 @@ const TAGS: [(&str, u32); 7] = [
 
 impl Workspace {
     pub fn new(left: PathBuf, right: PathBuf, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let l = Self::spawn_pane(left, true, cx);
-        let r = Self::spawn_pane(right, true, cx);
+        let l = Self::spawn_pane(left, true, window, cx);
+        let r = Self::spawn_pane(right, true, window, cx);
         let search = cx.new(|cx| InputState::new(window, cx));
         cx.subscribe(&search, |this, state, ev: &InputEvent, cx| {
             if matches!(ev, InputEvent::Change) {
@@ -141,17 +145,25 @@ impl Workspace {
             dialog_error: None,
             dialog_focus: cx.focus_handle(),
             job: None,
+            menu: None,
+            batch: None,
             placeholder_for: SharedString::default(),
         }
     }
 
-    fn spawn_pane(path: PathBuf, dual: bool, cx: &mut Context<Self>) -> Entity<FilePane> {
+    fn spawn_pane(
+        path: PathBuf,
+        dual: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Entity<FilePane> {
         let pane = cx.new(|cx| {
             let mut pane = FilePane::new(path, cx);
             pane.dual = dual;
             pane
         });
         cx.observe(&pane, |_, _, cx| cx.notify()).detach();
+        cx.subscribe_in(&pane, window, Self::on_pane_event).detach();
         pane
     }
 
@@ -170,7 +182,7 @@ impl Workspace {
     fn new_tab(&mut self, _: &NewTab, window: &mut Window, cx: &mut Context<Self>) {
         let side = self.active;
         let path = self.active_pane().read(cx).path.clone();
-        let pane = Self::spawn_pane(path, self.dual, cx);
+        let pane = Self::spawn_pane(path, self.dual, window, cx);
         let view = self.view;
         pane.update(cx, |p, _| p.set_view(view));
         self.tabs[side].push(pane);
@@ -1268,6 +1280,9 @@ impl Render for Workspace {
             .on_action(cx.listener(Self::delete_items))
             .on_action(cx.listener(Self::delete_permanently))
             .on_action(cx.listener(Self::refresh_panes))
+            .on_action(cx.listener(Self::copy_path))
+            .on_action(cx.listener(Self::open_context_menu))
+            .on_action(cx.listener(Self::open_batch_rename))
             .on_action(cx.listener(|_, _: &Quit, _, cx| cx.quit()))
             .flex()
             .size_full()
@@ -1315,6 +1330,8 @@ impl Render for Workspace {
                     .child(self.render_status(&p, cx)),
             )
             .children(self.render_job(&p, cx))
+            .children(self.render_batch_rename(&p, cx))
+            .children(self.render_menu(&p, cx))
             .children(self.render_dialog(&p, cx))
     }
 }

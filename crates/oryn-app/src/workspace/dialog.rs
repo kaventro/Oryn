@@ -249,7 +249,7 @@ impl Workspace {
         cx.notify();
     }
 
-    fn choose(&mut self, choice: Choice, window: &mut Window, cx: &mut Context<Self>) {
+    pub(super) fn choose(&mut self, choice: Choice, window: &mut Window, cx: &mut Context<Self>) {
         let Some(dialog) = self.dialog.take() else {
             return;
         };
