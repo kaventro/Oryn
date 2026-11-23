@@ -1315,6 +1315,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "diffy"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3e3dc2f773b6aaa63b1a7684b8589f670a8a0146a510b74d23a401c882364b49"
+dependencies = [
+ "hashbrown 0.17.2",
+]
+
+[[package]]
 name = "digest"
 version = "0.10.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4770,19 +4779,23 @@ dependencies = [
  "base64 0.22.1",
  "cap-std",
  "chrono",
+ "diffy",
  "dirs 6.0.0",
  "filetime",
  "flate2",
+ "globset",
  "hex",
  "libc",
  "notify",
  "parking_lot",
+ "regex",
  "serde",
  "serde_json",
  "sha2 0.11.1",
  "ssh2",
  "tar",
  "tempfile",
+ "tokio",
  "tracing",
  "trash",
  "walkdir",
@@ -6815,8 +6828,21 @@ dependencies = [
  "libc",
  "mio",
  "pin-project-lite",
+ "signal-hook-registry",
  "socket2",
+ "tokio-macros",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "tokio-macros"
+version = "2.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "78773a2a397f451582ce068015985c33193cf6dea8b74d2a639fe457b2f07b0e"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 3.0.10",
 ]
 
 [[package]]
