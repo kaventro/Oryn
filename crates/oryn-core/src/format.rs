@@ -18,6 +18,12 @@ pub fn fmt_size(bytes: Option<u64>) -> String {
     }
 }
 
+pub fn rfc3339_millis(mtime: &str) -> i64 {
+    DateTime::parse_from_rfc3339(mtime)
+        .map(|d| d.timestamp_millis())
+        .unwrap_or(0)
+}
+
 pub fn row_date_text(mtime: &str) -> String {
     match DateTime::parse_from_rfc3339(mtime) {
         Ok(d) => d
@@ -31,6 +37,12 @@ pub fn row_date_text(mtime: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rfc3339_millis_parses_or_falls_back_to_zero() {
+        assert_eq!(rfc3339_millis("1970-01-01T00:00:01Z"), 1000);
+        assert_eq!(rfc3339_millis(""), 0);
+    }
 
     #[test]
     fn sizes_match_the_web_ui() {

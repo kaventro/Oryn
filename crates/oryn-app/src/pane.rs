@@ -3,7 +3,9 @@ use std::time::{Duration, Instant};
 
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
-use oryn_core::format::{fmt_size, row_date_text};
+use oryn_core::format::{fmt_size, rfc3339_millis, row_date_text};
+use oryn_core::ui::arrange::{ArrangeEntry, SortField, SortOrder, arrange};
+use oryn_core::ui::selection::{Entry, Selection};
 
 use crate::actions::*;
 use crate::icons::file_icon;
@@ -20,6 +22,34 @@ pub struct Row {
     pub is_parent: bool,
     pub size: Option<u64>,
     pub mtime: String,
+    pub mtime_ms: i64,
+}
+
+impl ArrangeEntry for Row {
+    fn base(&self) -> &str {
+        if self.is_parent { ".." } else { &self.name }
+    }
+    fn is_dir(&self) -> bool {
+        self.is_dir
+    }
+    fn size(&self) -> u64 {
+        self.size.unwrap_or(0)
+    }
+    fn mtime_ms(&self) -> i64 {
+        self.mtime_ms
+    }
+}
+
+impl Entry for Row {
+    fn base(&self) -> &str {
+        ArrangeEntry::base(self)
+    }
+    fn is_dir(&self) -> bool {
+        self.is_dir
+    }
+    fn size(&self) -> u64 {
+        self.size.unwrap_or(0)
+    }
 }
 
 pub struct FilePane {
@@ -27,7 +57,8 @@ pub struct FilePane {
     pub rows: Vec<Row>,
     all_rows: Vec<Row>,
     pub cursor: usize,
-    pub marked: Vec<bool>,
+    pub selection: Selection,
+    pub order: SortOrder,
     pub focus: FocusHandle,
     pub error: Option<SharedString>,
     pub load_time: Duration,
@@ -51,7 +82,8 @@ impl FilePane {
             rows: Vec::new(),
             all_rows: Vec::new(),
             cursor: 0,
-            marked: Vec::new(),
+            selection: Selection::default(),
+            order: SortOrder::default(),
             focus: cx.focus_handle(),
             error: None,
             load_time: Duration::ZERO,
@@ -86,6 +118,7 @@ impl FilePane {
                         is_parent: true,
                         size: None,
                         mtime: String::new(),
+                        mtime_ms: 0,
                     });
                 }
                 rows.extend(items.into_iter().map(|it| Row {
@@ -93,12 +126,14 @@ impl FilePane {
                     is_dir: it.is_dir,
                     is_parent: false,
                     size: it.size,
+                    mtime_ms: rfc3339_millis(&it.mtime),
                     mtime: it.mtime,
                 }));
                 self.all_rows = rows;
                 self.path = path;
                 self.error = None;
                 self.filter.clear();
+                self.selection = Selection::default();
                 self.apply_filter(focus_name);
             }
             Err(err) => {
@@ -109,22 +144,29 @@ impl FilePane {
     }
 
     fn apply_filter(&mut self, focus_name: Option<&str>) {
-        let needle = self.filter.to_lowercase();
-        self.rows = if needle.is_empty() {
-            self.all_rows.clone()
-        } else {
-            self.all_rows
-                .iter()
-                .filter(|r| r.is_parent || r.name.to_lowercase().contains(&needle))
-                .cloned()
-                .collect()
-        };
-        self.marked = vec![false; self.rows.len()];
+        let order = arrange(&self.all_rows, &self.filter, self.order);
+        self.rows = order
+            .into_iter()
+            .map(|i| self.all_rows[i].clone())
+            .collect();
         self.cursor = focus_name
             .and_then(|n| self.rows.iter().position(|r| r.name.as_ref() == n))
             .unwrap_or(0);
         self.scroll
             .scroll_to_item(self.cursor, ScrollStrategy::Center);
+    }
+
+    pub fn sort_by(&mut self, field: SortField, cx: &mut Context<Self>) {
+        self.order = self.order.toggled(field);
+        let current = self.rows.get(self.cursor).map(|r| r.name.to_string());
+        self.apply_filter(current.as_deref());
+        cx.notify();
+    }
+
+    pub fn is_marked(&self, ix: usize) -> bool {
+        self.rows
+            .get(ix)
+            .is_some_and(|r| !r.is_parent && self.selection.contains(&r.name))
     }
 
     pub fn set_filter(&mut self, text: &str, cx: &mut Context<Self>) {
@@ -179,11 +221,8 @@ impl FilePane {
     }
 
     pub fn marked_summary(&self) -> (usize, u64) {
-        self.marked
-            .iter()
-            .zip(&self.rows)
-            .filter(|(m, _)| **m)
-            .fold((0, 0), |(n, s), (_, r)| (n + 1, s + r.size.unwrap_or(0)))
+        let sum = self.selection.summary(&self.all_rows);
+        (sum.sel_count, sum.sel_bytes)
     }
 
     pub fn totals(&self) -> (usize, u64) {
@@ -237,19 +276,18 @@ impl FilePane {
         if let Some(row) = self.rows.get(self.cursor)
             && !row.is_parent
         {
-            self.marked[self.cursor] = !self.marked[self.cursor];
+            let name = row.name.clone();
+            self.selection.toggle(&name);
         }
         self.set_cursor(self.cursor + 1, cx);
     }
 
     fn mark_all(&mut self, _: &MarkAll, _: &mut Window, cx: &mut Context<Self>) {
-        let all = self
-            .rows
-            .iter()
-            .zip(&self.marked)
-            .all(|(r, m)| r.is_parent || *m);
-        for (m, r) in self.marked.iter_mut().zip(&self.rows) {
-            *m = !all && !r.is_parent;
+        let sum = self.selection.summary(&self.all_rows);
+        if sum.sel_count == sum.total_files + sum.total_dirs {
+            self.selection.clear();
+        } else {
+            self.selection.select_all(&self.all_rows);
         }
         cx.notify();
     }
@@ -281,7 +319,39 @@ impl FilePane {
         cx.notify();
     }
 
-    fn render_header(&self, p: &Palette) -> impl IntoElement {
+    fn header_cell(
+        &self,
+        id: &'static str,
+        label: &'static str,
+        field: SortField,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> Stateful<Div> {
+        let active = self.order.field == field;
+        let arrow = if self.order.ascending {
+            "\u{25b4}"
+        } else {
+            "\u{25be}"
+        };
+        div()
+            .id(id)
+            .role(Role::Button)
+            .aria_label(format!("Sort by {}", label.to_lowercase()))
+            .flex()
+            .items_center()
+            .gap(px(4.0))
+            .cursor_pointer()
+            .when(active, |d| d.text_color(p.text_secondary))
+            .hover(|s| s.text_color(p.text_strong))
+            .on_click(cx.listener(move |this, _, window, cx| {
+                this.sort_by(field, cx);
+                window.focus(&this.focus, cx);
+            }))
+            .child(label)
+            .when(active, |d| d.child(div().text_size(px(9.0)).child(arrow)))
+    }
+
+    fn render_header(&self, p: &Palette, cx: &mut Context<Self>) -> impl IntoElement {
         div()
             .flex()
             .flex_none()
@@ -295,9 +365,27 @@ impl FilePane {
             .text_size(px(11.0))
             .font_weight(FontWeight::SEMIBOLD)
             .text_color(p.text_muted)
-            .child(div().flex_1().child("NAME"))
-            .child(div().w(px(DATE_COL)).text_right().child("DATE MODIFIED"))
-            .child(div().w(px(SIZE_COL)).text_right().child("SIZE"))
+            .child(div().flex_1().child(self.header_cell(
+                "sort-name",
+                "NAME",
+                SortField::Name,
+                p,
+                cx,
+            )))
+            .child(
+                div()
+                    .w(px(DATE_COL))
+                    .flex()
+                    .justify_end()
+                    .child(self.header_cell("sort-date", "DATE MODIFIED", SortField::Date, p, cx)),
+            )
+            .child(
+                div()
+                    .w(px(SIZE_COL))
+                    .flex()
+                    .justify_end()
+                    .child(self.header_cell("sort-size", "SIZE", SortField::Size, p, cx)),
+            )
     }
 
     fn render_row(
@@ -308,7 +396,7 @@ impl FilePane {
         cx: &mut Context<Self>,
     ) -> Stateful<Div> {
         let row = &self.rows[ix];
-        let marked = self.marked.get(ix).copied().unwrap_or(false);
+        let marked = self.is_marked(ix);
         let is_cursor = ix == self.cursor;
         let (name_color, meta_color) = if marked {
             (p.on_accent, p.on_accent)
@@ -538,7 +626,7 @@ impl Render for FilePane {
                 }])
             })
             .when(self.dual && !active, |d| d.opacity(0.92))
-            .child(self.render_header(&p))
+            .child(self.render_header(&p, cx))
             .child(body)
     }
 }
