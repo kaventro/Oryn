@@ -9,6 +9,7 @@ pub mod fs_safe;
 pub mod git;
 pub mod icons;
 pub mod paths;
+pub mod preview;
 pub mod replace;
 pub mod search;
 pub mod services;

@@ -80,6 +80,7 @@ pub fn with_alpha(c: Hsla, a: f32) -> Hsla {
     Hsla { a, ..c }
 }
 
+#[derive(Clone, Copy)]
 pub struct Palette {
     pub bg: Hsla,
     pub card: Hsla,

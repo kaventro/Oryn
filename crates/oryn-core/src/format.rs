@@ -34,6 +34,12 @@ pub fn row_date_text(mtime: &str) -> String {
     }
 }
 
+pub fn time_text(t: std::time::SystemTime) -> String {
+    DateTime::<Local>::from(t)
+        .format("%-d %b %Y at %H:%M")
+        .to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

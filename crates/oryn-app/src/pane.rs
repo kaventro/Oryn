@@ -8,7 +8,7 @@ use oryn_core::ui::arrange::{ArrangeEntry, SortField, SortOrder, arrange, short_
 use oryn_core::ui::selection::{Entry, Selection};
 
 use crate::actions::*;
-use crate::icons::file_icon;
+use crate::icons::{file_icon, thumbnail};
 use crate::theme::{Palette, black_alpha, palette, white_alpha, with_alpha};
 
 pub const ROW_HEIGHT: f32 = 30.0;
@@ -707,6 +707,28 @@ impl FilePane {
         }
     }
 
+    pub fn cursor_file(&self) -> Option<PathBuf> {
+        let (name, is_dir) = self.cursor_entry()?;
+        (!is_dir).then(|| self.op_dir().join(name))
+    }
+
+    pub fn step_file(&mut self, delta: isize, cx: &mut Context<Self>) -> Option<PathBuf> {
+        if self.view == ViewMode::Columns {
+            self.col_step(delta, cx);
+        } else {
+            let mut i = self.cursor as isize;
+            loop {
+                i += delta;
+                let row = self.rows.get(usize::try_from(i).ok()?)?;
+                if !row.is_parent && !row.is_dir {
+                    break;
+                }
+            }
+            self.set_cursor(i as usize, cx);
+        }
+        self.cursor_file()
+    }
+
     fn move_up(&mut self, _: &MoveUp, _: &mut Window, cx: &mut Context<Self>) {
         if self.view == ViewMode::Columns {
             return self.col_step(-1, cx);
@@ -966,7 +988,15 @@ impl FilePane {
                     this.drop_into(dir.clone(), item, cx);
                 }))
             })
-            .child(file_icon(&row.name, row.is_dir, marked, p).size(px(36.0)))
+            .child(thumbnail(
+                &self.path.join(row.name.as_ref()),
+                &row.name,
+                row.is_dir || row.is_parent,
+                marked,
+                36.0,
+                44.0,
+                p,
+            ))
             .child(
                 div()
                     .w_full()
@@ -1172,7 +1202,7 @@ impl FilePane {
             .into_any_element()
     }
 
-    fn render_inspector(&self, row: &Row, p: &Palette) -> AnyElement {
+    fn render_inspector(&self, dir: &Path, row: &Row, p: &Palette) -> AnyElement {
         let meta = |label: &'static str, value: String| {
             div()
                 .flex()
@@ -1206,12 +1236,21 @@ impl FilePane {
             .border_color(p.divider)
             .child(
                 div()
-                    .size(px(56.0))
+                    .min_w(px(56.0))
+                    .min_h(px(56.0))
                     .mb(px(8.0))
                     .flex()
                     .items_center()
                     .justify_center()
-                    .child(file_icon(&row.name, false, false, p).size(px(48.0))),
+                    .child(thumbnail(
+                        &dir.join(row.name.as_ref()),
+                        &row.name,
+                        false,
+                        false,
+                        48.0,
+                        120.0,
+                        p,
+                    )),
             )
             .child(
                 div()
@@ -1243,12 +1282,11 @@ impl FilePane {
     }
 
     fn render_columns(&self, active: bool, p: &Palette, cx: &mut Context<Self>) -> AnyElement {
-        let inspector = self
-            .columns
-            .last()
-            .and_then(Column::selected)
-            .filter(|r| !r.is_dir)
-            .map(|r| self.render_inspector(r, p));
+        let inspector = self.columns.last().and_then(|c| {
+            c.selected()
+                .filter(|r| !r.is_dir)
+                .map(|r| self.render_inspector(&c.path, r, p))
+        });
         div()
             .id("columns")
             .flex()

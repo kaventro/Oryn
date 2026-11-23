@@ -53,6 +53,16 @@ pub struct TerminalView {
     size: Size,
     pub focus: FocusHandle,
     exited: bool,
+    cwd: std::path::PathBuf,
+}
+
+pub fn cd_command(dir: &Path, windows: bool) -> String {
+    let d = dir.to_string_lossy();
+    if windows {
+        format!("Set-Location -LiteralPath '{}'\r", d.replace('\'', "''"))
+    } else {
+        format!("cd -- '{}'\r", d.replace('\'', "'\\''"))
+    }
 }
 
 impl TerminalView {
@@ -70,6 +80,7 @@ impl TerminalView {
             size,
             focus: cx.focus_handle(),
             exited: false,
+            cwd: cwd.to_path_buf(),
         };
         if let Err(err) = view.spawn(cwd, cx) {
             let msg = format!("Couldn't start a shell: {err}\r\n");
@@ -140,6 +151,19 @@ impl TerminalView {
         Ok(())
     }
 
+    pub fn has_exited(&self) -> bool {
+        self.exited
+    }
+
+    pub fn follow(&mut self, dir: &Path) {
+        if self.exited || dir == self.cwd {
+            return;
+        }
+        self.cwd = dir.to_path_buf();
+        let cmd = cd_command(dir, cfg!(windows));
+        self.write(cmd.as_bytes());
+    }
+
     fn write(&mut self, bytes: &[u8]) {
         if let Some(w) = self.writer.as_mut() {
             let _ = w.write_all(bytes);
@@ -168,6 +192,15 @@ impl TerminalView {
     fn on_key(&mut self, ev: &KeyDownEvent, _: &mut Window, cx: &mut Context<Self>) {
         let ks = &ev.keystroke;
         if ks.modifiers.control && ks.key == "`" {
+            return;
+        }
+        let paste = ks.key == "v"
+            && (ks.modifiers.platform || (ks.modifiers.control && ks.modifiers.shift));
+        if paste {
+            if let Some(text) = cx.read_from_clipboard().and_then(|c| c.text()) {
+                self.write(text.replace("\r\n", "\r").replace('\n', "\r").as_bytes());
+            }
+            cx.stop_propagation();
             return;
         }
         let bytes: Option<Vec<u8>> = match ks.key.as_str() {
@@ -324,5 +357,23 @@ impl Render for TerminalView {
                     .into_iter()
                     .map(|l| div().h(px(LINE_HEIGHT)).whitespace_nowrap().child(l)),
             )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::cd_command;
+    use std::path::Path;
+
+    #[test]
+    fn quotes_cd_for_each_shell() {
+        assert_eq!(
+            cd_command(Path::new("/tmp/it's"), false),
+            "cd -- '/tmp/it'\\''s'\r"
+        );
+        assert_eq!(
+            cd_command(Path::new("C:\\it's"), true),
+            "Set-Location -LiteralPath 'C:\\it''s'\r"
+        );
     }
 }

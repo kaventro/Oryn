@@ -20,6 +20,7 @@ mod dialog;
 mod jobs;
 mod menu;
 mod palette;
+mod quick;
 mod settings_view;
 mod tool_sheet;
 
@@ -49,6 +50,7 @@ pub struct Workspace {
     settings: Settings,
     settings_open: Option<FocusHandle>,
     tool: Option<tool_sheet::ToolHost>,
+    quick: Option<(Entity<crate::quick_view::QuickView>, Subscription)>,
     placeholder_for: SharedString,
 }
 
@@ -175,6 +177,7 @@ impl Workspace {
             settings,
             settings_open: None,
             tool: None,
+            quick: None,
             placeholder_for: SharedString::default(),
         }
     }
@@ -332,10 +335,18 @@ impl Workspace {
             return;
         }
         let cwd = self.active_pane().read(cx).path.clone();
+        if self
+            .terminal
+            .as_ref()
+            .is_some_and(|t| t.read(cx).has_exited())
+        {
+            self.terminal = None;
+        }
         let term = self
             .terminal
             .get_or_insert_with(|| cx.new(|cx| TerminalView::new(&cwd, cx)))
             .clone();
+        term.update(cx, |t, _| t.follow(&cwd));
         self.show_terminal = true;
         let f = term.read(cx).focus.clone();
         window.focus(&f, cx);
@@ -1057,15 +1068,18 @@ impl Workspace {
                             cx.listener(|this, _, w, cx| this.delete_items(&DeleteItems, w, cx)),
                         ),
                     )
-                    .child(Self::tool(
-                        "preview",
-                        "preview",
-                        Some("Preview"),
-                        "Preview",
-                        true,
-                        false,
-                        p,
-                    )),
+                    .child(
+                        Self::tool(
+                            "preview",
+                            "preview",
+                            Some("Preview"),
+                            "Preview",
+                            true,
+                            false,
+                            p,
+                        )
+                        .on_click(cx.listener(|this, _, w, cx| this.quick_look(&QuickLook, w, cx))),
+                    ),
             )
             .child(
                 Self::group(p)
@@ -1353,6 +1367,7 @@ impl Render for Workspace {
             .on_action(cx.listener(Self::open_batch_rename))
             .on_action(cx.listener(Self::open_palette))
             .on_action(cx.listener(Self::open_settings))
+            .on_action(cx.listener(Self::quick_look))
             .on_action(
                 cx.listener(|this, _: &ShowSearch, w, cx| this.open_tool(ToolKind::Search, w, cx)),
             )
@@ -1433,6 +1448,7 @@ impl Render for Workspace {
             .children(self.render_palette(&p, cx))
             .children(self.render_settings(&p, cx))
             .children(self.render_tool(&p, cx))
+            .children(self.render_quick(cx))
             .children(self.render_menu(&p, cx))
             .children(self.render_dialog(&p, cx))
     }

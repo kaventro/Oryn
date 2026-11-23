@@ -1,6 +1,7 @@
 mod actions;
 mod icons;
 mod pane;
+mod quick_view;
 mod terminal;
 mod theme;
 mod tools;

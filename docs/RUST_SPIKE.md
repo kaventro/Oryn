@@ -28,7 +28,7 @@ cargo run --release -p oryn-app -- [left-dir] [right-dir]
 | Ctrl+F (Cmd+F) | Filter the active pane |
 | Ctrl+\\ (Cmd+\\) | Dual or single pane |
 | Ctrl+B (Cmd+B) | Show or hide the sidebar |
-| Ctrl+\` or F9 | Toggle the terminal |
+| Ctrl+\` or F9 | Toggle the terminal; it moves to the active pane's folder when opened |
 | F2 | Rename |
 | F5, F6 | Copy or move to the other pane |
 | Shift+F5 | Duplicate |
@@ -41,6 +41,7 @@ cargo run --release -p oryn-app -- [left-dir] [right-dir]
 | Ctrl+R (Cmd+R) | Refresh both panes |
 | Ctrl+P (Cmd+P) | Command palette; type a path such as `~/Downloads` to jump |
 | Ctrl+, (Cmd+,) | Settings |
+| F3, Ctrl+Y (Cmd+Y), Preview button | Quick View: code, Markdown, images, office documents, hex; arrows step through files, Tab toggles hex |
 | Ctrl+Shift+F | Search by name or contents |
 | Ctrl+Shift+H | Find and replace in files |
 | Ctrl+Shift+G | Git: stage, commit, diff, branches, pull and push |
