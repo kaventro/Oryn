@@ -11,11 +11,19 @@ cargo run --release -p oryn-app -- [left-dir] [right-dir]
 | Key | Action |
 | --- | --- |
 | Up, Down, Page Up, Page Down, Home, End | Move the cursor |
+| Left, Right | Move in grid view; step between columns in column view |
 | Enter, double-click | Open a folder |
 | Backspace, Alt+Up | Parent folder |
 | Alt+Left, Alt+Right | Back, forward |
 | Space, Insert | Mark or unmark, then move down |
 | Ctrl+A (Cmd+A on macOS) | Mark or unmark all |
+| Alt+S, Alt+D | Select or deselect by mask, such as `*.png` |
+| Alt+I | Invert the selection |
+| Alt+A | Clear the selection |
+| Alt+E | Select every file with the cursor's extension |
+| Ctrl+1, Ctrl+2, Ctrl+3 (Cmd on macOS) | List, grid or column view |
+| Ctrl+T, Ctrl+W (Cmd on macOS) | New tab, close tab |
+| Ctrl+Tab, Ctrl+Shift+Tab | Next tab, previous tab |
 | Tab | Switch pane |
 | Ctrl+F (Cmd+F) | Filter the active pane |
 | Ctrl+\\ (Cmd+\\) | Dual or single pane |

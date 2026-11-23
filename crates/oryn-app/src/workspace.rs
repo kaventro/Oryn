@@ -7,7 +7,7 @@ use oryn_core::format::fmt_size;
 
 use crate::actions::*;
 use crate::icons::{icon, oryn_icon};
-use crate::pane::FilePane;
+use crate::pane::{FilePane, ViewMode};
 use crate::terminal::TerminalView;
 use crate::theme::{
     OrynTheme, Palette, TRAYS, black_alpha, hex, palette, ui_font, white_alpha, with_alpha,
@@ -16,13 +16,17 @@ use crate::theme::{
 const TRAFFIC_LIGHTS: f32 = 78.0;
 
 pub struct Workspace {
-    panes: [Entity<FilePane>; 2],
+    tabs: [Vec<Entity<FilePane>>; 2],
+    tab_ix: [usize; 2],
+    view: ViewMode,
     active: usize,
     dual: bool,
     sidebar: bool,
     terminal: Option<Entity<TerminalView>>,
     show_terminal: bool,
     search: Entity<InputState>,
+    mask_input: Entity<InputState>,
+    mask_selecting: Option<bool>,
     placeholder_for: SharedString,
 }
 
@@ -89,44 +93,316 @@ const TAGS: [(&str, u32); 7] = [
 
 impl Workspace {
     pub fn new(left: PathBuf, right: PathBuf, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let l = cx.new(|cx| FilePane::new(left, cx));
-        let r = cx.new(|cx| FilePane::new(right, cx));
-        cx.observe(&l, |_, _, cx| cx.notify()).detach();
-        cx.observe(&r, |_, _, cx| cx.notify()).detach();
+        let l = Self::spawn_pane(left, true, cx);
+        let r = Self::spawn_pane(right, true, cx);
         let search = cx.new(|cx| InputState::new(window, cx));
         cx.subscribe(&search, |this, state, ev: &InputEvent, cx| {
             if matches!(ev, InputEvent::Change) {
                 let text = state.read(cx).value().to_string();
-                let pane = this.panes[this.active].clone();
+                let pane = this.active_pane().clone();
                 pane.update(cx, |p, cx| p.set_filter(&text, cx));
             }
         })
         .detach();
+        let mask_input = cx.new(|cx| InputState::new(window, cx));
+        cx.subscribe_in(
+            &mask_input,
+            window,
+            |this, _, ev: &InputEvent, window, cx| {
+                if matches!(ev, InputEvent::PressEnter { .. }) {
+                    this.confirm_prompt(&ConfirmPrompt, window, cx);
+                }
+            },
+        )
+        .detach();
         let focus = l.read(cx).focus.clone();
         window.focus(&focus, cx);
         Self {
-            panes: [l, r],
+            tabs: [vec![l], vec![r]],
+            tab_ix: [0, 0],
+            view: ViewMode::List,
             active: 0,
             dual: true,
             sidebar: true,
             terminal: None,
             show_terminal: false,
             search,
+            mask_input,
+            mask_selecting: None,
             placeholder_for: SharedString::default(),
         }
     }
 
+    fn open_mask(&mut self, selecting: bool, window: &mut Window, cx: &mut Context<Self>) {
+        self.mask_selecting = Some(selecting);
+        self.mask_input.update(cx, |s, cx| {
+            s.set_value("*", window, cx);
+            s.select_all(window, cx);
+            s.focus(window, cx);
+        });
+        cx.notify();
+    }
+
+    fn close_prompt(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.mask_selecting = None;
+        self.focus_pane(self.active, window, cx);
+        cx.notify();
+    }
+
+    fn confirm_prompt(&mut self, _: &ConfirmPrompt, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(selecting) = self.mask_selecting else {
+            return;
+        };
+        let mask = self.mask_input.read(cx).value().trim().to_string();
+        if !mask.is_empty() {
+            self.active_pane()
+                .clone()
+                .update(cx, |p, cx| p.apply_mask(&mask, selecting, cx));
+        }
+        self.close_prompt(window, cx);
+    }
+
+    fn cancel_prompt(&mut self, _: &CancelPrompt, window: &mut Window, cx: &mut Context<Self>) {
+        self.close_prompt(window, cx);
+    }
+
+    fn render_mask_prompt(
+        &self,
+        selecting: bool,
+        p: &Palette,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let button = |id: &'static str, label: &'static str, primary: bool| {
+            div()
+                .id(id)
+                .role(Role::Button)
+                .aria_label(label)
+                .flex()
+                .items_center()
+                .justify_center()
+                .h(px(30.0))
+                .px(px(16.0))
+                .rounded(px(6.0))
+                .text_size(px(13.0))
+                .cursor_pointer()
+                .when(primary, |d| {
+                    d.bg(p.accent)
+                        .text_color(p.on_accent)
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .shadow(vec![BoxShadow {
+                            color: with_alpha(p.accent, 0.35),
+                            offset: point(px(0.0), px(2.0)),
+                            blur_radius: px(8.0),
+                            spread_radius: px(0.0),
+                            inset: false,
+                        }])
+                        .hover(|s| s.bg(p.accent_hover))
+                })
+                .when(!primary, |d| {
+                    d.bg(white_alpha(0.08))
+                        .border_1()
+                        .border_color(white_alpha(0.1))
+                        .text_color(hex(0xd1d1d6))
+                        .hover(|s| s.bg(white_alpha(0.14)).text_color(p.text_strong))
+                })
+                .child(label)
+        };
+        div()
+            .id("mask-overlay")
+            .key_context("MaskPrompt")
+            .on_action(cx.listener(Self::cancel_prompt))
+            .on_action(cx.listener(Self::confirm_prompt))
+            .absolute()
+            .inset_0()
+            .flex()
+            .items_center()
+            .justify_center()
+            .bg(black_alpha(0.55))
+            .on_click(cx.listener(|this, _, w, cx| this.close_prompt(w, cx)))
+            .child(
+                div()
+                    .id("mask-dialog")
+                    .role(Role::Dialog)
+                    .aria_label(if selecting {
+                        "Select by mask"
+                    } else {
+                        "Deselect by mask"
+                    })
+                    .on_click(|_, _, cx| cx.stop_propagation())
+                    .w(px(420.0))
+                    .flex()
+                    .flex_col()
+                    .py(px(20.0))
+                    .px(px(24.0))
+                    .rounded(px(14.0))
+                    .bg(hex(0x242428).opacity(0.94))
+                    .border_1()
+                    .border_color(white_alpha(0.12))
+                    .shadow(vec![BoxShadow {
+                        color: black_alpha(0.75),
+                        offset: point(px(0.0), px(28.0)),
+                        blur_radius: px(70.0),
+                        spread_radius: px(0.0),
+                        inset: false,
+                    }])
+                    .child(
+                        div()
+                            .mb(px(4.0))
+                            .text_size(px(15.0))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(p.text_strong)
+                            .child(if selecting {
+                                "Select by mask"
+                            } else {
+                                "Deselect by mask"
+                            }),
+                    )
+                    .child(
+                        div()
+                            .mb(px(14.0))
+                            .text_size(px(12.5))
+                            .text_color(p.text_muted)
+                            .child("Use * and ? as wildcards, for example *.png"),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .h(px(34.0))
+                            .mb(px(18.0))
+                            .px(px(12.0))
+                            .rounded(px(8.0))
+                            .bg(white_alpha(0.1))
+                            .border_1()
+                            .border_color(p.accent)
+                            .shadow(vec![BoxShadow {
+                                color: with_alpha(p.accent, 0.28),
+                                offset: point(px(0.0), px(0.0)),
+                                blur_radius: px(0.0),
+                                spread_radius: px(3.0),
+                                inset: false,
+                            }])
+                            .child(
+                                Input::new(&self.mask_input)
+                                    .appearance(false)
+                                    .text_size(px(13.0))
+                                    .text_color(p.text_strong),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .justify_end()
+                            .gap(px(10.0))
+                            .child(
+                                button("mask-cancel", "Cancel", false).on_click(
+                                    cx.listener(|this, _, w, cx| this.close_prompt(w, cx)),
+                                ),
+                            )
+                            .child(
+                                button(
+                                    "mask-ok",
+                                    if selecting { "Select" } else { "Deselect" },
+                                    true,
+                                )
+                                .on_click(cx.listener(
+                                    |this, _, w, cx| this.confirm_prompt(&ConfirmPrompt, w, cx),
+                                )),
+                            ),
+                    ),
+            )
+            .into_any_element()
+    }
+
+    fn spawn_pane(path: PathBuf, dual: bool, cx: &mut Context<Self>) -> Entity<FilePane> {
+        let pane = cx.new(|cx| {
+            let mut pane = FilePane::new(path, cx);
+            pane.dual = dual;
+            pane
+        });
+        cx.observe(&pane, |_, _, cx| cx.notify()).detach();
+        pane
+    }
+
     pub fn left(&self) -> Entity<FilePane> {
-        self.panes[0].clone()
+        self.pane(0).clone()
+    }
+
+    fn pane(&self, side: usize) -> &Entity<FilePane> {
+        &self.tabs[side][self.tab_ix[side]]
     }
 
     fn active_pane(&self) -> &Entity<FilePane> {
-        &self.panes[self.active]
+        self.pane(self.active)
+    }
+
+    fn new_tab(&mut self, _: &NewTab, window: &mut Window, cx: &mut Context<Self>) {
+        let side = self.active;
+        let path = self.active_pane().read(cx).path.clone();
+        let pane = Self::spawn_pane(path, self.dual, cx);
+        let view = self.view;
+        pane.update(cx, |p, _| p.set_view(view));
+        self.tabs[side].push(pane);
+        self.tab_ix[side] = self.tabs[side].len() - 1;
+        self.focus_pane(side, window, cx);
+    }
+
+    fn set_view(&mut self, view: ViewMode, window: &mut Window, cx: &mut Context<Self>) {
+        self.view = view;
+        for pane in self.tabs.iter().flatten().cloned().collect::<Vec<_>>() {
+            pane.update(cx, |p, cx| {
+                p.set_view(view);
+                cx.notify();
+            });
+        }
+        self.focus_pane(self.active, window, cx);
+    }
+
+    fn close_tab_at(
+        &mut self,
+        side: usize,
+        ix: usize,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.tabs[side].len() <= 1 || ix >= self.tabs[side].len() {
+            return;
+        }
+        self.tabs[side].remove(ix);
+        let current = self.tab_ix[side];
+        if current > ix || current >= self.tabs[side].len() {
+            self.tab_ix[side] = current.saturating_sub(1);
+        }
+        self.focus_pane(side, window, cx);
+    }
+
+    fn close_tab(&mut self, _: &CloseTab, window: &mut Window, cx: &mut Context<Self>) {
+        let side = self.active;
+        self.close_tab_at(side, self.tab_ix[side], window, cx);
+    }
+
+    fn select_tab(&mut self, side: usize, ix: usize, window: &mut Window, cx: &mut Context<Self>) {
+        if ix < self.tabs[side].len() {
+            self.tab_ix[side] = ix;
+            self.focus_pane(side, window, cx);
+        }
+    }
+
+    fn next_tab(&mut self, _: &NextTab, window: &mut Window, cx: &mut Context<Self>) {
+        let side = self.active;
+        let n = self.tabs[side].len();
+        self.select_tab(side, (self.tab_ix[side] + 1) % n, window, cx);
+    }
+
+    fn prev_tab(&mut self, _: &PrevTab, window: &mut Window, cx: &mut Context<Self>) {
+        let side = self.active;
+        let n = self.tabs[side].len();
+        self.select_tab(side, (self.tab_ix[side] + n - 1) % n, window, cx);
     }
 
     fn focus_pane(&mut self, ix: usize, window: &mut Window, cx: &mut Context<Self>) {
         self.active = ix;
-        let f = self.panes[ix].read(cx).focus.clone();
+        let f = self.pane(ix).read(cx).focus.clone();
         window.focus(&f, cx);
         cx.notify();
     }
@@ -139,8 +415,8 @@ impl Workspace {
 
     fn toggle_panes(&mut self, _: &TogglePanes, window: &mut Window, cx: &mut Context<Self>) {
         self.dual = !self.dual;
-        for pane in &self.panes {
-            let dual = self.dual;
+        let dual = self.dual;
+        for pane in self.tabs.iter().flatten().cloned().collect::<Vec<_>>() {
             pane.update(cx, |p, _| p.dual = dual);
         }
         if !self.dual {
@@ -525,36 +801,16 @@ impl Workspace {
                     .text_color(p.text_strong)
                     .child(title.clone()),
             )
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(px(7.0))
-                    .px(px(12.0))
-                    .py(px(5.0))
-                    .rounded(px(6.0))
-                    .bg(p.accent)
-                    .border_1()
-                    .border_color(p.accent)
-                    .shadow(vec![BoxShadow {
-                        color: with_alpha(p.accent, 0.35),
-                        offset: point(px(0.0), px(2.0)),
-                        blur_radius: px(8.0),
-                        spread_radius: px(0.0),
-                        inset: false,
-                    }])
-                    .text_size(px(12.5))
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(p.on_accent)
-                    .child(icon("folder", 13.0, p.on_accent))
-                    .child(title),
-            )
+            .child(self.render_tabs(p, cx))
             .child(
                 div()
                     .flex()
                     .items_center()
                     .gap(px(6.0))
-                    .child(Self::icon_button("add-tab", "add-tab", "New tab", false, p))
+                    .child(
+                        Self::icon_button("add-tab", "add-tab", "New tab", false, p)
+                            .on_click(cx.listener(|this, _, w, cx| this.new_tab(&NewTab, w, cx))),
+                    )
                     .child(
                         Self::icon_button(
                             "pane-toggle",
@@ -624,6 +880,85 @@ impl Workspace {
                         )),
                 )
             })
+    }
+
+    fn render_tabs(&self, p: &Palette, cx: &mut Context<Self>) -> impl IntoElement {
+        let side = self.active;
+        let many = self.tabs[side].len() > 1;
+        let tabs = self.tabs[side].iter().enumerate().map(|(ix, pane)| {
+            let active = ix == self.tab_ix[side];
+            let pane = pane.read(cx);
+            let name = pane.title();
+            let full = pane.path.display().to_string();
+            let fg = if active { p.on_accent } else { hex(0xa0a0a5) };
+            div()
+                .id(("tab", ix))
+                .role(Role::Tab)
+                .aria_label(SharedString::from(full))
+                .aria_selected(active)
+                .flex()
+                .items_center()
+                .gap(px(7.0))
+                .max_w(px(200.0))
+                .px(px(12.0))
+                .py(px(5.0))
+                .rounded(px(6.0))
+                .border_1()
+                .text_size(px(12.5))
+                .text_color(fg)
+                .cursor_pointer()
+                .when(active, |d| {
+                    d.bg(p.accent)
+                        .border_color(p.accent)
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .shadow(vec![BoxShadow {
+                            color: with_alpha(p.accent, 0.35),
+                            offset: point(px(0.0), px(2.0)),
+                            blur_radius: px(8.0),
+                            spread_radius: px(0.0),
+                            inset: false,
+                        }])
+                })
+                .when(!active, |d| {
+                    d.bg(white_alpha(0.05))
+                        .border_color(p.control_border)
+                        .font_weight(FontWeight::MEDIUM)
+                        .hover(|s| s.bg(white_alpha(0.1)).text_color(p.text_strong))
+                })
+                .on_click(cx.listener(move |this, _, w, cx| this.select_tab(side, ix, w, cx)))
+                .child(icon("folder", 13.0, fg))
+                .child(div().min_w_0().truncate().child(name))
+                .when(many, |d| {
+                    d.child(
+                        div()
+                            .id(("tab-close", ix))
+                            .role(Role::Button)
+                            .aria_label("Close tab")
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .size(px(15.0))
+                            .ml(px(2.0))
+                            .rounded_full()
+                            .text_size(px(13.0))
+                            .opacity(0.6)
+                            .hover(|s| s.opacity(1.0).bg(black_alpha(0.25)))
+                            .on_click(cx.listener(move |this, _, w, cx| {
+                                cx.stop_propagation();
+                                this.close_tab_at(side, ix, w, cx);
+                            }))
+                            .child("\u{00d7}"),
+                    )
+                })
+        });
+        div()
+            .id("tabs")
+            .role(Role::TabList)
+            .aria_label("Tabs")
+            .flex()
+            .items_center()
+            .gap(px(4.0))
+            .children(tabs)
     }
 
     fn caption(id: &'static str, name: &'static str, area: WindowControlArea) -> Stateful<Div> {
@@ -802,33 +1137,48 @@ impl Workspace {
             )
             .child(
                 Self::group(p)
-                    .child(Self::tool(
-                        "view-list",
-                        "view-list",
-                        None,
-                        "List view",
-                        false,
-                        true,
-                        p,
-                    ))
-                    .child(Self::tool(
-                        "view-grid",
-                        "view-grid",
-                        None,
-                        "Grid view",
-                        false,
-                        false,
-                        p,
-                    ))
-                    .child(Self::tool(
-                        "view-columns",
-                        "view-columns",
-                        None,
-                        "Columns view",
-                        true,
-                        false,
-                        p,
-                    )),
+                    .child(
+                        Self::tool(
+                            "view-list",
+                            "view-list",
+                            None,
+                            "List view",
+                            false,
+                            self.view == ViewMode::List,
+                            p,
+                        )
+                        .on_click(
+                            cx.listener(|this, _, w, cx| this.set_view(ViewMode::List, w, cx)),
+                        ),
+                    )
+                    .child(
+                        Self::tool(
+                            "view-grid",
+                            "view-grid",
+                            None,
+                            "Grid view",
+                            false,
+                            self.view == ViewMode::Grid,
+                            p,
+                        )
+                        .on_click(
+                            cx.listener(|this, _, w, cx| this.set_view(ViewMode::Grid, w, cx)),
+                        ),
+                    )
+                    .child(
+                        Self::tool(
+                            "view-columns",
+                            "view-columns",
+                            None,
+                            "Columns view",
+                            true,
+                            self.view == ViewMode::Columns,
+                            p,
+                        )
+                        .on_click(
+                            cx.listener(|this, _, w, cx| this.set_view(ViewMode::Columns, w, cx)),
+                        ),
+                    ),
             )
             .child(Self::group(p).child(Self::tool(
                 "more",
@@ -954,7 +1304,9 @@ impl Workspace {
         let pane = self.active_pane().read(cx);
         let (n, bytes) = pane.marked_summary();
         let (total, total_bytes) = pane.totals();
-        let left = if n > 0 {
+        let left = if let Some(notice) = &pane.notice {
+            notice.to_string()
+        } else if n > 0 {
             format!("{n} of {total} selected ({})", fmt_size(Some(bytes)))
         } else {
             format!("{total} items \u{2014} {}", fmt_size(Some(total_bytes)))
@@ -1012,7 +1364,7 @@ impl Workspace {
 impl Render for Workspace {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         for i in 0..2 {
-            if self.panes[i].read(cx).focus.contains_focused(window, cx) {
+            if self.pane(i).read(cx).focus.contains_focused(window, cx) {
                 self.active = i;
             }
         }
@@ -1036,10 +1388,25 @@ impl Render for Workspace {
             .aria_label("Oryn")
             .on_action(cx.listener(Self::switch_pane))
             .on_action(cx.listener(Self::toggle_panes))
+            .on_action(
+                cx.listener(|this, _: &ViewList, w, cx| this.set_view(ViewMode::List, w, cx)),
+            )
+            .on_action(
+                cx.listener(|this, _: &ViewGrid, w, cx| this.set_view(ViewMode::Grid, w, cx)),
+            )
+            .on_action(
+                cx.listener(|this, _: &ViewColumns, w, cx| this.set_view(ViewMode::Columns, w, cx)),
+            )
+            .on_action(cx.listener(Self::new_tab))
+            .on_action(cx.listener(Self::close_tab))
+            .on_action(cx.listener(Self::next_tab))
+            .on_action(cx.listener(Self::prev_tab))
             .on_action(cx.listener(Self::toggle_sidebar))
             .on_action(cx.listener(Self::toggle_terminal))
             .on_action(cx.listener(Self::focus_search))
             .on_action(cx.listener(Self::cycle_tray))
+            .on_action(cx.listener(|this, _: &SelectByMask, w, cx| this.open_mask(true, w, cx)))
+            .on_action(cx.listener(|this, _: &DeselectByMask, w, cx| this.open_mask(false, w, cx)))
             .on_action(cx.listener(|_, _: &Quit, _, cx| cx.quit()))
             .flex()
             .size_full()
@@ -1067,8 +1434,8 @@ impl Render for Workspace {
                             .gap(px(12.0))
                             .px(px(16.0))
                             .pb(px(12.0))
-                            .child(self.panes[0].clone())
-                            .when(self.dual, |d| d.child(self.panes[1].clone())),
+                            .child(self.pane(0).clone())
+                            .when(self.dual, |d| d.child(self.pane(1).clone())),
                     )
                     .when_some(terminal, |d, t| {
                         d.child(
@@ -1086,5 +1453,8 @@ impl Render for Workspace {
                     })
                     .child(self.render_status(&p, cx)),
             )
+            .when_some(self.mask_selecting, |d, selecting| {
+                d.child(self.render_mask_prompt(selecting, &p, cx))
+            })
     }
 }
