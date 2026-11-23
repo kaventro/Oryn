@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The macOS app and `.dmg` are signed with a Developer ID and notarized, so Gatekeeper opens them without a warning.
 
 ### Security
-- Every action in the release workflow is pinned to a commit SHA.
+- Every GitHub Action in the workflows is pinned to a commit SHA.
 
 ## [0.0.9] - 2026-11-23
 
