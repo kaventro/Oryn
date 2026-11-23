@@ -5,7 +5,9 @@ use std::time::{Duration, Instant};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 use oryn_core::format::{fmt_size, rfc3339_millis, row_date_text};
-use oryn_core::ui::arrange::{ArrangeEntry, SortField, SortOrder, arrange, short_extension};
+use oryn_core::ui::arrange::{
+    ArrangeEntry, FoldersOnTop, SortField, SortOrder, arrange, short_extension,
+};
 use oryn_core::ui::selection::{Entry, Selection};
 
 use crate::actions::*;
@@ -280,6 +282,7 @@ pub struct FilePane {
     pub cursor: usize,
     pub selection: Selection,
     pub order: SortOrder,
+    pub folders_on_top: FoldersOnTop,
     pub focus: FocusHandle,
     pub error: Option<SharedString>,
     pub load_time: Duration,
@@ -315,6 +318,7 @@ impl FilePane {
             cursor: 0,
             selection: Selection::default(),
             order: SortOrder::default(),
+            folders_on_top: FoldersOnTop::default(),
             focus: cx.focus_handle(),
             error: None,
             load_time: Duration::ZERO,
@@ -422,7 +426,12 @@ impl FilePane {
     }
 
     fn apply_filter(&mut self, focus_name: Option<&str>) {
-        let order = arrange(&self.all_rows, &self.filter, self.order);
+        let order = arrange(
+            &self.all_rows,
+            &self.filter,
+            self.order,
+            self.folders_on_top,
+        );
         self.rows = order
             .into_iter()
             .map(|i| self.all_rows[i].clone())
@@ -443,7 +452,7 @@ impl FilePane {
     }
 
     fn arranged(&self, rows: Vec<Row>) -> Vec<Row> {
-        let order = arrange(&rows, "", self.order);
+        let order = arrange(&rows, "", self.order, self.folders_on_top);
         let mut slots: Vec<Option<Row>> = rows.into_iter().map(Some).collect();
         order.into_iter().filter_map(|i| slots[i].take()).collect()
     }
@@ -618,6 +627,16 @@ impl FilePane {
             }
             None => self.report(format!("Couldn't open \u{201c}{name}\u{201d}."), cx),
         }
+    }
+
+    pub fn set_folders_on_top(&mut self, folders: FoldersOnTop, cx: &mut Context<Self>) {
+        if self.folders_on_top == folders {
+            return;
+        }
+        self.folders_on_top = folders;
+        let current = self.rows.get(self.cursor).map(|r| r.name.to_string());
+        self.apply_filter(current.as_deref());
+        cx.notify();
     }
 
     pub fn sort_by(&mut self, field: SortField, cx: &mut Context<Self>) {

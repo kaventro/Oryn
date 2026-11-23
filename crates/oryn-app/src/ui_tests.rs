@@ -487,3 +487,42 @@ fn properties_cut_paste_swap_and_hidden_files(cx: &mut TestAppContext) {
     send(cx, window, crate::actions::ToggleHidden);
     assert_eq!(has_secret(cx), shown);
 }
+
+fn row_names(cx: &mut TestAppContext, ws: &Entity<Workspace>) -> Vec<String> {
+    cx.update(|cx| {
+        ws.read(cx)
+            .pane_at(0)
+            .read(cx)
+            .rows
+            .iter()
+            .filter(|r| !r.is_parent)
+            .map(|r| r.name.to_string())
+            .collect()
+    })
+}
+
+#[gpui_kit::test]
+fn folders_on_top_follows_the_setting_and_persists(cx: &mut TestAppContext) {
+    let _serial = serial();
+    let (_tmp, a, b) = dirs();
+    std::fs::create_dir(a.join("music")).unwrap();
+    let (window, ws) = open(cx, &a, &b);
+    assert_eq!(row_names(cx, &ws), ["music", "notes.txt"]);
+    send(cx, window, crate::actions::OpenSettings);
+    click(cx, window, "folders-Never");
+    assert_eq!(row_names(cx, &ws), ["music", "notes.txt"]);
+    std::fs::create_dir(a.join("zebra")).unwrap();
+    cx.update(|cx| {
+        ws.read(cx)
+            .pane_at(0)
+            .update(cx, |p, cx| p.refresh(None, cx));
+    });
+    assert_eq!(row_names(cx, &ws), ["music", "notes.txt", "zebra"]);
+    click(cx, window, "folders-Except by date");
+    assert_eq!(row_names(cx, &ws), ["music", "zebra", "notes.txt"]);
+    let saved = std::fs::read_to_string(data_dir().join("settings.json")).unwrap();
+    assert!(saved.contains(r#""foldersOnTop": "exceptDate""#));
+    click(cx, window, "folders-Never");
+    let (_window, ws) = open(cx, &a, &b);
+    assert_eq!(row_names(cx, &ws), ["music", "notes.txt", "zebra"]);
+}
