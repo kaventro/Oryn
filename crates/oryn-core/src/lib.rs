@@ -9,6 +9,7 @@ pub mod format;
 pub mod fs_safe;
 pub mod git;
 pub mod icons;
+pub mod media;
 pub mod paths;
 pub mod preview;
 pub mod replace;

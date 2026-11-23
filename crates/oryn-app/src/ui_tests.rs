@@ -2,6 +2,7 @@ use std::path::Path;
 
 use std::path::PathBuf;
 use std::sync::OnceLock;
+use std::time::Duration;
 
 use gpui_kit::test::TestWindowExt;
 use gpui_kit::{
@@ -486,6 +487,98 @@ fn properties_cut_paste_swap_and_hidden_files(cx: &mut TestAppContext) {
     assert_ne!(has_secret(cx), shown);
     send(cx, window, crate::actions::ToggleHidden);
     assert_eq!(has_secret(cx), shown);
+}
+
+fn quick_media(
+    cx: &mut TestAppContext,
+    file: &str,
+) -> (
+    tempfile::TempDir,
+    AnyWindowHandle,
+    Entity<crate::quick_view::QuickView>,
+    std::rc::Rc<crate::media::tests::Log>,
+) {
+    let tmp = tempfile::tempdir().unwrap();
+    let a = tmp.path().join("a");
+    std::fs::create_dir_all(&a).unwrap();
+    std::fs::write(a.join(file), b"media").unwrap();
+    let (window, ws) = open(cx, &a, tmp.path());
+    let log = std::rc::Rc::new(crate::media::tests::Log::default());
+    cx.update(|cx| cx.set_global(crate::media::tests::services(&log)));
+    cursor_to(cx, &ws, file);
+    send(cx, window, crate::actions::QuickLook);
+    let view = cx
+        .update(|cx| ws.read(cx).quick_view())
+        .expect("quick view");
+    (tmp, window, view, log)
+}
+
+#[gpui_kit::test]
+fn audio_plays_pauses_and_seeks_in_quick_view(cx: &mut TestAppContext) {
+    let _serial = serial();
+    let (_tmp, window, view, log) = quick_media(cx, "song.mp3");
+    let panel = cx
+        .update(|cx| view.read(cx).audio().cloned())
+        .expect("audio panel");
+    click(cx, window, "media-play");
+    assert_eq!(log.take(), ["open", "play"]);
+    assert!(cx.update(|cx| panel.read(cx).is_playing()));
+    let bar = bounds_of(cx, window, "media-seek");
+    let at = gpui_kit::point(
+        bar.origin.x + bar.size.width * 0.75,
+        bar.origin.y + bar.size.height / 2.0,
+    );
+    let mut v = VisualTestContext::from_window(window, cx);
+    v.simulate_mouse_down(at, MouseButton::Left, Modifiers::none());
+    v.simulate_mouse_up(at, MouseButton::Left, Modifiers::none());
+    v.run_until_parked();
+    assert_eq!(log.take(), ["seek 75"]);
+    send(cx, window, crate::actions::SeekForward);
+    send(cx, window, crate::actions::SeekForward);
+    assert_eq!(log.take(), ["seek 80", "seek 85"]);
+    send(cx, window, crate::actions::TogglePlayback);
+    assert_eq!(log.take(), ["pause"]);
+    assert!(!cx.update(|cx| panel.read(cx).is_playing()));
+    assert_eq!(
+        cx.update(|cx| panel.read(cx).position()),
+        Duration::from_secs(85)
+    );
+}
+
+#[gpui_kit::test]
+fn audio_that_cannot_play_explains_why(cx: &mut TestAppContext) {
+    let _serial = serial();
+    let (_tmp, window, view, log) = quick_media(cx, "broken.flac");
+    let panel = cx
+        .update(|cx| view.read(cx).audio().cloned())
+        .expect("audio panel");
+    click(cx, window, "media-play");
+    assert!(log.take().is_empty());
+    assert_eq!(
+        cx.update(|cx| panel.read(cx).error().map(str::to_string)),
+        Some("this audio format can't be played".into())
+    );
+}
+
+#[gpui_kit::test]
+fn video_shows_a_frame_and_plays_in_the_system_player(cx: &mut TestAppContext) {
+    let _serial = serial();
+    let (_tmp, window, view, log) = quick_media(cx, "clip.mp4");
+    let panel = cx
+        .update(|cx| view.read(cx).video().cloned())
+        .expect("video panel");
+    let (frame, width) = cx.update(|cx| {
+        let p = panel.read(cx);
+        (
+            p.frame().cloned(),
+            p.info().and_then(|i| i.video.as_ref()).map(|v| v.width),
+        )
+    });
+    assert_eq!(frame.unwrap().file_name().unwrap(), "clip.png");
+    assert_eq!(width, Some(1280));
+    click(cx, window, "media-play");
+    send(cx, window, crate::actions::TogglePlayback);
+    assert_eq!(log.take(), ["launch clip.mp4", "launch clip.mp4"]);
 }
 
 fn row_names(cx: &mut TestAppContext, ws: &Entity<Workspace>) -> Vec<String> {

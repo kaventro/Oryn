@@ -2,6 +2,7 @@
 
 mod actions;
 mod icons;
+mod media;
 mod opener;
 mod pane;
 mod quick_view;
