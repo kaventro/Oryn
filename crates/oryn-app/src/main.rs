@@ -3,6 +3,7 @@ mod icons;
 mod pane;
 mod terminal;
 mod theme;
+mod tools;
 mod workspace;
 
 use std::path::PathBuf;

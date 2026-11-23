@@ -64,6 +64,8 @@ fn entries(on_item: bool) -> Vec<Entry> {
             item("pencil", "Rename", "F2", RenameItem),
             item("text-cursor-input", "Batch Rename\u{2026}", "", MultiRename),
             item("clipboard", "Copy Path", "", CopyPath),
+            item("tag", "Tags\u{2026}", "", ShowTags),
+            item("hash", "Checksums", "", ShowChecksums),
             Entry::Separator,
             danger("trash", "Move to Trash", "F8", DeleteItems),
             danger(

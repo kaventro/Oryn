@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 
+use crate::tools::ToolKind;
 use gpui_kit::component::input::{Input, InputEvent, InputState};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
@@ -20,6 +21,7 @@ mod jobs;
 mod menu;
 mod palette;
 mod settings_view;
+mod tool_sheet;
 
 use dialog::Dialog;
 use jobs::Job;
@@ -46,6 +48,7 @@ pub struct Workspace {
     palette: Option<palette::CommandPalette>,
     settings: Settings,
     settings_open: Option<FocusHandle>,
+    tool: Option<tool_sheet::ToolHost>,
     placeholder_for: SharedString,
 }
 
@@ -171,6 +174,7 @@ impl Workspace {
             palette: None,
             settings,
             settings_open: None,
+            tool: None,
             placeholder_for: SharedString::default(),
         }
     }
@@ -484,6 +488,9 @@ impl Workspace {
                 false,
                 p,
             )
+            .on_click(cx.listener(move |this, _, w, cx| {
+                this.open_tool_with(ToolKind::Tags, Some(label.to_string()), w, cx)
+            }))
         });
 
         div()
@@ -1346,6 +1353,35 @@ impl Render for Workspace {
             .on_action(cx.listener(Self::open_batch_rename))
             .on_action(cx.listener(Self::open_palette))
             .on_action(cx.listener(Self::open_settings))
+            .on_action(
+                cx.listener(|this, _: &ShowSearch, w, cx| this.open_tool(ToolKind::Search, w, cx)),
+            )
+            .on_action(
+                cx.listener(|this, _: &ShowReplace, w, cx| {
+                    this.open_tool(ToolKind::Replace, w, cx)
+                }),
+            )
+            .on_action(cx.listener(|this, _: &ShowGit, w, cx| this.open_tool(ToolKind::Git, w, cx)))
+            .on_action(
+                cx.listener(|this, _: &ShowCompare, w, cx| {
+                    this.open_tool(ToolKind::Compare, w, cx)
+                }),
+            )
+            .on_action(cx.listener(|this, _: &ShowDuplicates, w, cx| {
+                this.open_tool(ToolKind::Duplicates, w, cx)
+            }))
+            .on_action(cx.listener(|this, _: &ShowChecksums, w, cx| {
+                this.open_tool(ToolKind::Checksum, w, cx)
+            }))
+            .on_action(
+                cx.listener(|this, _: &ShowDiskSpace, w, cx| this.open_tool(ToolKind::Disk, w, cx)),
+            )
+            .on_action(
+                cx.listener(|this, _: &ShowTags, w, cx| this.open_tool(ToolKind::Tags, w, cx)),
+            )
+            .on_action(
+                cx.listener(|this, _: &ShowSftp, w, cx| this.open_tool(ToolKind::Sftp, w, cx)),
+            )
             .on_action(cx.listener(|_, _: &Quit, _, cx| cx.quit()))
             .flex()
             .size_full()
@@ -1396,6 +1432,7 @@ impl Render for Workspace {
             .children(self.render_batch_rename(&p, cx))
             .children(self.render_palette(&p, cx))
             .children(self.render_settings(&p, cx))
+            .children(self.render_tool(&p, cx))
             .children(self.render_menu(&p, cx))
             .children(self.render_dialog(&p, cx))
     }

@@ -613,6 +613,21 @@ impl FilePane {
         cx.notify();
     }
 
+    pub fn reveal(&mut self, path: &Path, cx: &mut Context<Self>) {
+        let (Some(dir), Some(name)) = (path.parent(), path.file_name()) else {
+            return;
+        };
+        let name = name.to_string_lossy().into_owned();
+        if dir == self.path {
+            self.refresh(Some(&name), cx);
+            return;
+        }
+        self.back.push(self.path.clone());
+        self.forward.clear();
+        self.load(dir.to_path_buf(), Some(&name));
+        cx.notify();
+    }
+
     pub fn can_go_back(&self) -> bool {
         !self.back.is_empty()
     }
