@@ -4,7 +4,7 @@ members = ["crates/oryn-core", "crates/oryn-app"]
 exclude = ["desktop"]
 
 [workspace.package]
-version = "0.0.12"
+version = "0.0.13"
 edition = "2024"
 license = "AGPL-3.0-only"
 repository = "https://github.com/kaventro/Oryn"

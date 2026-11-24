@@ -5559,7 +5559,7 @@ dependencies = [
 
 [[package]]
 name = "oryn-app"
-version = "0.0.12"
+version = "0.0.13"
 dependencies = [
  "alacritty_terminal",
  "anyhow",
@@ -5580,7 +5580,7 @@ dependencies = [
 
 [[package]]
 name = "oryn-core"
-version = "0.0.12"
+version = "0.0.13"
 dependencies = [
  "anyhow",
  "base64 0.23.1",
