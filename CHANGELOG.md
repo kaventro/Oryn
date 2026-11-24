@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.12] - 2026-11-24
+
+### Added
+- Oryn updates itself. Click Update in the header and choose Update and restart: Oryn downloads the build for your system, checks it against the release's SHA-256 checksums, puts it in place and restarts. On macOS it replaces the whole Oryn.app after checking its code signature. The .deb and other package-manager installs open the release page instead.
+
 ## [0.0.11] - 2026-11-23
 
 ### Added
