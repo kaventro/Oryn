@@ -6,7 +6,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [Unreleased]
+## [0.0.13] - 2026-11-24
 
 ### Fixed
 - Windows: the buttons in the top bar (Settings, tabs, new tab, dual pane, terminal, remote, update, sidebar, minimise, maximise and close) respond to clicks again. Windows treated the whole bar as the window's drag handle and swallowed the clicks.
