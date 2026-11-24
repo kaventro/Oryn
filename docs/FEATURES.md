@@ -50,4 +50,4 @@ Ctrl+\` or F9 opens a terminal drawer in the active pane's folder. It follows th
 
 ## Updates
 
-Oryn checks GitHub for a newer release when it starts and shows an Update button in the header. Turn this off in Settings.
+Oryn checks GitHub for a newer release when it starts and shows an Update button in the header. Click it and choose Update and restart: Oryn downloads the build for your system, checks it against the release's SHA-256 checksums, puts it in place and restarts. On macOS it replaces the whole Oryn.app and checks its code signature first. Copies installed by a package manager, such as the `.deb`, are updated from the package manager instead, and the button opens the release page. Turn the check off in Settings.

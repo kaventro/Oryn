@@ -6,6 +6,7 @@ use gpui_kit::*;
 use oryn_core::batch::{self, BatchKind};
 use oryn_core::services::fs_transfer::OverwritePolicy;
 use oryn_core::ui::rename::validate_name;
+use oryn_core::update::Release;
 
 use super::Workspace;
 use crate::actions::*;
@@ -39,6 +40,18 @@ pub enum Dialog {
         path: PathBuf,
         rows: Vec<(&'static str, String)>,
     },
+    Update {
+        release: Release,
+        stage: UpdateStage,
+    },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum UpdateStage {
+    Offer,
+    Manual(&'static str),
+    Working,
+    Failed,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -46,6 +59,7 @@ pub enum Choice {
     Confirm,
     Overwrite,
     Skip,
+    Browse,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -119,6 +133,11 @@ impl Dialog {
                 .file_name()
                 .map(|n| n.to_string_lossy().into_owned())
                 .unwrap_or_else(|| path.display().to_string()),
+            Dialog::Update {
+                release,
+                stage: UpdateStage::Working,
+            } => format!("Updating to Oryn {}\u{2026}", release.version),
+            Dialog::Update { release, .. } => format!("Oryn {} is available", release.version),
         }
     }
 
@@ -133,6 +152,7 @@ impl Dialog {
             Dialog::Delete { .. } => "delete",
             Dialog::GoTo => "goto",
             Dialog::Info { .. } => "info",
+            Dialog::Update { .. } => "update",
         }
     }
 
@@ -165,6 +185,29 @@ impl Dialog {
             } => format!("{}. This can't be undone.", names(sources)),
             Dialog::GoTo => "Type or paste a path. ~ stands for your home folder.".into(),
             Dialog::Info { .. } => String::new(),
+            Dialog::Update { stage, .. } => match stage {
+                UpdateStage::Offer => format!(
+                    "You have {}. Oryn downloads the update, checks it and restarts.",
+                    env!("CARGO_PKG_VERSION")
+                ),
+                UpdateStage::Manual(reason) => (*reason).into(),
+                UpdateStage::Working => {
+                    "Downloading and checking the update. Oryn restarts when it's ready.".into()
+                }
+                UpdateStage::Failed => "The update didn't install. Oryn is unchanged.".into(),
+            },
+        }
+    }
+
+    fn close_label(&self) -> &'static str {
+        match self {
+            Dialog::Update {
+                stage: UpdateStage::Working,
+                ..
+            } => "Hide",
+            Dialog::Update { .. } => "Later",
+            _ if self.buttons().is_empty() => "Close",
+            _ => "Cancel",
         }
     }
 
@@ -173,6 +216,7 @@ impl Dialog {
             self,
             Dialog::Delete { .. }
                 | Dialog::Info { .. }
+                | Dialog::Update { .. }
                 | Dialog::Transfer {
                     conflicts: Some(_),
                     ..
@@ -214,6 +258,20 @@ impl Dialog {
             } => vec![("Delete", Choice::Confirm, Tone::Danger)],
             Dialog::GoTo => vec![("Go", Choice::Confirm, Tone::Primary)],
             Dialog::Info { .. } => Vec::new(),
+            Dialog::Update { stage, .. } => match stage {
+                UpdateStage::Offer => vec![
+                    ("Release notes", Choice::Browse, Tone::Plain),
+                    ("Update and restart", Choice::Confirm, Tone::Primary),
+                ],
+                UpdateStage::Manual(_) => {
+                    vec![("Open release page", Choice::Browse, Tone::Primary)]
+                }
+                UpdateStage::Working => Vec::new(),
+                UpdateStage::Failed => vec![
+                    ("Open release page", Choice::Browse, Tone::Plain),
+                    ("Try again", Choice::Confirm, Tone::Primary),
+                ],
+            },
         }
     }
 }
@@ -358,7 +416,7 @@ impl Workspace {
                 let policy = match choice {
                     Choice::Skip => OverwritePolicy::Skip,
                     Choice::Overwrite => OverwritePolicy::Overwrite,
-                    Choice::Confirm => {
+                    Choice::Confirm | Choice::Browse => {
                         let clash = batch::conflicts(&sources, &dest);
                         if !clash.is_empty() {
                             self.dialog = Some(Dialog::Transfer {
@@ -396,6 +454,9 @@ impl Workspace {
                 }
             }
             Dialog::Info { .. } => self.close_prompt(window, cx),
+            Dialog::Update { release, stage } => {
+                self.choose_update(release, stage, choice, window, cx)
+            }
             Dialog::Delete { sources, permanent } => {
                 self.close_prompt(window, cx);
                 let kind = if permanent {
@@ -506,11 +567,7 @@ impl Workspace {
         let title = dialog.title();
         let subtitle = dialog.subtitle();
         let buttons = dialog.buttons();
-        let close_label = if buttons.is_empty() {
-            "Close"
-        } else {
-            "Cancel"
-        };
+        let close_label = dialog.close_label();
         Some(
             div()
                 .id("dialog-overlay")

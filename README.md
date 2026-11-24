@@ -72,7 +72,7 @@ Download the latest build from [Releases](https://github.com/kaventro/Oryn/relea
 - Windows: `Oryn_<version>_x64-setup.exe`, or the portable `.exe`
 - Linux: `oryn_<version>_amd64.deb`, or the `.tar.gz`
 
-Oryn checks GitHub for a newer release when it starts and shows an Update button in the header. You can turn this off in Settings.
+Oryn checks GitHub for a newer release when it starts and shows an Update button in the header. Click it to download, verify and install the update, and Oryn restarts on the new version. The `.deb` is updated through your package manager instead. You can turn the check off in Settings.
 
 ## Run from source
 

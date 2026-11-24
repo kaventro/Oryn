@@ -24,6 +24,7 @@ mod palette;
 mod quick;
 mod settings_view;
 mod tool_sheet;
+mod updates;
 mod watch;
 
 use dialog::Dialog;
@@ -59,6 +60,8 @@ pub struct Workspace {
     quick: Option<(Entity<crate::quick_view::QuickView>, Subscription)>,
     placeholder_for: SharedString,
     update: Option<oryn_core::update::Release>,
+    installing: bool,
+    updates: std::sync::Arc<dyn crate::update::UpdateSource>,
     _update_task: Option<Task<()>>,
     watch: Option<watch::Watch>,
 }
@@ -181,6 +184,8 @@ impl Workspace {
             quick: None,
             placeholder_for: SharedString::default(),
             update: None,
+            installing: false,
+            updates: std::sync::Arc::new(crate::update::GitHubUpdates::default()),
             _update_task: None,
             watch: None,
         };
@@ -213,20 +218,6 @@ impl Workspace {
         .filter(|(_, on)| *on)
         .map(|(n, _)| n)
         .collect()
-    }
-
-    fn check_updates(&mut self, cx: &mut Context<Self>) {
-        if std::env::var_os("ORYN_NO_UPDATE_CHECK").is_some() {
-            return;
-        }
-        let task = cx.background_spawn(async move { crate::update::latest() });
-        self._update_task = Some(cx.spawn(async move |this, cx| {
-            let found = task.await;
-            let _ = this.update(cx, |this, cx| {
-                this.update = found;
-                cx.notify();
-            });
-        }));
     }
 
     fn spawn_pane(
@@ -919,8 +910,9 @@ impl Workspace {
                 d.child(
                     div()
                         .id("update-pill")
-                        .role(Role::Link)
-                        .aria_label(format!("Oryn {} is available", rel.version))
+                        .debug_selector(|| "update-pill".into())
+                        .role(Role::Button)
+                        .aria_label(format!("Update to Oryn {}", rel.version))
                         .flex()
                         .items_center()
                         .gap(px(6.0))
@@ -934,9 +926,7 @@ impl Workspace {
                         .text_color(p.text_strong)
                         .cursor_pointer()
                         .hover(|s| s.bg(with_alpha(p.accent, 0.28)))
-                        .on_click(move |_, _, _| {
-                            let _ = open::that_detached(&rel.url);
-                        })
+                        .on_click(cx.listener(|this, _, w, cx| this.offer_update(w, cx)))
                         .child(icon("download", 13.0, p.accent))
                         .child(format!("Update {}", rel.version)),
                 )
