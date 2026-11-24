@@ -201,7 +201,6 @@ fn make_executable(_path: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Write;
 
     fn tarball(path: &Path, member: &str, body: &[u8]) {
         let gz =
@@ -263,6 +262,7 @@ mod tests {
     #[cfg(not(target_os = "macos"))]
     #[test]
     fn bundle_installer_swaps_the_whole_app() {
+        use std::io::Write;
         let dir = tempfile::tempdir().unwrap();
         let app = dir.path().join("Oryn.app");
         fs::create_dir_all(app.join("Contents/MacOS")).unwrap();
