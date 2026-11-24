@@ -517,6 +517,7 @@ impl Workspace {
                         this.run_entry(ix, w, cx);
                     }
                 }))
+                .occlude()
                 .absolute()
                 .inset_0()
                 .on_mouse_down(

@@ -579,6 +579,7 @@ impl Workspace {
                 .track_focus(&self.dialog_focus)
                 .on_action(cx.listener(Self::cancel_prompt))
                 .on_action(cx.listener(Self::confirm_prompt))
+                .occlude()
                 .absolute()
                 .inset_0()
                 .flex()
