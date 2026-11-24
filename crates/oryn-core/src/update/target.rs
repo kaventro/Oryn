@@ -217,4 +217,51 @@ mod tests {
             Plan::Manual(_)
         ));
     }
+
+    #[test]
+    fn current_platform_is_known() {
+        let here = Platform::current();
+        assert_ne!(here.os, Os::Other);
+        assert_ne!(here.arch, Arch::Other);
+    }
+
+    #[test]
+    fn other_systems_and_processors_update_by_hand() {
+        let exe = Path::new("/home/dev/oryn");
+        let odd_cpu = Platform {
+            os: Os::Linux,
+            arch: Arch::Other,
+        };
+        assert!(matches!(plan(odd_cpu, exe, "1.0.0"), Plan::Manual(_)));
+        let odd_os = Platform {
+            os: Os::Other,
+            arch: Arch::X86_64,
+        };
+        assert!(matches!(plan(odd_os, exe, "1.0.0"), Plan::Manual(_)));
+    }
+
+    #[test]
+    fn every_method_has_an_installer() {
+        let dir = tempfile::tempdir().unwrap();
+        let exe = dir.path().join("oryn");
+        std::fs::write(&exe, b"old").unwrap();
+        let fresh = dir.path().join("fresh");
+        std::fs::write(&fresh, b"new").unwrap();
+        let target = |method| Target {
+            asset: String::new(),
+            checksums: String::new(),
+            method,
+        };
+        let binary = target(Method::Binary { exe: exe.clone() });
+        assert_eq!(binary.installer().install(&fresh, dir.path()).unwrap(), exe);
+        let tarball = target(Method::Tarball {
+            exe: exe.clone(),
+            member: "x/oryn".into(),
+        });
+        assert!(tarball.installer().install(&fresh, dir.path()).is_err());
+        let bundle = target(Method::Bundle {
+            app: dir.path().join("Oryn.app"),
+        });
+        assert!(bundle.installer().install(&fresh, dir.path()).is_err());
+    }
 }

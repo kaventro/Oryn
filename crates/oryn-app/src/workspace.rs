@@ -61,6 +61,7 @@ pub struct Workspace {
     placeholder_for: SharedString,
     update: Option<oryn_core::update::Release>,
     installing: bool,
+    updates: std::sync::Arc<dyn crate::update::UpdateSource>,
     _update_task: Option<Task<()>>,
     watch: Option<watch::Watch>,
 }
@@ -184,6 +185,7 @@ impl Workspace {
             placeholder_for: SharedString::default(),
             update: None,
             installing: false,
+            updates: std::sync::Arc::new(crate::update::GitHubUpdates::default()),
             _update_task: None,
             watch: None,
         };

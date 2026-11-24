@@ -303,4 +303,40 @@ mod tests {
         assert_eq!(fs::read(app.join("Contents/MacOS/oryn")).unwrap(), b"old");
         assert!(!dir.path().join(".Oryn.app.update").exists());
     }
+
+    #[test]
+    fn binary_installer_reports_a_destination_it_cannot_replace() {
+        let dir = tempfile::tempdir().unwrap();
+        let exe = dir.path().join("oryn");
+        fs::create_dir_all(exe.join("inside")).unwrap();
+        let fresh = dir.path().join("download");
+        fs::write(&fresh, b"new").unwrap();
+        assert!(BinaryInstaller::new(exe.clone())
+            .install(&fresh, dir.path())
+            .is_err());
+        assert!(exe.join("inside").is_dir());
+        assert!(!dir.path().join(".oryn.update").exists());
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    #[test]
+    fn bundle_installer_rejects_an_incomplete_app() {
+        let dir = tempfile::tempdir().unwrap();
+        let app = dir.path().join("Oryn.app");
+        fs::create_dir_all(app.join("Contents/MacOS")).unwrap();
+        let download = dir.path().join("Oryn.app.zip");
+        let mut zip = zip::ZipWriter::new(File::create(&download).unwrap());
+        zip.start_file(
+            "Oryn.app/Info.plist",
+            zip::write::SimpleFileOptions::default(),
+        )
+        .unwrap();
+        std::io::Write::write_all(&mut zip, b"plist").unwrap();
+        zip.finish().unwrap();
+        let err = BundleInstaller::new(app.clone())
+            .install(&download, dir.path())
+            .unwrap_err();
+        assert!(err.to_string().contains("incomplete"));
+        assert!(app.join("Contents/MacOS").is_dir());
+    }
 }

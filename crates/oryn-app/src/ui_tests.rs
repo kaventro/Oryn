@@ -620,19 +620,133 @@ fn folders_on_top_follows_the_setting_and_persists(cx: &mut TestAppContext) {
     assert_eq!(row_names(cx, &ws), ["music", "notes.txt", "zebra"]);
 }
 
+struct FakeUpdates {
+    plan: oryn_core::update::Plan,
+    results: parking_lot::Mutex<Vec<Result<PathBuf, String>>>,
+    opened: parking_lot::Mutex<Vec<String>>,
+}
+
+impl FakeUpdates {
+    fn new(plan: oryn_core::update::Plan, results: Vec<Result<PathBuf, String>>) -> Self {
+        Self {
+            plan,
+            results: parking_lot::Mutex::new(results),
+            opened: parking_lot::Mutex::new(Vec::new()),
+        }
+    }
+}
+
+impl crate::update::UpdateSource for FakeUpdates {
+    fn latest(&self) -> Option<oryn_core::update::Release> {
+        Some(oryn_core::update::Release {
+            version: "99.0.0".into(),
+            url: "https://example.com/release".into(),
+            assets: Vec::new(),
+        })
+    }
+
+    fn plan(&self, _: &oryn_core::update::Release) -> oryn_core::update::Plan {
+        self.plan.clone()
+    }
+
+    fn install(&self, _: &oryn_core::update::Release) -> anyhow::Result<PathBuf> {
+        self.results.lock().remove(0).map_err(anyhow::Error::msg)
+    }
+
+    fn open_page(&self, url: &str) {
+        self.opened.lock().push(url.to_string());
+    }
+}
+
+fn automatic() -> oryn_core::update::Plan {
+    oryn_core::update::Plan::Automatic(oryn_core::update::Target {
+        asset: "a".into(),
+        checksums: "s".into(),
+        method: oryn_core::update::Method::Binary {
+            exe: PathBuf::from("oryn"),
+        },
+    })
+}
+
+fn with_updates(
+    cx: &mut TestAppContext,
+    fake: std::sync::Arc<FakeUpdates>,
+) -> (tempfile::TempDir, AnyWindowHandle, Entity<Workspace>) {
+    let (tmp, a, b) = dirs();
+    let (window, ws) = open(cx, &a, &b);
+    cx.update(|cx| ws.update(cx, |w, cx| w.use_updates(fake, cx)));
+    cx.run_until_parked();
+    (tmp, window, ws)
+}
+
+fn prompt(cx: &mut TestAppContext, ws: &Entity<Workspace>) -> Option<(String, Option<String>)> {
+    cx.update(|cx| ws.read(cx).update_prompt())
+}
+
 #[gpui_kit::test]
 fn update_pill_offers_the_update_and_later_closes_it(cx: &mut TestAppContext) {
     let _serial = serial();
-    let (_tmp, a, b) = dirs();
-    let (window, ws) = open(cx, &a, &b);
-    let release = oryn_core::update::Release {
-        version: "99.0.0".into(),
-        url: "https://example.com/release".into(),
-        assets: Vec::new(),
-    };
-    cx.update(|cx| ws.update(cx, |w, cx| w.announce_update(release, cx)));
+    let fake = std::sync::Arc::new(FakeUpdates::new(automatic(), Vec::new()));
+    let (_tmp, window, ws) = with_updates(cx, fake.clone());
     click(cx, window, "update-pill");
-    assert_eq!(cx.update(|cx| ws.read(cx).dialog_kind()), Some("update"));
+    assert_eq!(prompt(cx, &ws).map(|p| p.0), Some("Offer".into()));
     click(cx, window, "dialog-Later");
     assert_eq!(cx.update(|cx| ws.read(cx).dialog_kind()), None);
+    click(cx, window, "update-pill");
+    click(cx, window, "dialog-Release notes");
+    assert_eq!(cx.update(|cx| ws.read(cx).dialog_kind()), None);
+    assert_eq!(*fake.opened.lock(), ["https://example.com/release"]);
+}
+
+#[gpui_kit::test]
+fn a_failed_update_can_be_tried_again_and_then_restarts(cx: &mut TestAppContext) {
+    let _serial = serial();
+    let fake = std::sync::Arc::new(FakeUpdates::new(
+        automatic(),
+        vec![
+            Err("no network".into()),
+            Err("still no network".into()),
+            Ok(PathBuf::from("/apps/oryn")),
+        ],
+    ));
+    let (_tmp, window, ws) = with_updates(cx, fake.clone());
+    click(cx, window, "update-pill");
+    click(cx, window, "dialog-Update and restart");
+    assert_eq!(
+        prompt(cx, &ws),
+        Some(("Failed".into(), Some("no network".into())))
+    );
+    click(cx, window, "dialog-Open release page");
+    assert_eq!(fake.opened.lock().len(), 1);
+    click(cx, window, "update-pill");
+    assert_eq!(prompt(cx, &ws).map(|p| p.0), Some("Offer".into()));
+    send(cx, window, crate::actions::ConfirmPrompt);
+    assert_eq!(prompt(cx, &ws).map(|p| p.0), Some("Failed".into()));
+    frame(cx, window);
+    click(cx, window, "dialog-Try again");
+    assert!(fake.results.lock().is_empty());
+    assert_eq!(prompt(cx, &ws).map(|p| p.0), Some("Working".into()));
+    send(cx, window, crate::actions::ConfirmPrompt);
+    assert_eq!(cx.update(|cx| ws.read(cx).dialog_kind()), Some("update"));
+    frame(cx, window);
+    click(cx, window, "dialog-Hide");
+    assert_eq!(prompt(cx, &ws), None);
+}
+
+#[gpui_kit::test]
+fn a_manual_install_only_opens_the_release_page(cx: &mut TestAppContext) {
+    let _serial = serial();
+    let fake = std::sync::Arc::new(FakeUpdates::new(
+        oryn_core::update::Plan::Manual("Use your package manager."),
+        Vec::new(),
+    ));
+    let (_tmp, window, ws) = with_updates(cx, fake.clone());
+    click(cx, window, "update-pill");
+    assert_eq!(
+        prompt(cx, &ws).map(|p| p.0),
+        Some("Manual(\"Use your package manager.\")".into())
+    );
+    send(cx, window, crate::actions::ConfirmPrompt);
+    assert_eq!(prompt(cx, &ws), None);
+    assert_eq!(*fake.opened.lock(), ["https://example.com/release"]);
 }
