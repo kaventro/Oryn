@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Fixed
+- Windows: the buttons in the top bar (Settings, tabs, new tab, dual pane, terminal, remote, update, sidebar, minimise, maximise and close) respond to clicks again. Windows treated the whole bar as the window's drag handle and swallowed the clicks.
+- Settings fit smaller windows: the panel scrolls instead of running off the bottom of the screen, so Done and the lower switches stay reachable.
+- Linux: the window can be moved by dragging the top bar, maximised by double-clicking it, and resized from its edges, and the minimise, maximise and close buttons work.
+- Windows: Oryn opens in your user folder when started from the Start menu instead of the folder it was launched from.
+
 ## [0.0.12] - 2026-11-24
 
 ### Added

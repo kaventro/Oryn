@@ -23,6 +23,7 @@ mod menu;
 mod palette;
 mod quick;
 mod settings_view;
+mod title_bar;
 mod tool_sheet;
 mod updates;
 mod watch;
@@ -64,6 +65,8 @@ pub struct Workspace {
     updates: std::sync::Arc<dyn crate::update::UpdateSource>,
     _update_task: Option<Task<()>>,
     watch: Option<watch::Watch>,
+    chrome: std::rc::Rc<dyn crate::chrome::WindowChrome>,
+    drag_armed: bool,
 }
 
 struct Place {
@@ -72,7 +75,7 @@ struct Place {
     path: PathBuf,
 }
 
-fn home_dir() -> PathBuf {
+pub(crate) fn home_dir() -> PathBuf {
     std::env::var_os("HOME")
         .or_else(|| std::env::var_os("USERPROFILE"))
         .map(PathBuf::from)
@@ -188,6 +191,8 @@ impl Workspace {
             updates: std::sync::Arc::new(crate::update::GitHubUpdates::default()),
             _update_task: None,
             watch: None,
+            chrome: std::rc::Rc::new(crate::chrome::NativeChrome::for_platform()),
+            drag_armed: false,
         };
         if std::env::var_os("ORYN_NO_WATCH").is_none() {
             this.watch = Some(Self::start_watch(cx));
@@ -663,9 +668,7 @@ impl Workspace {
             .border_r_1()
             .border_color(p.divider)
             .child(
-                div()
-                    .id("sidebar-top")
-                    .window_control_area(WindowControlArea::Drag)
+                self.drag_region(div().id("sidebar-top"), cx)
                     .flex()
                     .items_center()
                     .justify_between()
@@ -680,6 +683,8 @@ impl Workspace {
                     .child(
                         div()
                             .id("sidebar-toggle")
+                            .debug_selector(|| "sidebar-toggle".into())
+                            .occlude()
                             .role(Role::Button)
                             .aria_label("Hide sidebar")
                             .flex()
@@ -807,6 +812,7 @@ impl Workspace {
         div()
             .id(id)
             .debug_selector(|| format!("btn-{id}"))
+            .occlude()
             .role(Role::Button)
             .aria_label(label)
             .flex()
@@ -850,10 +856,8 @@ impl Workspace {
         p: &Palette,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let caption = !cfg!(target_os = "macos");
-        div()
-            .id("header")
-            .window_control_area(WindowControlArea::Drag)
+        let caption = self.chrome.shows_captions();
+        self.drag_region(div().id("header"), cx)
             .flex()
             .flex_none()
             .items_center()
@@ -875,6 +879,8 @@ impl Workspace {
                         .child(
                             div()
                                 .id("sidebar-show")
+                                .debug_selector(|| "sidebar-show".into())
+                                .occlude()
                                 .role(Role::Button)
                                 .aria_label("Show sidebar")
                                 .flex()
@@ -896,6 +902,7 @@ impl Workspace {
             .child(
                 div()
                     .id("folder-title")
+                    .debug_selector(|| "folder-title".into())
                     .role(Role::Heading)
                     .flex_1()
                     .min_w_0()
@@ -911,6 +918,7 @@ impl Workspace {
                     div()
                         .id("update-pill")
                         .debug_selector(|| "update-pill".into())
+                        .occlude()
                         .role(Role::Button)
                         .aria_label(format!("Update to Oryn {}", rel.version))
                         .flex()
@@ -970,19 +978,7 @@ impl Workspace {
                         })),
                     )
                     .child(
-                        Self::icon_button(
-                            "settings",
-                            "settings",
-                            format!(
-                                "Change accent, now {}",
-                                TRAYS[cx.try_global::<OrynTheme>().map(|t| t.tray).unwrap_or(0)
-                                    % TRAYS.len()]
-                                .name
-                            ),
-                            false,
-                            p,
-                        )
-                        .on_click(
+                        Self::icon_button("settings", "settings", "Settings", false, p).on_click(
                             cx.listener(|this, _, w, cx| this.open_settings(&OpenSettings, w, cx)),
                         ),
                     ),
@@ -1000,13 +996,9 @@ impl Workspace {
                                 .mr(px(6.0))
                                 .bg(white_alpha(0.1)),
                         )
-                        .child(Self::caption("win-min", "win-min", WindowControlArea::Min))
-                        .child(Self::caption("win-max", "win-max", WindowControlArea::Max))
-                        .child(Self::caption(
-                            "win-close",
-                            "win-close",
-                            WindowControlArea::Close,
-                        )),
+                        .child(self.caption("win-min", WindowControlArea::Min, cx))
+                        .child(self.caption("win-max", WindowControlArea::Max, cx))
+                        .child(self.caption("win-close", WindowControlArea::Close, cx)),
                 )
             })
     }
@@ -1022,6 +1014,8 @@ impl Workspace {
             let fg = if active { p.on_accent } else { hex(0xa0a0a5) };
             div()
                 .id(("tab", ix))
+                .debug_selector(move || format!("tab-{ix}"))
+                .occlude()
                 .role(Role::Tab)
                 .aria_label(SharedString::from(full))
                 .aria_selected(active)
@@ -1088,20 +1082,6 @@ impl Workspace {
             .items_center()
             .gap(px(4.0))
             .children(tabs)
-    }
-
-    fn caption(id: &'static str, name: &'static str, area: WindowControlArea) -> Stateful<Div> {
-        div()
-            .id(id)
-            .window_control_area(area)
-            .flex()
-            .items_center()
-            .justify_center()
-            .w(px(30.0))
-            .h(px(28.0))
-            .rounded(px(4.0))
-            .hover(|s| s.bg(white_alpha(0.08)))
-            .child(oryn_icon(name, 12.0, hex(0xa1a1a6)))
     }
 
     fn tool(
@@ -1558,6 +1538,12 @@ impl Workspace {
 
 impl Render for Workspace {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        gpui_kit::component::window_border().child(self.render_root(window, cx))
+    }
+}
+
+impl Workspace {
+    fn render_root(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Stateful<Div> {
         for i in 0..2 {
             if self.pane(i).read(cx).focus.contains_focused(window, cx) {
                 self.active = i;

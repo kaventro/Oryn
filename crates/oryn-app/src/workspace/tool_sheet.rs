@@ -175,6 +175,7 @@ impl Workspace {
                 .id("tool-overlay")
                 .key_context("Dialog")
                 .on_action(cx.listener(|this, _: &CancelPrompt, w, cx| this.close_tool(w, cx)))
+                .occlude()
                 .absolute()
                 .inset_0()
                 .flex()

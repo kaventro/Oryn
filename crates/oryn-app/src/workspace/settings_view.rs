@@ -298,6 +298,7 @@ impl Workspace {
                 .key_context("Dialog")
                 .track_focus(focus)
                 .on_action(cx.listener(|this, _: &CancelPrompt, w, cx| this.close_settings(w, cx)))
+                .occlude()
                 .absolute()
                 .inset_0()
                 .flex()
@@ -312,6 +313,7 @@ impl Workspace {
                         .aria_label("Settings")
                         .on_click(|_, _, cx| cx.stop_propagation())
                         .w(px(500.0))
+                        .max_h(relative(0.9))
                         .flex()
                         .flex_col()
                         .py(px(20.0))
@@ -334,6 +336,15 @@ impl Workspace {
                                 .text_color(p.text_strong)
                                 .child("Settings"),
                         )
+                        .child(
+                            div()
+                                .id("settings-body")
+                                .debug_selector(|| "settings-body".into())
+                                .flex()
+                                .flex_col()
+                                .flex_1()
+                                .min_h_0()
+                                .overflow_y_scroll()
                         .child(section("Accent"))
                         .child(div().flex().justify_between().children(swatches))
                         .child(section("View"))
@@ -366,7 +377,8 @@ impl Workspace {
                                 ),
                         )
                         .child(section("Behaviour"))
-                        .children(toggles)
+                        .children(toggles),
+                        )
                         .child(
                             div()
                                 .mt(px(16.0))
@@ -382,6 +394,7 @@ impl Workspace {
                                 .child(
                                     div()
                                         .id("settings-done")
+                                        .debug_selector(|| "btn-settings-done".into())
                                         .role(Role::Button)
                                         .aria_label("Done")
                                         .px(px(16.0))

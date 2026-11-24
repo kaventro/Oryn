@@ -324,6 +324,7 @@ impl Workspace {
                 .key_context("Dialog")
                 .track_focus(&b.focus)
                 .on_action(cx.listener(|this, _: &CancelPrompt, w, cx| this.close_batch(w, cx)))
+                .occlude()
                 .absolute()
                 .inset_0()
                 .flex()

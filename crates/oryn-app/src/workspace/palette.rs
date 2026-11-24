@@ -321,6 +321,7 @@ impl Workspace {
                     }
                     cx.stop_propagation();
                 }))
+                .occlude()
                 .absolute()
                 .inset_0()
                 .flex()

@@ -750,3 +750,161 @@ fn a_manual_install_only_opens_the_release_page(cx: &mut TestAppContext) {
     assert_eq!(prompt(cx, &ws), None);
     assert_eq!(*fake.opened.lock(), ["https://example.com/release"]);
 }
+
+#[derive(Default)]
+struct RecordingChrome {
+    calls: parking_lot::Mutex<Vec<&'static str>>,
+}
+
+impl RecordingChrome {
+    fn take(&self) -> Vec<&'static str> {
+        std::mem::take(&mut *self.calls.lock())
+    }
+}
+
+impl crate::chrome::WindowChrome for RecordingChrome {
+    fn app_drives_window(&self) -> bool {
+        true
+    }
+
+    fn shows_captions(&self) -> bool {
+        true
+    }
+
+    fn start_move(&self, _: &mut gpui_kit::Window) {
+        self.calls.lock().push("move");
+    }
+
+    fn minimize(&self, _: &mut gpui_kit::Window) {
+        self.calls.lock().push("minimize");
+    }
+
+    fn zoom(&self, _: &mut gpui_kit::Window) {
+        self.calls.lock().push("zoom");
+    }
+
+    fn close(&self, _: &mut gpui_kit::Window, _: &mut gpui_kit::App) {
+        self.calls.lock().push("close");
+    }
+}
+
+fn with_chrome(
+    cx: &mut TestAppContext,
+) -> (
+    tempfile::TempDir,
+    AnyWindowHandle,
+    Entity<Workspace>,
+    std::rc::Rc<RecordingChrome>,
+) {
+    let (tmp, a, b) = dirs();
+    let (window, ws) = open(cx, &a, &b);
+    let chrome = std::rc::Rc::new(RecordingChrome::default());
+    cx.update(|cx| ws.update(cx, |w, cx| w.use_chrome(chrome.clone(), cx)));
+    cx.run_until_parked();
+    (tmp, window, ws, chrome)
+}
+
+fn press_and_drag(cx: &mut TestAppContext, window: AnyWindowHandle, at: Point<gpui_kit::Pixels>) {
+    let mut v = VisualTestContext::from_window(window, cx);
+    v.simulate_mouse_move(at, None, Modifiers::none());
+    v.simulate_event(MouseDownEvent {
+        position: at,
+        modifiers: Modifiers::none(),
+        button: MouseButton::Left,
+        click_count: 1,
+        first_mouse: false,
+    });
+    v.simulate_mouse_move(
+        at + Point::new(px(4.0), px(0.0)),
+        MouseButton::Left,
+        Modifiers::none(),
+    );
+    v.simulate_mouse_move(
+        at + Point::new(px(8.0), px(0.0)),
+        MouseButton::Left,
+        Modifiers::none(),
+    );
+    v.simulate_event(MouseUpEvent {
+        position: at + Point::new(px(8.0), px(0.0)),
+        modifiers: Modifiers::none(),
+        button: MouseButton::Left,
+        click_count: 1,
+    });
+    v.run_until_parked();
+}
+
+#[gpui_kit::test]
+fn title_bar_buttons_take_clicks_instead_of_dragging_the_window(cx: &mut TestAppContext) {
+    let _serial = serial();
+    let (_tmp, window, _ws, chrome) = with_chrome(cx);
+
+    for sel in [
+        "btn-settings",
+        "btn-add-tab",
+        "btn-pane-toggle",
+        "btn-remote",
+        "tab-0",
+        "sidebar-toggle",
+        "win-min",
+    ] {
+        let at = bounds_of(cx, window, sel).center();
+        press_and_drag(cx, window, at);
+        assert!(!chrome.take().contains(&"move"), "{sel} dragged the window");
+        send(cx, window, crate::actions::CancelPrompt);
+    }
+
+    let title = bounds_of(cx, window, "folder-title").center();
+    press_and_drag(cx, window, title);
+    assert_eq!(chrome.take(), ["move"]);
+}
+
+#[gpui_kit::test]
+fn settings_open_from_the_title_bar_and_cover_the_drag_area(cx: &mut TestAppContext) {
+    let _serial = serial();
+    let (_tmp, window, ws, chrome) = with_chrome(cx);
+    click(cx, window, "btn-settings");
+    assert_eq!(overlays(cx, &ws), ["settings"]);
+
+    let title = bounds_of(cx, window, "folder-title").center();
+    press_and_drag(cx, window, title);
+    assert!(chrome.take().is_empty());
+    assert!(overlays(cx, &ws).is_empty());
+
+    click(cx, window, "btn-settings");
+    click(cx, window, "folders-Never");
+    let saved = std::fs::read_to_string(data_dir().join("settings.json")).unwrap();
+    assert!(saved.contains(r#""foldersOnTop": "never""#));
+}
+
+#[gpui_kit::test]
+fn window_buttons_and_double_click_drive_the_window(cx: &mut TestAppContext) {
+    let _serial = serial();
+    let (_tmp, window, _ws, chrome) = with_chrome(cx);
+    for sel in ["win-min", "win-max", "win-close"] {
+        click(cx, window, sel);
+    }
+    assert_eq!(chrome.take(), ["minimize", "zoom", "close"]);
+
+    double_click(cx, window, "folder-title");
+    assert_eq!(chrome.take(), ["zoom"]);
+}
+
+#[gpui_kit::test]
+fn settings_fit_a_small_window_and_scroll(cx: &mut TestAppContext) {
+    let _serial = serial();
+    let (_tmp, a, b) = dirs();
+    let (window, ws) = open(cx, &a, &b);
+    VisualTestContext::from_window(window, cx).simulate_resize(size(px(900.0), px(560.0)));
+    send(cx, window, crate::actions::OpenSettings);
+    assert_eq!(overlays(cx, &ws), ["settings"]);
+    let done = bounds_of(cx, window, "btn-settings-done");
+    assert!(
+        done.bottom() <= px(560.0),
+        "Done sits off screen at {done:?}"
+    );
+    let header = bounds_of(cx, window, "folder-title");
+    let body = bounds_of(cx, window, "settings-body");
+    assert!(body.top() > header.bottom(), "settings cover the title bar");
+    click(cx, window, "btn-settings-done");
+    assert!(overlays(cx, &ws).is_empty());
+}

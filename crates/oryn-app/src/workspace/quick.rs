@@ -61,6 +61,7 @@ impl Workspace {
         Some(
             div()
                 .id("quick-overlay")
+                .occlude()
                 .absolute()
                 .inset_0()
                 .flex()

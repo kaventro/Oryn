@@ -1,6 +1,7 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
 mod actions;
+mod chrome;
 mod icons;
 mod media;
 mod opener;
@@ -24,9 +25,7 @@ use crate::workspace::Workspace;
 fn start_dir(arg: Option<String>) -> PathBuf {
     arg.map(PathBuf::from)
         .filter(|p| p.is_dir())
-        .or_else(|| std::env::var_os("HOME").map(PathBuf::from))
-        .or_else(|| std::env::current_dir().ok())
-        .unwrap_or_else(|| PathBuf::from("/"))
+        .unwrap_or_else(workspace::home_dir)
 }
 
 fn main() {
@@ -75,4 +74,19 @@ fn main() {
             });
             cx.activate(true);
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::start_dir;
+
+    #[test]
+    fn start_dir_uses_an_existing_folder_or_home() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().to_path_buf();
+        assert_eq!(start_dir(Some(dir.display().to_string())), dir);
+        let missing = dir.join("missing").display().to_string();
+        assert_eq!(start_dir(Some(missing)), crate::workspace::home_dir());
+        assert_eq!(start_dir(None), crate::workspace::home_dir());
+    }
 }
